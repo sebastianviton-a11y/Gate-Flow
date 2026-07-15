@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+
+  "compilerOptions": {
+    /* ---- Requisitos explícitos de S0-02 / CLAUDE.md §9 ---- */
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+
+    /* ---- Lenguaje y módulos ----
+       Necesarios para que la configuración anterior sea utilizable;
+       no son parte de la lista de requisitos pero son indispensables
+       para que el compilador funcione en un monorepo Next.js/TS. */
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    /* ---- Soporte a referencias de proyecto (monorepo) ---- */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "incremental": true,
+    "sourceMap": true
+  },
+  "exclude": ["node_modules", "dist", ".turbo"]
+}
