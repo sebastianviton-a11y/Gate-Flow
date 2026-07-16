@@ -15,7 +15,7 @@ import {
 } from "@gateflow/ui";
 import { TenantSwitcher } from "./tenant-switcher";
 import { MobileNav } from "./mobile-nav";
-import { ROLE_LABELS } from "@gateflow/auth";
+import { ROLE_LABELS } from "@gateflow/auth/client";
 
 function initials(nombre: string) {
   return nombre
