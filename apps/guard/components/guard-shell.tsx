@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { GateFlowLogo } from "@gateflow/ui";
 import type { SessionContext } from "@gateflow/types";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { ConnectivityIndicator } from "./connectivity-indicator";
 
 /**

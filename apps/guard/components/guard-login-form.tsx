@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
 export function GuardLoginForm() {

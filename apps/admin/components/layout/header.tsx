@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 import type { SessionContext } from "@gateflow/types";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@gateflow/ui";
 import {
   DropdownMenu,

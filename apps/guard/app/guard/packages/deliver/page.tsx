@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Search, Loader2, Check } from "lucide-react";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes, entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { Button, Input, EstadoBadge } from "@gateflow/ui";

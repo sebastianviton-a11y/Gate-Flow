@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Download, Upload, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@gateflow/ui";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { importarUnidadesMasivo, type FilaImportarUnidad, type ResultadoImportacion } from "@gateflow/paquetes";
 import { validarCSVUnidades, type FilaValidada } from "@/lib/csv";
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PackageX, Loader2 } from "lucide-react";
-import { createBrowserSupabaseClient } from "@gateflow/supabase";
+import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { listarPendientes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { EstadoBadge } from "@gateflow/ui";
