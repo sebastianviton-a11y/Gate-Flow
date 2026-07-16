@@ -1,0 +1,27 @@
+## netlify.toml — sitio "gateflow-guard"
+##
+## Al crear este sitio en Netlify: dejar "Base directory" VACÍO y
+## configurar "Package directory" = apps/guard. Mismo criterio que
+## apps/admin/netlify.toml — ver DEPLOY_STAGING.md §3.
+
+[build]
+  # Ver apps/admin/netlify.toml para la razón exacta de no usar
+  # --frozen-lockfile todavía.
+  command = "pnpm install && pnpm --filter @gateflow/guard build"
+  publish = "apps/guard/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[headers]]
+  # Necesario para que el service worker (public/sw.js) controle toda
+  # la app desde la raíz — mismo header que ya declara next.config.mjs
+  # a nivel de aplicación; se repite aquí porque algunos runtimes de
+  # Netlify para Next.js no siempre respetan next.config.mjs `headers()`
+  # para archivos servidos como estáticos puros como /sw.js.
+  for = "/sw.js"
+  [headers.values]
+    Service-Worker-Allowed = "/"

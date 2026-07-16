@@ -1,0 +1,37 @@
+## netlify.toml — sitio "gateflow-admin"
+##
+## Al crear este sitio en Netlify: dejar "Base directory" VACÍO y
+## configurar "Package directory" = apps/admin. Netlify entonces instala
+## y construye desde la raíz del monorepo (donde vive pnpm-workspace.yaml),
+## que es la forma recomendada actualmente por Netlify para monorepos
+## pnpm — ver DEPLOY_STAGING.md §3 para la razón completa y la fuente.
+## Todas las rutas de este archivo son relativas a la RAÍZ del repo,
+## no a esta carpeta, porque "Base directory" queda sin definir.
+
+[build]
+  # SIN --frozen-lockfile: ese flag exige que pnpm-lock.yaml ya exista y
+  # coincida exactamente con package.json — nunca se pudo generar en este
+  # entorno (sin acceso a red para resolver dependencias). Con
+  # --frozen-lockfile, el primer deploy habría fallado de inmediato con
+  # "Cannot install with frozen-lockfile because pnpm-lock.yaml is
+  # absent". Tras el primer `pnpm install` real (en tu máquina o en el
+  # propio build de Netlify), se genera pnpm-lock.yaml — a partir de ahí
+  # puedes volver a agregar --frozen-lockfile si quieres builds 100%
+  # reproducibles.
+  command = "pnpm install && pnpm --filter @gateflow/admin build"
+  publish = "apps/admin/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY se configuran
+  # en la UI de Netlify (Site configuration → Environment variables), NUNCA
+  # aquí — este archivo se versiona en Git. Ver ENVIRONMENT_VARIABLES.md.
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Next.js App Router + middleware.ts requieren el runtime oficial de
+# Netlify para Next.js (arriba) — traduce middleware a Netlify Edge
+# Functions automáticamente. No se agregan redirects manuales: el
+# middleware ya resuelve /login vs. rutas protegidas (ver
+# apps/admin/middleware.ts) y el plugin respeta esa lógica tal cual.

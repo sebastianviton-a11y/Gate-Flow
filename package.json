@@ -1,19 +1,25 @@
 {
   "name": "gateflow",
   "private": true,
-  "version": "0.0.0",
-  "packageManager": "pnpm@9.0.0",
-  "engines": {
-    "node": ">=20"
-  },
+  "version": "0.1.0",
+  "description": "GateFlow — plataforma SaaS multi-tenant de operaciones de portería. Monorepo.",
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "dev": "concurrently -n admin,guard -c blue,magenta \"pnpm dev:admin\" \"pnpm dev:guard\"",
+    "dev:admin": "pnpm --filter @gateflow/admin dev",
+    "dev:guard": "pnpm --filter @gateflow/guard dev",
+    "build": "pnpm build:admin && pnpm build:guard",
+    "build:admin": "pnpm --filter @gateflow/admin build",
+    "build:guard": "pnpm --filter @gateflow/guard build",
+    "lint": "pnpm lint:admin && pnpm lint:guard",
+    "lint:admin": "pnpm --filter @gateflow/admin lint",
+    "lint:guard": "pnpm --filter @gateflow/guard lint",
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "turbo": "^2.0.0"
-  }
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
 }

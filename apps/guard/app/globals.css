@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mismos tokens que apps/admin — ver ese globals.css para la justificación
+   completa de la paleta. Aquí se ajusta el tamaño base de texto: la app
+   del guardia se usa a menudo con luz solar directa y a distancia de
+   brazo, por lo que el cuerpo de texto parte de 16px, no 14px. */
+@layer base {
+  :root {
+    --background: 216 24% 97%;
+    --foreground: 211 53% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 211 53% 11%;
+    --border: 216 20% 90%;
+    --input: 216 18% 87%;
+    --ring: 167 100% 38%;
+
+    /* Marca GateFlow */
+    --primary: 167 100% 38%;          /* Verde Flujo #00C49A */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 211 53% 11%;         /* Azul Profundo #0D1B2A */
+    --secondary-foreground: 0 0% 100%;
+    --info: 208 79% 51%;              /* Azul Envío #1E88E5 */
+    --info-foreground: 0 0% 100%;
+    --accent-brand: 32 100% 50%;      /* Naranja Conexión #FF8A00 — prioridad/urgencia */
+    --accent-brand-foreground: 0 0% 100%;
+
+    --muted: 216 24% 96%;
+    --muted-foreground: 216 10% 45%;
+    --accent: 216 24% 96%;
+    --accent-foreground: 211 53% 11%;
+    --destructive: 358 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --warn: 45 100% 51%;              /* Amarillo Paquete #FFC107 — pendiente */
+    --warn-foreground: 32 60% 18%;
+    --success: 167 100% 32%;          /* Verde Flujo, tono más oscuro para contraste de texto */
+    --success-foreground: 0 0% 100%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-size: 17px; /* base mayor que apps/admin (16px) por diseño operativo */
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+.gf-code {
+  @apply font-mono text-xs tracking-tight;
+}
+.gf-code::before {
+  content: "[ ";
+  @apply text-muted-foreground;
+}
+.gf-code::after {
+  content: " ]";
+  @apply text-muted-foreground;
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@gateflow/auth",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gateflow/supabase": "workspace:*",
+    "@gateflow/types": "workspace:*",
+    "server-only": "^0.0.1"
+  },
+  "peerDependencies": {
+    "next": "14.2.15",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "next": "14.2.15",
+    "react": "^18.3.1",
+    "typescript": "^5.5.4"
+  }
+}
