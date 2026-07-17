@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { registrarPaquete, buscarUnidades, obtenerCatalogos, type Catalogos, type UbicacionItem, type ResultadoRegistro } from "@gateflow/paquetes";
+import {
+  registrarPaquete,
+  buscarUnidades,
+  obtenerCatalogos,
+  subirFotografiaPaquete,
+  construirEnlaceWhatsApp,
+  type Catalogos,
+  type UbicacionItem,
+  type ResultadoRegistro,
+} from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
 import { Button, Input, PackageQRCode } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
+import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
 
 export default function RegisterPackagePage() {
@@ -29,6 +39,7 @@ export default function RegisterPackagePage() {
   const [prioridadId, setPrioridadId] = useState<string>("");
   const [ubicacionId, setUbicacionId] = useState<string>("");
   const [notas, setNotas] = useState("");
+  const [foto, setFoto] = useState<File | null>(null);
 
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +86,7 @@ export default function RegisterPackagePage() {
     setPrioridadId("");
     setUbicacionId("");
     setNotas("");
+    setFoto(null);
     setError(null);
     setConfirmacion(null);
   }
@@ -100,6 +112,24 @@ export default function RegisterPackagePage() {
         destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
       });
       setConfirmacion(resultado);
+
+      // La foto es opcional (no bloquea el registro, BR-17 solo exige
+      // ubicación) — si falla la subida, el paquete ya quedó registrado
+      // correctamente; se registra el error en consola, no se le muestra
+      // al guardia como si el registro completo hubiera fallado.
+      if (foto) {
+        try {
+          await subirFotografiaPaquete(supabase, {
+            tenantId: session.tenant.id,
+            paqueteId: resultado.paquete.id,
+            tipo: "recepcion",
+            archivo: foto,
+            tomadaPor: session.user.id,
+          });
+        } catch (fotoError) {
+          console.error("[GateFlow] No se pudo subir la fotografía de recepción:", fotoError);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo registrar el paquete. Intenta de nuevo.");
     } finally {
@@ -109,6 +139,10 @@ export default function RegisterPackagePage() {
 
   if (confirmacion) {
     const { paquete, notificacion } = confirmacion;
+    const enlaceWhatsApp = notificacion
+      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario)
+      : null;
+
     return (
       <div className="flex h-full flex-col">
         <OperationalHeader title="Paquete registrado" />
@@ -127,7 +161,23 @@ export default function RegisterPackagePage() {
           <div className="animate-in fade-in zoom-in-95 duration-300">
             <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
           </div>
-          <Button onClick={reiniciar} className="min-h-touch mt-2 w-full max-w-xs text-base">
+
+          {notificacion &&
+            (enlaceWhatsApp ? (
+              <a
+                href={enlaceWhatsApp.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-touch w-full max-w-xs items-center justify-center gap-2 rounded-md border border-success bg-success/10 text-base font-medium text-success"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Avisar por WhatsApp
+              </a>
+            ) : (
+              <p className="text-xs text-muted-foreground">Este residente no tiene un número de WhatsApp registrado.</p>
+            ))}
+
+          <Button onClick={reiniciar} className="min-h-touch w-full max-w-xs text-base">
             <RotateCcw className="h-4 w-4" />
             Registrar otro paquete
           </Button>
@@ -247,6 +297,11 @@ export default function RegisterPackagePage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-muted-foreground">Fotografía (opcional)</p>
+              <PhotoCapture onChange={setFoto} />
             </div>
 
             {/* UX_REVIEW.md §3: solo empresa y ubicación quedan siempre

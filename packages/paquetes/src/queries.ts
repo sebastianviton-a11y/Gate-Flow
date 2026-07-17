@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes } from "@gateflow/types";
+import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes, FotografiaPaquete } from "@gateflow/types";
 import { mapPaqueteRow, mapHistorialRow, type PaqueteRow, type HistorialRow } from "./mappers";
 
 /**
@@ -14,8 +14,8 @@ const PAQUETE_SELECT = `
   empresa_paqueteria_id, estado_id, tamano_id, prioridad_id, ubicacion_id,
   numero_guia, notas, recibido_por, entregado_por, entregado_a_nombre,
   fecha_recepcion, fecha_entrega,
-  unidades ( identificador ),
-  residente:users!paquetes_residente_id_fkey ( nombre_completo ),
+  unidades ( identificador, contacto_telefono ),
+  residente:users!paquetes_residente_id_fkey ( nombre_completo, telefono ),
   recibido:users!paquetes_recibido_por_fkey ( nombre_completo ),
   entregado:users!paquetes_entregado_por_fkey ( nombre_completo ),
   empresas_paqueteria ( nombre ),
@@ -146,6 +146,46 @@ export async function obtenerFirmaEntrega(supabase: SupabaseClient, paqueteId: s
   if (error) throw error;
   if (!data) return null;
   return { firmaData: data.firma_data, firmanteNombre: data.firmante_nombre, creadoEn: data.created_at };
+}
+
+/**
+ * El bucket es privado (BR de evidencia — nunca público), así que mostrar
+ * una foto exige una URL firmada de corta duración, no la ruta cruda.
+ * 10 minutos alcanza para ver el detalle de un paquete sin dejar el
+ * enlace utilizable indefinidamente si se comparte por error.
+ */
+export async function obtenerFotografiasPaquete(supabase: SupabaseClient, paqueteId: string): Promise<FotografiaPaquete[]> {
+  const { data, error } = await supabase
+    .from("paquete_fotografias")
+    .select("id, tipo, storage_path, created_at, users:tomada_por ( nombre_completo )")
+    .eq("paquete_id", paqueteId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data || data.length === 0) return [];
+
+  const filas = data as unknown as Array<{
+    id: string;
+    tipo: string;
+    storage_path: string;
+    created_at: string;
+    users: { nombre_completo: string } | null;
+  }>;
+
+  const conUrl = await Promise.all(
+    filas.map(async (f) => {
+      const { data: firmada } = await supabase.storage.from("evidencia").createSignedUrl(f.storage_path, 600);
+      return {
+        id: f.id,
+        tipo: f.tipo as FotografiaPaquete["tipo"],
+        url: firmada?.signedUrl ?? "",
+        tomadaPorNombre: f.users?.nombre_completo ?? null,
+        creadoEn: f.created_at,
+      };
+    }),
+  );
+
+  return conUrl.filter((f) => f.url !== "");
 }
 
 export async function obtenerHistorial(supabase: SupabaseClient, paqueteId: string): Promise<PaqueteHistorialEvento[]> {

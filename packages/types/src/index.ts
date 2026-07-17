@@ -114,6 +114,8 @@ export interface Paquete {
   unidadIdentificador: string;
   residenteId?: string | null;
   residenteNombre?: string | null;
+  residenteTelefono?: string | null;
+  contactoTelefono?: string | null;
   remitente?: string | null;
   empresaPaqueteria?: string | null;
   estado: EstadoPaquete;
@@ -194,6 +196,14 @@ export interface UnidadConResidentes {
   residentes: { id: string; nombreCompleto: string }[];
   contactoNombre?: string | null;
   contactoTelefono?: string | null;
+}
+
+export interface FotografiaPaquete {
+  id: string;
+  tipo: "recepcion" | "entrega" | "evidencia_dano";
+  url: string;
+  tomadaPorNombre?: string | null;
+  creadoEn: string;
 }
 
 export type TipoIncidencia =

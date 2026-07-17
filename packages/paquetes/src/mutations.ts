@@ -144,6 +144,42 @@ export async function guardarFirmaEntrega(supabase: SupabaseClient, input: Guard
   if (error) throw error;
 }
 
+export interface SubirFotografiaInput {
+  tenantId: string;
+  paqueteId: string;
+  tipo: "recepcion" | "entrega" | "evidencia_dano";
+  archivo: File;
+  tomadaPor: string;
+}
+
+/**
+ * Sube una fotografía al bucket privado `evidencia` (migración 12) y
+ * registra la fila en paquete_fotografias. La ruta SIEMPRE empieza con
+ * el tenant_id — es la convención de la que dependen las policies de
+ * storage.objects (evidencia_select_propio_tenant /
+ * evidencia_insert_propio_tenant), no una decisión cosmética.
+ */
+export async function subirFotografiaPaquete(supabase: SupabaseClient, input: SubirFotografiaInput): Promise<void> {
+  const extension = input.archivo.name.split(".").pop() ?? "jpg";
+  const nombreArchivo = `${crypto.randomUUID()}.${extension}`;
+  const path = `${input.tenantId}/${input.paqueteId}/${nombreArchivo}`;
+
+  const { error: errorSubida } = await supabase.storage.from("evidencia").upload(path, input.archivo, {
+    contentType: input.archivo.type || "image/jpeg",
+    upsert: false,
+  });
+  if (errorSubida) throw errorSubida;
+
+  const { error: errorInsert } = await supabase.from("paquete_fotografias").insert({
+    tenant_id: input.tenantId,
+    paquete_id: input.paqueteId,
+    tipo: input.tipo,
+    storage_path: path,
+    tomada_por: input.tomadaPor,
+  });
+  if (errorInsert) throw errorInsert;
+}
+
 /**
  * Entrega un paquete. Delega en la función `entregar_paquete()` de
  * Postgres (migración Sprint 02), que usa `SELECT ... FOR UPDATE` para

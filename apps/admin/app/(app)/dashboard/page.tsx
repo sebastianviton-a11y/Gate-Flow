@@ -1,4 +1,5 @@
-import { Package, PackageCheck, Clock, TriangleAlert } from "lucide-react";
+import { Package, PackageCheck, Clock, TriangleAlert, Plus } from "lucide-react";
+import Link from "next/link";
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import {
@@ -6,6 +7,7 @@ import {
   obtenerVolumen30Dias,
   obtenerActividadReciente,
 } from "@gateflow/paquetes";
+import { Button } from "@gateflow/ui";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PackagesChart } from "@/components/dashboard/packages-chart";
@@ -32,16 +34,24 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <PageHeader title="Dashboard" description={session.tenant.nombre} />
-        <div
-          className={`flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-            estadoOperativo.tono === "warn" ? "bg-warn/10 text-warn-foreground" : "bg-success/10 text-success"
-          }`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${estadoOperativo.tono === "warn" ? "bg-warn" : "bg-success"}`} />
-          {estadoOperativo.texto}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-1">
+          <PageHeader title="Dashboard" description={session.tenant.nombre} />
+          <div
+            className={`flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+              estadoOperativo.tono === "warn" ? "bg-warn/10 text-warn-foreground" : "bg-success/10 text-success"
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${estadoOperativo.tono === "warn" ? "bg-warn" : "bg-success"}`} />
+            {estadoOperativo.texto}
+          </div>
         </div>
+        <Button asChild size="lg" className="shrink-0">
+          <Link href="/paquetes/nuevo">
+            <Plus className="h-4 w-4" />
+            Registrar paquete
+          </Link>
+        </Button>
       </div>
 
       {/* Alerta accionable, no una tarjeta más — solo aparece si hay algo

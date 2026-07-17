@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { listarPaquetes, buscarPaquetes } from "@gateflow/paquetes";
-import { EstadoBadge } from "@gateflow/ui";
+import { EstadoBadge, Button } from "@gateflow/ui";
 import type { EstadoPaquete } from "@gateflow/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { FiltrosPaquetes } from "@/components/paquetes/filtros-paquetes";
@@ -45,7 +46,15 @@ export default async function PaquetesPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Paquetes" description="Todos los paquetes del residencial activo." />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader title="Paquetes" description="Todos los paquetes del residencial activo." />
+        <Button asChild size="sm" className="shrink-0">
+          <Link href="/paquetes/nuevo">
+            <Plus className="h-4 w-4" />
+            Registrar paquete
+          </Link>
+        </Button>
+      </div>
 
       <FiltrosPaquetes estadoActual={searchParams.estado} textoActual={searchParams.q} />
 
@@ -67,7 +76,19 @@ export default async function PaquetesPage({
             {resultado.items.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
-                  {texto ? `Sin resultados para "${texto}".` : "Sin paquetes registrados todavía."}
+                  {texto ? (
+                    `Sin resultados para "${texto}".`
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <span>Sin paquetes registrados todavía.</span>
+                      <Button asChild size="sm">
+                        <Link href="/paquetes/nuevo">
+                          <Plus className="h-4 w-4" />
+                          Registrar paquete
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}

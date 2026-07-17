@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, type FirmaEntrega } from "@gateflow/paquetes";
-import type { Paquete, PaqueteHistorialEvento } from "@gateflow/types";
+import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, obtenerFotografiasPaquete, type FirmaEntrega } from "@gateflow/paquetes";
+import type { Paquete, PaqueteHistorialEvento, FotografiaPaquete } from "@gateflow/types";
 import { EstadoBadge, PackageQRCode, Button } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
@@ -28,11 +28,13 @@ export default function GuardPackageDetailPage() {
   const [paquete, setPaquete] = useState<Paquete | null | undefined>(undefined);
   const [historial, setHistorial] = useState<PaqueteHistorialEvento[]>([]);
   const [firma, setFirma] = useState<FirmaEntrega | null>(null);
+  const [fotografias, setFotografias] = useState<FotografiaPaquete[]>([]);
 
   useEffect(() => {
     obtenerPaquetePorId(supabase, id).then(setPaquete);
     obtenerHistorial(supabase, id).then(setHistorial);
     obtenerFirmaEntrega(supabase, id).then(setFirma);
+    obtenerFotografiasPaquete(supabase, id).then(setFotografias);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -124,6 +126,20 @@ export default function GuardPackageDetailPage() {
               <p className="mt-1 text-center text-xs text-muted-foreground">
                 {firma.firmanteNombre} · {new Date(firma.creadoEn).toLocaleString("es-MX")}
               </p>
+            </div>
+          </div>
+        )}
+
+        {fotografias.length > 0 && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-muted-foreground">Fotografías</p>
+            <div className="grid grid-cols-2 gap-2">
+              {fotografias.map((foto) => (
+                <a key={foto.id} href={foto.url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={foto.url} alt={`Evidencia (${foto.tipo})`} className="aspect-square w-full rounded-xl border border-border object-cover" />
+                </a>
+              ))}
             </div>
           </div>
         )}

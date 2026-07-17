@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Package } from "lucide-react";
+import { Menu, X, Package, Plus } from "lucide-react";
 import { GateFlowLogo } from "@gateflow/ui";
 import type { RoleKey } from "@gateflow/types";
 import { navItemsForRole } from "./nav-items";
@@ -68,6 +68,17 @@ export function MobileNav({ role }: { role: RoleKey }) {
               >
                 <X className="h-4 w-4" />
               </button>
+            </div>
+
+            <div className="px-3 pt-3">
+              <Link
+                href="/paquetes/nuevo"
+                onClick={close}
+                className="flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground"
+              >
+                <Plus className="h-4 w-4" />
+                Registrar paquete
+              </Link>
             </div>
 
             <nav className="flex-1 space-y-0.5 px-3 py-2">

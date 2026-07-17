@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
-import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega } from "@gateflow/paquetes";
+import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, obtenerFotografiasPaquete } from "@gateflow/paquetes";
 import { EstadoBadge, PackageQRCode } from "@gateflow/ui";
 import { PageHeader } from "@/components/shared/page-header";
 import { EditarNotas } from "./editar-notas";
@@ -25,6 +25,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
 
   const historial = await obtenerHistorial(supabase, params.id);
   const firma = await obtenerFirmaEntrega(supabase, params.id);
+  const fotografias = await obtenerFotografiasPaquete(supabase, params.id);
 
   return (
     <div className="space-y-6">
@@ -124,6 +125,20 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
               <p className="mt-1 text-center text-xs text-muted-foreground">
                 {firma.firmanteNombre} · {new Date(firma.creadoEn).toLocaleString("es-MX")}
               </p>
+            </div>
+          )}
+
+          {fotografias.length > 0 && (
+            <div className="w-full border-t border-border pt-4">
+              <p className="mb-2 text-center text-sm font-medium text-muted-foreground">Fotografías</p>
+              <div className="grid grid-cols-2 gap-2">
+                {fotografias.map((foto) => (
+                  <a key={foto.id} href={foto.url} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={foto.url} alt={`Evidencia (${foto.tipo})`} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>
