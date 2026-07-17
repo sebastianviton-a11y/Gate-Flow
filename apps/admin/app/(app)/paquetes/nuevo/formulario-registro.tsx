@@ -14,7 +14,7 @@ import {
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
 import type { SessionContext, UnidadConResidentes } from "@gateflow/types";
-import { Button, Input, Label, PackageQRCode } from "@gateflow/ui";
+import { Button, Input, Label, PackageQRCode, obtenerMensajeError } from "@gateflow/ui";
 
 export function FormularioRegistroPaquete({ session }: { session: SessionContext }) {
   const router = useRouter();
@@ -90,7 +90,7 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
       });
       setConfirmacion(resultado);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo registrar el paquete.");
+      setError(obtenerMensajeError(e, "No se pudo registrar el paquete."));
     } finally {
       setEnviando(false);
     }

@@ -14,7 +14,7 @@ import {
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
-import { Button, Input, PackageQRCode } from "@gateflow/ui";
+import { Button, Input, PackageQRCode, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
@@ -131,7 +131,7 @@ export default function RegisterPackagePage() {
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo registrar el paquete. Intenta de nuevo.");
+      setError(obtenerMensajeError(e, "No se pudo registrar el paquete. Intenta de nuevo."));
     } finally {
       setEnviando(false);
     }

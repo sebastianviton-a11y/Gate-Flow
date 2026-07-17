@@ -5,7 +5,7 @@ import { Search, Loader2, Check } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes, entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
-import { Button, Input, EstadoBadge } from "@gateflow/ui";
+import { Button, Input, EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { SignaturePad } from "@/components/signature-pad";
 import { useGuardSession } from "@/components/session-provider";
@@ -73,7 +73,7 @@ export default function DeliverPackagePage() {
       });
       setEntregado(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo registrar la entrega.");
+      setError(obtenerMensajeError(e, "No se pudo registrar la entrega."));
     } finally {
       setEnviando(false);
     }

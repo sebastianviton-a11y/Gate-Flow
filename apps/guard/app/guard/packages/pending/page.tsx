@@ -6,7 +6,7 @@ import { PackageX, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { listarPendientes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
-import { EstadoBadge } from "@gateflow/ui";
+import { EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 
@@ -28,7 +28,7 @@ export default function PendingPackagesPage() {
   useEffect(() => {
     listarPendientes(supabase, session.tenant.id)
       .then(setPaquetes)
-      .catch((e) => setError(e instanceof Error ? e.message : "No se pudo cargar el listado."));
+      .catch((e) => setError(obtenerMensajeError(e, "No se pudo cargar el listado.")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
