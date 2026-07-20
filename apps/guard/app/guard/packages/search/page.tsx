@@ -7,7 +7,7 @@ import { Search, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
-import { Input, Badge, EstadoBadge } from "@gateflow/ui";
+import { Input, EstadoBadge } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 

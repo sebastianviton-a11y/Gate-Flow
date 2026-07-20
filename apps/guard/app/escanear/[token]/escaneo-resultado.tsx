@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check, PackageCheck, Package } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { entregarPaquete, guardarFirmaEntrega, obtenerFotografiasPaquete } from "@gateflow/paquetes";
+import { entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete, SessionContext } from "@gateflow/types";
 import { Button, Input, EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
 import { SignaturePad } from "@/components/signature-pad";

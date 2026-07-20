@@ -84,7 +84,7 @@ export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl,
   return (
     <div className="flex flex-col items-center gap-4">
       <div ref={canvasRef} className="inline-flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-4">
-        <QRCodeCanvas value={scanUrl} size={size} level="M" marginSize={2} />
+        <QRCodeCanvas value={scanUrl} size={size} level="M" includeMargin={false} />
         <span className="gf-code">{codigoGateflow}</span>
       </div>
 
