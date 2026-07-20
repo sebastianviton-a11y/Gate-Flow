@@ -1,4 +1,4 @@
-"use client";
+ï»¿"use client";
 
 import { useState } from "react";
 import { Check, UserPlus } from "lucide-react";
@@ -8,9 +8,9 @@ import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
 
 /**
  * Reutiliza importarUnidadesMasivo() con un solo registro en vez de
- * crear una mutación nueva — es exactamente la misma validación
- * (identificador duplicado, tipo válido) que ya usa la carga por
- * plantilla, así que las dos vías nunca pueden divergir en sus reglas.
+ * crear una mutaciÃ³n nueva â€” es exactamente la misma validaciÃ³n
+ * (identificador duplicado, tipo vÃ¡lido) que ya usa la carga por
+ * plantilla, asÃ­ que las dos vÃ­as nunca pueden divergir en sus reglas.
  */
 export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string; onAgregada: () => void }) {
   const [abierto, setAbierto] = useState(false);
@@ -117,7 +117,7 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
           />
         </div>
         <div>
-          <Label htmlFor="telefono-manual">Teléfono / WhatsApp (opcional)</Label>
+          <Label htmlFor="telefono-manual">TelÃ©fono / WhatsApp (opcional)</Label>
           <Input
             id="telefono-manual"
             type="tel"
@@ -130,15 +130,15 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Este residente queda como contacto informal (sin cuenta propia) — igual que al importar por plantilla. El día
-        que necesite iniciar sesión, se le crea una cuenta y se vincula formalmente.
+        Este residente queda como contacto informal (sin cuenta propia) â€” igual que al importar por plantilla. El dÃ­a
+        que necesite iniciar sesiÃ³n, se le crea una cuenta y se vincula formalmente.
       </p>
 
       {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
       <div className="flex items-center gap-3">
         <Button onClick={handleGuardar} disabled={!identificador.trim() || enviando} size="sm">
-          {enviando ? "Guardando…" : "Guardar"}
+          {enviando ? "Guardandoâ€¦" : "Guardar"}
         </Button>
         {exito && (
           <span className="flex items-center gap-1 text-sm text-success">
