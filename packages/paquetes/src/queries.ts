@@ -13,7 +13,7 @@ const PAQUETE_SELECT = `
   id, codigo_gateflow, tenant_id, unidad_id, residente_id, remitente,
   empresa_paqueteria_id, estado_id, tamano_id, prioridad_id, ubicacion_id,
   numero_guia, notas, recibido_por, entregado_por, entregado_a_nombre,
-  fecha_recepcion, fecha_entrega,
+  fecha_recepcion, fecha_entrega, pickup_token,
   unidades ( identificador, contacto_telefono ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo, telefono ),
   recibido:users!paquetes_recibido_por_fkey ( nombre_completo ),
@@ -186,6 +186,35 @@ export async function obtenerFotografiasPaquete(supabase: SupabaseClient, paquet
   );
 
   return conUrl.filter((f) => f.url !== "");
+}
+
+/**
+ * Busca un paquete por su pickup_token. Es una consulta autenticada
+ * normal — RLS (paquetes_tenant_isolation) ya garantiza que devuelve
+ * null si el paquete pertenece a otro tenant, sin necesitar ninguna
+ * función especial. Quien llama a esto SIEMPRE debe ya estar
+ * autenticado como guardia/admin de un tenant — nunca se expone esta
+ * consulta a una ruta sin sesión (ver app/guard/escanear/[token]/page.tsx,
+ * que decide ANTES de llamar aquí si hay sesión activa).
+ */
+export async function buscarPaquetePorPickupToken(supabase: SupabaseClient, token: string): Promise<Paquete | null> {
+  const { data, error } = await supabase.from("paquetes").select(PAQUETE_SELECT).eq("pickup_token", token).maybeSingle();
+  if (error) throw error;
+  return data ? mapPaqueteRow(data as unknown as PaqueteRow) : null;
+}
+
+/** Otros paquetes pendientes de la misma unidad — para la sección
+ * "Otros paquetes pendientes para este domicilio" al escanear un QR. */
+export async function listarPendientesPorUnidad(supabase: SupabaseClient, unidadId: string, excluirPaqueteId: string): Promise<Paquete[]> {
+  const { data, error } = await supabase
+    .from("paquetes")
+    .select(PAQUETE_SELECT)
+    .eq("unidad_id", unidadId)
+    .in("estado_id", ["recibido", "notificado"])
+    .neq("id", excluirPaqueteId)
+    .order("fecha_recepcion", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as unknown as PaqueteRow[]).map(mapPaqueteRow);
 }
 
 export async function obtenerHistorial(supabase: SupabaseClient, paqueteId: string): Promise<PaqueteHistorialEvento[]> {

@@ -15,6 +15,8 @@ export {
   listarUnidades,
   obtenerFirmaEntrega,
   obtenerFotografiasPaquete,
+  buscarPaquetePorPickupToken,
+  listarPendientesPorUnidad,
   type ListarPaquetesResultado,
   type DashboardResumen,
   type DashboardConteoPorEtiqueta,
@@ -40,4 +42,10 @@ export {
   type SubirFotografiaInput,
 } from "./mutations";
 
-export { construirEnlaceWhatsApp, normalizarTelefonoWhatsApp, type EnlaceWhatsApp } from "./whatsapp";
+export {
+  construirEnlaceWhatsApp,
+  construirMensajeNotificacion,
+  construirUrlEscaneo,
+  normalizarTelefonoWhatsApp,
+  type EnlaceWhatsApp,
+} from "./whatsapp";

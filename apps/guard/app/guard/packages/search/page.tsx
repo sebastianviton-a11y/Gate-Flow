@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Search, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes } from "@gateflow/paquetes";
@@ -10,11 +11,18 @@ import { Input, Badge, EstadoBadge } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 
-export default function SearchPackagePage() {
+/**
+ * useSearchParams() exige estar envuelto en <Suspense> en Next.js 14
+ * App Router — sin esto, el build falla explícitamente para esta
+ * página. Por eso la lógica real vive en un componente interno, y el
+ * export default solo se encarga de envolverlo.
+ */
+function SearchPackageContent() {
   const session = useGuardSession();
   const supabase = createBrowserSupabaseClient();
+  const searchParams = useSearchParams();
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [resultados, setResultados] = useState<Paquete[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [buscado, setBuscado] = useState(false);
@@ -82,5 +90,13 @@ export default function SearchPackagePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SearchPackagePage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchPackageContent />
+    </Suspense>
   );
 }

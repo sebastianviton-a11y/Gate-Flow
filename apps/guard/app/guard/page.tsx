@@ -1,4 +1,4 @@
-import { PackagePlus, PackageCheck, Search, Clock, TriangleAlert } from "lucide-react";
+import { PackagePlus, PackageCheck, Search, Clock, TriangleAlert, QrCode } from "lucide-react";
 import { ActionTile } from "@/components/action-tile";
 
 export default function GuardHomePage() {
@@ -15,6 +15,13 @@ export default function GuardHomePage() {
           label="Registrar paquete"
           description="Recepción — menos de 20 segundos"
           icon={PackagePlus}
+          tone="primary"
+        />
+        <ActionTile
+          href="/guard/packages/escanear"
+          label="Escanear QR"
+          description="Localiza un paquete al instante"
+          icon={QrCode}
           tone="primary"
         />
         <ActionTile

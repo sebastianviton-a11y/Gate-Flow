@@ -16,5 +16,6 @@ export { Skeleton } from "./skeleton";
 export { Input } from "./input";
 export { Label } from "./label";
 export { PackageQRCode } from "./qr-code";
+export { PickupShareCard } from "./pickup-share-card";
 export { EstadoBadge } from "./estado-badge";
 export { GateFlowLogo } from "./gateflow-logo";

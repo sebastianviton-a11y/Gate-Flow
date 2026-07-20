@@ -3,18 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Loader2, Check, MessageCircle } from "lucide-react";
+import { Search, Loader2, Check } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import {
   registrarPaquete,
   buscarUnidades,
   obtenerCatalogos,
   construirEnlaceWhatsApp,
+  construirMensajeNotificacion,
+  construirUrlEscaneo,
   type Catalogos,
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
 import type { SessionContext, UnidadConResidentes } from "@gateflow/types";
-import { Button, Input, Label, PackageQRCode, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, Label, PackageQRCode, PickupShareCard, obtenerMensajeError } from "@gateflow/ui";
 
 export function FormularioRegistroPaquete({ session }: { session: SessionContext }) {
   const router = useRouter();
@@ -98,7 +100,11 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
 
   if (confirmacion) {
     const { paquete, notificacion } = confirmacion;
+    const nombreDestinatario = notificacion?.destinatario ?? "residente";
+    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario);
     const enlaceWhatsApp = notificacion ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario) : null;
+    const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || "";
+    const scanUrl = paquete.pickupToken && baseUrl ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
 
     return (
       <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center">
@@ -109,21 +115,11 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
           <h2 className="font-display text-lg font-semibold">Paquete registrado correctamente</h2>
           <p className="text-sm text-muted-foreground">{paquete.unidadIdentificador}</p>
         </div>
-        <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
-        {notificacion &&
-          (enlaceWhatsApp ? (
-            <a
-              href={enlaceWhatsApp.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-11 w-full max-w-xs items-center justify-center gap-2 rounded-md border border-success bg-success/10 text-sm font-medium text-success"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Avisar por WhatsApp
-            </a>
-          ) : (
-            <p className="text-xs text-muted-foreground">Este residente no tiene un número de WhatsApp registrado.</p>
-          ))}
+        {scanUrl ? (
+          <PickupShareCard scanUrl={scanUrl} codigoGateflow={paquete.codigoGateflow} mensaje={mensaje} whatsappUrl={enlaceWhatsApp?.url ?? null} />
+        ) : (
+          <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
+        )}
         <div className="flex w-full max-w-xs gap-2">
           <Button variant="outline" className="flex-1" onClick={() => router.push(`/paquetes/${paquete.id}`)}>
             Ver detalle

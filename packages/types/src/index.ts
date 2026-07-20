@@ -132,6 +132,7 @@ export interface Paquete {
   entregadoANombre?: string | null;
   fechaRecepcion: string;
   fechaEntrega?: string | null;
+  pickupToken?: string | null;
 }
 
 /** Filtros aceptados por el listado de paquetes (apps/admin) y por las

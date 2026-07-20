@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
+import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import {
   registrarPaquete,
@@ -9,12 +9,14 @@ import {
   obtenerCatalogos,
   subirFotografiaPaquete,
   construirEnlaceWhatsApp,
+  construirMensajeNotificacion,
+  construirUrlEscaneo,
   type Catalogos,
   type UbicacionItem,
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
-import { Button, Input, PackageQRCode, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, PickupShareCard, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
@@ -139,9 +141,17 @@ export default function RegisterPackagePage() {
 
   if (confirmacion) {
     const { paquete, notificacion } = confirmacion;
+    const nombreDestinatario = notificacion?.destinatario ?? "residente";
+    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario);
     const enlaceWhatsApp = notificacion
       ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario)
       : null;
+    // NEXT_PUBLIC_GUARD_APP_URL es la URL pública real de este sitio en
+    // Netlify — nunca un dominio temporal escrito en el código. Si
+    // todavía no se configuró (ej. en desarrollo local), se usa el
+    // origin del navegador como respaldo razonable.
+    const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
+    const scanUrl = paquete.pickupToken ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
 
     return (
       <div className="flex h-full flex-col">
@@ -158,24 +168,17 @@ export default function RegisterPackagePage() {
               <p className="text-sm text-muted-foreground">Sin residente asociado — no se generó notificación.</p>
             )}
           </div>
-          <div className="animate-in fade-in zoom-in-95 duration-300">
-            <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
-          </div>
 
-          {notificacion &&
-            (enlaceWhatsApp ? (
-              <a
-                href={enlaceWhatsApp.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-h-touch w-full max-w-xs items-center justify-center gap-2 rounded-md border border-success bg-success/10 text-base font-medium text-success"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Avisar por WhatsApp
-              </a>
-            ) : (
-              <p className="text-xs text-muted-foreground">Este residente no tiene un número de WhatsApp registrado.</p>
-            ))}
+          {scanUrl && (
+            <div className="animate-in fade-in zoom-in-95 duration-300">
+              <PickupShareCard
+                scanUrl={scanUrl}
+                codigoGateflow={paquete.codigoGateflow}
+                mensaje={mensaje}
+                whatsappUrl={enlaceWhatsApp?.url ?? null}
+              />
+            </div>
+          )}
 
           <Button onClick={reiniciar} className="min-h-touch w-full max-w-xs text-base">
             <RotateCcw className="h-4 w-4" />
