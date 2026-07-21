@@ -1,4 +1,4 @@
-import type { RoleKey } from "@gateflow/types";
+﻿import type { RoleKey } from "@gateflow/types";
 
 /**
  * Helpers de rol para la capa de UI. La autorización real vive en RLS
@@ -8,8 +8,11 @@ import type { RoleKey } from "@gateflow/types";
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
   super_admin: "Super Admin",
+  admin_empresa: "Administrador de Empresa",
   admin_residencial: "Administrador",
+  supervisor: "Supervisor",
   guardia: "Guardia",
+  recepcion: "Recepción",
   residente: "Residente",
 };
 
