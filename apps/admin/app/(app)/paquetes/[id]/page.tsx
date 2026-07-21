@@ -1,10 +1,18 @@
 import { notFound } from "next/navigation";
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
-import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, obtenerFotografiasPaquete } from "@gateflow/paquetes";
+import {
+  obtenerPaquetePorId,
+  obtenerHistorial,
+  obtenerFirmaEntrega,
+  obtenerFotografiasPaquete,
+  listarUbicacionesActivas,
+  obtenerHistorialUbicacion,
+} from "@gateflow/paquetes";
 import { EstadoBadge, PackageQRCode } from "@gateflow/ui";
 import { PageHeader } from "@/components/shared/page-header";
 import { EditarNotas } from "./editar-notas";
+import { CambiarUbicacion } from "./cambiar-ubicacion";
 
 const ESTADO_LABEL: Record<string, string> = {
   pendiente: "Pendiente de recepción",
@@ -24,8 +32,11 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
   if (!paquete) notFound();
 
   const historial = await obtenerHistorial(supabase, params.id);
+  const historialUbicacion = await obtenerHistorialUbicacion(supabase, session.tenant.id, params.id);
   const firma = await obtenerFirmaEntrega(supabase, params.id);
   const fotografias = await obtenerFotografiasPaquete(supabase, params.id);
+  const ubicacionesDisponibles = await listarUbicacionesActivas(supabase, session.tenant.id);
+  const puedeEditarUbicacion = paquete.estado === "recibido" || paquete.estado === "notificado";
 
   return (
     <div className="space-y-6">
@@ -62,7 +73,14 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
               <dd className="font-medium">{paquete.prioridad ?? "—"}</dd>
 
               <dt className="text-muted-foreground">Ubicación</dt>
-              <dd className="font-medium">{paquete.ubicacionDescripcion ?? "—"}</dd>
+              <dd>
+                <CambiarUbicacion
+                  paqueteId={paquete.id}
+                  ubicacionActual={paquete.ubicacionDescripcion ?? "Sin ubicación asignada"}
+                  ubicacionesDisponibles={ubicacionesDisponibles}
+                  puedeEditar={puedeEditarUbicacion}
+                />
+              </dd>
 
               <dt className="text-muted-foreground">Recibido por</dt>
               <dd className="font-medium">{paquete.recibidoPorNombre ?? "—"}</dd>
@@ -105,6 +123,24 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
               </div>
             )}
           </div>
+
+          {historialUbicacion.length > 0 && (
+            <div className="rounded-lg border border-border bg-card p-5">
+              <h2 className="mb-3 font-display text-sm font-medium text-muted-foreground">Cambios de ubicación</h2>
+              <div className="space-y-3 border-l-2 border-border pl-4">
+                {historialUbicacion.map((h) => (
+                  <div key={h.id}>
+                    <p className="text-sm font-medium">
+                      {h.ubicacionAnteriorRuta ?? "Sin ubicación"} → {h.ubicacionNuevaRuta ?? "Sin ubicación"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col items-center justify-start gap-4 rounded-lg border border-border bg-card p-5">

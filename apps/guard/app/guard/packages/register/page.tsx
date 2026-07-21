@@ -293,12 +293,13 @@ export default function RegisterPackagePage() {
                       ubicacionId === u.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"
                     }`}
                   >
-                    {u.nombre}
+                    {u.ruta}
                   </button>
                 ))}
                 {catalogos && catalogos.ubicaciones.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Este residencial no tiene ubicaciones configuradas todavía (Configuración, en apps/admin).
+                    No hay ubicaciones de bodega configuradas. Solicita al administrador crear al menos una en
+                    Configuración → Bodega.
                   </p>
                 )}
               </div>

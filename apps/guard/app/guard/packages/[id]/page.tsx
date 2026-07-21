@@ -2,11 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin, Pencil } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, obtenerFotografiasPaquete, type FirmaEntrega } from "@gateflow/paquetes";
+import {
+  obtenerPaquetePorId,
+  obtenerHistorial,
+  obtenerFirmaEntrega,
+  obtenerFotografiasPaquete,
+  listarUbicacionesActivas,
+  cambiarUbicacionPaquete,
+  obtenerHistorialUbicacion,
+  type FirmaEntrega,
+  type UbicacionHistorialEvento,
+} from "@gateflow/paquetes";
 import type { Paquete, PaqueteHistorialEvento, FotografiaPaquete } from "@gateflow/types";
-import { EstadoBadge, PackageQRCode, Button } from "@gateflow/ui";
+import { EstadoBadge, PackageQRCode, Button, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 
@@ -27,14 +37,22 @@ export default function GuardPackageDetailPage() {
 
   const [paquete, setPaquete] = useState<Paquete | null | undefined>(undefined);
   const [historial, setHistorial] = useState<PaqueteHistorialEvento[]>([]);
+  const [historialUbicacion, setHistorialUbicacion] = useState<UbicacionHistorialEvento[]>([]);
   const [firma, setFirma] = useState<FirmaEntrega | null>(null);
   const [fotografias, setFotografias] = useState<FotografiaPaquete[]>([]);
+  const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState<{ id: string; ruta: string }[]>([]);
+  const [editandoUbicacion, setEditandoUbicacion] = useState(false);
+  const [nuevaUbicacionId, setNuevaUbicacionId] = useState("");
+  const [guardandoUbicacion, setGuardandoUbicacion] = useState(false);
+  const [errorUbicacion, setErrorUbicacion] = useState<string | null>(null);
 
   useEffect(() => {
     obtenerPaquetePorId(supabase, id).then(setPaquete);
     obtenerHistorial(supabase, id).then(setHistorial);
+    obtenerHistorialUbicacion(supabase, session.tenant.id, id).then(setHistorialUbicacion);
     obtenerFirmaEntrega(supabase, id).then(setFirma);
     obtenerFotografiasPaquete(supabase, id).then(setFotografias);
+    listarUbicacionesActivas(supabase, session.tenant.id).then(setUbicacionesDisponibles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -62,6 +80,23 @@ export default function GuardPackageDetailPage() {
 
   const pendiente = paquete.estado === "recibido" || paquete.estado === "notificado";
 
+  async function handleGuardarUbicacion() {
+    if (!nuevaUbicacionId || !paquete) return;
+    setGuardandoUbicacion(true);
+    setErrorUbicacion(null);
+    try {
+      await cambiarUbicacionPaquete(supabase, paquete.id, nuevaUbicacionId);
+      const nueva = ubicacionesDisponibles.find((u) => u.id === nuevaUbicacionId);
+      setPaquete({ ...paquete, ubicacionDescripcion: nueva?.ruta ?? paquete.ubicacionDescripcion });
+      setEditandoUbicacion(false);
+      obtenerHistorialUbicacion(supabase, session.tenant.id, id).then(setHistorialUbicacion);
+    } catch (e) {
+      setErrorUbicacion(obtenerMensajeError(e, "No se pudo cambiar la ubicación."));
+    } finally {
+      setGuardandoUbicacion(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <OperationalHeader title={paquete.unidadIdentificador} />
@@ -74,6 +109,54 @@ export default function GuardPackageDetailPage() {
 
         <div className="flex justify-center">
           <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
+        </div>
+
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Ubicación en bodega</p>
+                <p className="font-medium">{paquete.ubicacionDescripcion ?? "Sin ubicación asignada"}</p>
+              </div>
+            </div>
+            {pendiente && !editandoUbicacion && (
+              <button onClick={() => setEditandoUbicacion(true)} className="flex items-center gap-1 text-xs text-primary">
+                <Pencil className="h-3 w-3" />
+                Cambiar
+              </button>
+            )}
+          </div>
+
+          {editandoUbicacion && (
+            <div className="mt-3 space-y-2 border-t border-primary/20 pt-3">
+              <select
+                value={nuevaUbicacionId}
+                onChange={(e) => setNuevaUbicacionId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Selecciona la nueva ubicación…</option>
+                {ubicacionesDisponibles.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.ruta}
+                  </option>
+                ))}
+              </select>
+              {errorUbicacion && <p className="text-xs text-destructive">{errorUbicacion}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => setEditandoUbicacion(false)} className="text-xs text-muted-foreground">
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleGuardarUbicacion}
+                  disabled={!nuevaUbicacionId || guardandoUbicacion}
+                  className="text-xs font-medium text-primary disabled:opacity-50"
+                >
+                  {guardandoUbicacion ? "Guardando…" : "Guardar"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-border bg-card p-4 text-sm">
@@ -93,12 +176,6 @@ export default function GuardPackageDetailPage() {
             <>
               <dt className="text-muted-foreground">Paquetería</dt>
               <dd className="text-right font-medium">{paquete.empresaPaqueteria}</dd>
-            </>
-          )}
-          {paquete.ubicacionDescripcion && (
-            <>
-              <dt className="text-muted-foreground">Ubicación</dt>
-              <dd className="text-right font-medium">{paquete.ubicacionDescripcion}</dd>
             </>
           )}
           <dt className="text-muted-foreground">Recibido</dt>
@@ -151,6 +228,24 @@ export default function GuardPackageDetailPage() {
               {historial.map((h) => (
                 <div key={h.id}>
                   <p className="text-sm font-medium">{ESTADO_LABEL[h.estadoNuevoId] ?? h.estadoNuevoId}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {historialUbicacion.length > 0 && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-muted-foreground">Cambios de ubicación</p>
+            <div className="space-y-3 border-l-2 border-border pl-4">
+              {historialUbicacion.map((h) => (
+                <div key={h.id}>
+                  <p className="text-sm font-medium">
+                    {h.ubicacionAnteriorRuta ?? "Sin ubicación"} → {h.ubicacionNuevaRuta ?? "Sin ubicación"}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
                   </p>

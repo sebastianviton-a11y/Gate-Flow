@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { PageHeader } from "@/components/shared/page-header";
@@ -23,6 +25,16 @@ export default async function ConfiguracionPage() {
         nombreInicial={data?.nombre ?? session.tenant.nombre}
         configuracionInicial={(data?.configuracion as ConfiguracionResidencial) ?? {}}
       />
+      <Link
+        href="/configuracion/bodega"
+        className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:bg-muted"
+      >
+        <div>
+          <p className="font-medium">Bodega</p>
+          <p className="text-sm text-muted-foreground">Estantes, zonas y espacios donde se almacenan los paquetes.</p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      </Link>
     </div>
   );
 }

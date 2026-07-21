@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, MapPin } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
@@ -78,6 +78,12 @@ function SearchPackageContent() {
                 <div>
                   <p className="font-medium">{p.unidadIdentificador}</p>
                   <span className="gf-code text-muted-foreground">{p.codigoGateflow}</span>
+                  {p.ubicacionDescripcion && (
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      {p.ubicacionDescripcion}
+                    </p>
+                  )}
                 </div>
                 <EstadoBadge estado={p.estado} />
               </Link>

@@ -271,10 +271,18 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
               <option value="">Selecciona…</option>
               {(catalogos?.ubicaciones ?? []).map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.nombre}
+                  {u.ruta}
                 </option>
               ))}
             </select>
+            {catalogos && catalogos.ubicaciones.length === 0 && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                No hay ubicaciones de bodega configuradas.{" "}
+                <Link href="/configuracion/bodega" className="text-primary underline">
+                  Crea al menos una en Configuración → Bodega.
+                </Link>
+              </p>
+            )}
           </div>
 
           <div>

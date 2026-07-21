@@ -50,3 +50,18 @@ export {
   normalizarTelefonoWhatsApp,
   type EnlaceWhatsApp,
 } from "./whatsapp";
+
+export {
+  listarUbicacionesAdmin,
+  listarUbicacionesActivas,
+  detectarCiclo,
+  crearUbicacion,
+  actualizarUbicacion,
+  cambiarActivoUbicacion,
+  eliminarUbicacion,
+  obtenerHistorialUbicacion,
+  cambiarUbicacionPaquete,
+  type UbicacionAdmin,
+  type UbicacionInput,
+  type UbicacionHistorialEvento,
+} from "./ubicaciones";

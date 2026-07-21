@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes, FotografiaPaquete } from "@gateflow/types";
 import { mapPaqueteRow, mapHistorialRow, type PaqueteRow, type HistorialRow } from "./mappers";
+import { listarUbicacionesActivas } from "./ubicaciones";
 
 /**
  * Select completo de un paquete con sus relaciones embebidas. Los alias
@@ -335,6 +336,10 @@ export interface CatalogoItem {
 export interface UbicacionItem {
   id: string;
   nombre: string;
+  /** Ruta completa cuando hay jerarquía, ej. "Estante A / Nivel superior".
+   * Igual a `nombre` cuando la ubicación no tiene padre. */
+  ruta: string;
+  codigo: string | null;
   padreId: string | null;
 }
 
@@ -347,30 +352,31 @@ export interface Catalogos {
 
 /** Combina catálogo global (tenant_id NULL) + propio del tenant, tal
  * como lo describe 03-DATABASE.md §14 — el cliente nunca decide esa
- * combinación, RLS ya la resuelve devolviendo ambos conjuntos de filas. */
+ * combinación, RLS ya la resuelve devolviendo ambos conjuntos de filas.
+ *
+ * Las ubicaciones se resuelven con listarUbicacionesActivas() (packages/
+ * paquetes/src/ubicaciones.ts) en vez de una consulta propia — antes
+ * este archivo tenía su propia consulta duplicada que solo traía
+ * `nombre`, sin ruta jerárquica ni código; ahora hay un solo lugar que
+ * calcula la ruta, usado tanto aquí como en la pantalla de
+ * administración de bodega. */
 export async function obtenerCatalogos(supabase: SupabaseClient, tenantId: string): Promise<Catalogos> {
   const [empresas, tamanos, prioridades, ubicaciones] = await Promise.all([
     supabase.from("empresas_paqueteria").select("id, nombre").eq("activo", true).order("nombre"),
     supabase.from("tamanos_paquete").select("id, clave, nombre, color_hex").eq("activo", true).order("orden"),
     supabase.from("prioridades_paquete").select("id, clave, nombre, color_hex").eq("activo", true).order("orden"),
-    supabase
-      .from("ubicaciones")
-      .select("id, nombre, padre_id")
-      .eq("tenant_id", tenantId)
-      .eq("activo", true)
-      .order("nombre"),
+    listarUbicacionesActivas(supabase, tenantId),
   ]);
 
   if (empresas.error) throw empresas.error;
   if (tamanos.error) throw tamanos.error;
   if (prioridades.error) throw prioridades.error;
-  if (ubicaciones.error) throw ubicaciones.error;
 
   return {
     empresasPaqueteria: (empresas.data ?? []).map((e) => ({ id: e.id, clave: e.nombre, nombre: e.nombre })),
     tamanos: (tamanos.data ?? []).map((t) => ({ id: t.id, clave: t.clave, nombre: t.nombre, colorHex: t.color_hex })),
     prioridades: (prioridades.data ?? []).map((p) => ({ id: p.id, clave: p.clave, nombre: p.nombre, colorHex: p.color_hex })),
-    ubicaciones: (ubicaciones.data ?? []).map((u) => ({ id: u.id, nombre: u.nombre, padreId: u.padre_id })),
+    ubicaciones: (ubicaciones as UbicacionItem[]).map((u) => ({ id: u.id, nombre: u.nombre, ruta: u.ruta, codigo: u.codigo, padreId: null })),
   };
 }
 

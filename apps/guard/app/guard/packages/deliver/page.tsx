@@ -140,6 +140,12 @@ export default function DeliverPackagePage() {
                     <div>
                       <p className="font-medium">{p.unidadIdentificador}</p>
                       <span className="gf-code text-muted-foreground">{p.codigoGateflow}</span>
+                      {p.ubicacionDescripcion && (
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {p.ubicacionDescripcion}
+                        </p>
+                      )}
                     </div>
                     <EstadoBadge estado={p.estado} />
                   </button>
