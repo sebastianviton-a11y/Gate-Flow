@@ -32,16 +32,26 @@ export function QrScanner({ onDetectado }: QrScannerProps) {
 
         if (!activo || !videoRef.current) return;
 
-        const controls = await lector.decodeFromVideoDevice(undefined, videoRef.current, (resultado, error) => {
-          if (resultado && !detectadoRef.current) {
-            detectadoRef.current = true;
-            onDetectado(resultado.getText());
-          }
-          // Los "errores" de frame a frame sin código detectado son
-          // normales (pasa en cada fotograma sin QR visible) — no se
-          // tratan como fallo de cámara, solo se ignoran.
-          void error;
-        });
+        // decodeFromConstraints (no decodeFromVideoDevice con deviceId
+        // undefined) — hay un comportamiento inconsistente documentado
+        // entre navegadores donde `undefined` abre la cámara FRONTAL en
+        // algunos casos en vez de la trasera, sin ningún error visible.
+        // Pedir explícitamente facingMode: environment evita depender
+        // de esa elección automática del navegador.
+        const controls = await lector.decodeFromConstraints(
+          { video: { facingMode: { ideal: "environment" } } },
+          videoRef.current,
+          (resultado, error) => {
+            if (resultado && !detectadoRef.current) {
+              detectadoRef.current = true;
+              onDetectado(resultado.getText());
+            }
+            // Los "errores" de frame a frame sin código detectado son
+            // normales (pasa en cada fotograma sin QR visible) — no se
+            // tratan como fallo de cámara, solo se ignoran.
+            void error;
+          },
+        );
 
         if (!activo) {
           controls.stop();

@@ -11,9 +11,10 @@ export function getSupabaseEnv() {
 
   if (!url || !anonKey) {
     throw new Error(
-      "Faltan variables de entorno de Supabase. Copia apps/web/.env.example a " +
-        "apps/web/.env.local y completa NEXT_PUBLIC_SUPABASE_URL y " +
-        "NEXT_PUBLIC_SUPABASE_ANON_KEY con los valores de tu proyecto Supabase.",
+      "Faltan variables de entorno de Supabase. Completa NEXT_PUBLIC_SUPABASE_URL y " +
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY (en apps/admin/.env.local o apps/guard/.env.local " +
+        "para desarrollo local, o en las variables de entorno del sitio de Netlify " +
+        "correspondiente para producción) con los valores de tu proyecto Supabase.",
     );
   }
 

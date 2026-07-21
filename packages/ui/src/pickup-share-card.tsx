@@ -16,18 +16,15 @@ interface PickupShareCardProps {
 }
 
 /**
- * "Compartir aviso y QR": los enlaces wa.me NO permiten adjuntar una
- * imagen automáticamente desde el navegador — es una limitación real de
- * wa.me, no algo que se pueda rodear. Web Share API SÍ puede compartir
- * texto + archivo de imagen juntos, pero solo en navegadores/contextos
- * que lo soportan (mayormente móvil, con HTTPS). Por eso:
- *   1º intento: Web Share API con el PNG del QR + el texto — si el
- *      dispositivo lo soporta, el usuario elige a dónde compartir
- *      (WhatsApp entre las opciones).
- *   2º respaldo, siempre visible: enviar solo el texto por wa.me,
- *      descargar el QR por separado, copiar el mensaje — nunca se
- *      afirma que WhatsApp adjunta la imagen si el navegador no lo
- *      permite.
+ * Encontrado con uso real: WhatsApp no siempre acepta texto + imagen
+ * juntos cuando llegan vía Web Share API — según el dispositivo, puede
+ * abrir sin el mensaje prellenado, obligando a escribirlo a mano. El
+ * enlace wa.me (solo texto) SÍ prellena el mensaje de forma confiable
+ * en todos los casos — por eso es la acción principal, no un respaldo.
+ * "Compartir QR" (con imagen) queda como acción secundaria para quien
+ * también quiera enviar la imagen, con su limitación explicada en texto,
+ * no oculta. wa.me en sí NUNCA permite adjuntar imagen — es una
+ * limitación real de wa.me, no de esta app.
  */
 export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl, size = 200 }: PickupShareCardProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -89,36 +86,32 @@ export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl,
       </div>
 
       <div className="flex w-full max-w-xs flex-col gap-2">
-        <button
-          onClick={handleCompartirNativo}
-          className="flex h-11 items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground"
-        >
-          <Share2 className="h-4 w-4" />
-          Compartir aviso y QR
-        </button>
-
-        {compartioNativo === "no_soportado" && (
-          <p className="text-center text-xs text-muted-foreground">
-            Este navegador no soporta compartir la imagen directamente — usa las opciones de abajo.
+        {whatsappUrl ? (
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-11 items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Enviar aviso por WhatsApp
+          </a>
+        ) : (
+          <p className="rounded-md bg-warn/10 px-3 py-2 text-center text-xs text-warn-foreground">
+            Este residente no tiene un número de WhatsApp registrado.
           </p>
         )}
 
+        <p className="text-center text-[11px] text-muted-foreground">
+          El botón de arriba abre WhatsApp con el mensaje ya escrito. Comparte también la imagen del QR con alguna de
+          las opciones de abajo — WhatsApp no siempre acepta texto e imagen juntos en un solo paso.
+        </p>
+
         <div className="grid grid-cols-3 gap-2">
-          {whatsappUrl ? (
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-10 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-xs"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Texto
-            </a>
-          ) : (
-            <span className="flex h-10 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-border text-center text-[10px] text-muted-foreground">
-              Sin WhatsApp
-            </span>
-          )}
+          <button onClick={handleCompartirNativo} className="flex h-10 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-xs">
+            <Share2 className="h-4 w-4" />
+            Compartir QR
+          </button>
           <button onClick={handleDescargar} className="flex h-10 flex-col items-center justify-center gap-0.5 rounded-md border border-border text-xs">
             <Download className="h-4 w-4" />
             Descargar
@@ -128,6 +121,12 @@ export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl,
             {copiado ? "Copiado" : "Copiar"}
           </button>
         </div>
+
+        {compartioNativo === "no_soportado" && (
+          <p className="text-center text-xs text-muted-foreground">
+            Este navegador no puede compartir la imagen directamente — usa "Descargar" y compártela desde tu galería.
+          </p>
+        )}
       </div>
     </div>
   );
