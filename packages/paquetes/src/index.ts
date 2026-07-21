@@ -69,3 +69,18 @@ export {
   type UbicacionInput,
   type UbicacionHistorialEvento,
 } from "./ubicaciones";
+
+export {
+  reportarIncidencia,
+  subirFotografiaIncidencia,
+  listarIncidencias,
+  obtenerIncidenciasPaquete,
+  resolverIncidencia,
+  cambiarEstadoSeguimiento,
+  TIPO_INCIDENCIA_LABEL,
+  type Incidencia,
+  type TipoIncidencia,
+  type EstadoIncidencia,
+  type ReportarIncidenciaInput,
+  type SubirFotografiaIncidenciaInput,
+} from "./incidencias";
