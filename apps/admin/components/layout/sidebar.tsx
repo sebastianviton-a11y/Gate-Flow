@@ -3,20 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Package } from "lucide-react";
-import { GateFlowLogo } from "@gateflow/ui";
+import { TenantLogo } from "@gateflow/ui";
 import type { NavItem, RoleKey } from "@gateflow/types";
 import { navItemsForRole } from "./nav-items";
 import { NAV_ICONS } from "./nav-icons";
 import { cn } from "@gateflow/ui";
 
-export function Sidebar({ role }: { role: RoleKey }) {
+export function Sidebar({ role, logoUrl, nombreTenant }: { role: RoleKey; logoUrl?: string | null; nombreTenant?: string }) {
   const pathname = usePathname();
   const items = navItemsForRole(role);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col bg-ink-950 text-white md:flex">
       <div className="flex h-16 items-center px-6">
-        <GateFlowLogo size={30} withWordmark onDark />
+        <TenantLogo logoUrl={logoUrl} nombreTenant={nombreTenant} size={30} withWordmark onDark />
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">

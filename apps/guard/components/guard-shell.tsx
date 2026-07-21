@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { GateFlowLogo } from "@gateflow/ui";
+import { TenantLogo } from "@gateflow/ui";
 import type { SessionContext } from "@gateflow/types";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { ConnectivityIndicator } from "./connectivity-indicator";
@@ -28,7 +28,7 @@ export function GuardShell({ session }: { session: SessionContext }) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <div className="flex min-w-0 items-center gap-2">
-        <GateFlowLogo size={26} />
+        <TenantLogo logoUrl={session.tenant.logoUrl} nombreTenant={session.tenant.nombre} size={26} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-tight">{session.tenant.nombre}</p>
           <p className="truncate text-xs leading-tight text-muted-foreground">{session.user.nombreCompleto}</p>

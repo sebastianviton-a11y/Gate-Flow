@@ -39,7 +39,7 @@ export function Header({ session }: { session: SessionContext }) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <MobileNav role={session.role} />
+        <MobileNav role={session.role} logoUrl={session.tenant.logoUrl} nombreTenant={session.tenant.nombre} />
         <TenantSwitcher currentTenant={session.tenant} availableTenants={session.availableTenants} />
       </div>
 

@@ -28,6 +28,11 @@ export interface Tenant {
   tipo: "residencial" | "condominio" | "urbanizacion";
   plan: "trial" | "basico" | "pro" | "enterprise";
   activo: boolean;
+  /** Logo propio del residencial, si lo subió — viene de
+   * tenants.configuracion (JSONB), no de una columna dedicada. null
+   * cuando no se ha personalizado; la UI cae de vuelta a la marca de
+   * GateFlow (ver packages/ui/src/tenant-logo.tsx). */
+  logoUrl?: string | null;
 }
 
 export interface UserProfile {

@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-muted/40">
-      <Sidebar role={session.role} />
+      <Sidebar role={session.role} logoUrl={session.tenant.logoUrl} nombreTenant={session.tenant.nombre} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header session={session} />
         <DemoSessionBanner session={session} />

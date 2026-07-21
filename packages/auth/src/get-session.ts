@@ -44,7 +44,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
 
   const { data: membership, error } = await supabase
     .from("user_tenants")
-    .select("rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo)")
+    .select("rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo, configuracion)")
     .eq("user_id", user.id)
     .eq("activo", true)
     .limit(1)
@@ -52,7 +52,22 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
 
   // Caso real: la tabla existe, el usuario tiene una fila de pertenencia.
   if (!error && membership?.tenants) {
-    const tenant = membership.tenants as unknown as Tenant;
+    const tenantRow = membership.tenants as unknown as {
+      id: string;
+      nombre: string;
+      tipo: Tenant["tipo"];
+      plan: Tenant["plan"];
+      activo: boolean;
+      configuracion: { logoUrl?: string } | null;
+    };
+    const tenant: Tenant = {
+      id: tenantRow.id,
+      nombre: tenantRow.nombre,
+      tipo: tenantRow.tipo,
+      plan: tenantRow.plan,
+      activo: tenantRow.activo,
+      logoUrl: tenantRow.configuracion?.logoUrl ?? null,
+    };
     const role = (membership.roles as unknown as { clave: RoleKey })?.clave ?? "admin_residencial";
 
     return {

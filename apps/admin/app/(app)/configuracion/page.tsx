@@ -22,6 +22,7 @@ export default async function ConfiguracionPage() {
     <div className="max-w-2xl space-y-6">
       <PageHeader title="Configuración" description="Datos generales de tu residencial." />
       <FormularioGeneral
+        tenantId={session.tenant.id}
         nombreInicial={data?.nombre ?? session.tenant.nombre}
         configuracionInicial={(data?.configuracion as ConfiguracionResidencial) ?? {}}
       />

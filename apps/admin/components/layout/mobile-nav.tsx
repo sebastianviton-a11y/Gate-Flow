@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Package, Plus } from "lucide-react";
-import { GateFlowLogo } from "@gateflow/ui";
+import { TenantLogo } from "@gateflow/ui";
 import type { RoleKey } from "@gateflow/types";
 import { navItemsForRole } from "./nav-items";
 import { NAV_ICONS } from "./nav-icons";
@@ -16,7 +16,7 @@ import { cn } from "@gateflow/ui";
  * Escape cierra, el foco se mueve al botón de cierre al abrir y regresa
  * al trigger al cerrar.
  */
-export function MobileNav({ role }: { role: RoleKey }) {
+export function MobileNav({ role, logoUrl, nombreTenant }: { role: RoleKey; logoUrl?: string | null; nombreTenant?: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const items = navItemsForRole(role);
@@ -58,7 +58,7 @@ export function MobileNav({ role }: { role: RoleKey }) {
           <button type="button" aria-label="Cerrar navegación" onClick={close} className="flex-1 bg-black/40" />
           <div className="flex w-72 max-w-[80vw] flex-col bg-ink-950 text-white">
             <div className="flex h-16 items-center justify-between px-5">
-              <GateFlowLogo size={26} withWordmark onDark />
+              <TenantLogo logoUrl={logoUrl} nombreTenant={nombreTenant} size={26} withWordmark onDark />
               <button
                 ref={closeButtonRef}
                 type="button"
