@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { X, TriangleAlert } from "lucide-react";
@@ -193,7 +193,7 @@ export function EditarUnidad({
             <Button variant="ghost" size="sm" onClick={onCerrar}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={handleGuardar} disabled={!identificador.trim() || enviando}>
+            <Button size="sm" onClick={() => handleGuardar()} disabled={!identificador.trim() || enviando}>
               {enviando ? "Guardando…" : "Guardar cambios"}
             </Button>
           </div>
