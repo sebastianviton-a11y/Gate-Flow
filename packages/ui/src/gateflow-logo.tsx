@@ -1,4 +1,4 @@
-import { cn } from "./utils";
+﻿import { cn } from "./utils";
 
 interface GateFlowLogoProps {
   /** Tamaño del ícono en px. El texto (si se muestra) escala junto con él. */
@@ -32,9 +32,20 @@ export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, 
         {/* Naranja Conexión — arco inferior */}
         <path d="M 63 91 A 42 42 0 0 1 12 57" stroke="#FF8A00" strokeWidth="9" strokeLinecap="round" fill="none" />
         <path d="M 76 79 L 68 92 L 58 80 Z" fill="#FF8A00" />
-        {/* Caja central */}
-        <rect x="30" y="30" width="40" height="40" rx="6" fill="#FFC107" stroke="#0D1B2A" strokeWidth="4" />
-        <path d="M30 40 L50 48 L70 40 M50 48 L50 70" stroke="#0D1B2A" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {/* Caja central — forma de caja de cartón con solapa superior,
+            no un cuadrado plano. Color ámbar/naranja (antes decía
+            amarillo #FFC107 por error — la referencia de marca real usa
+            un tono naranja/ámbar, más cercano a #F5A623). */}
+        <rect x="28" y="38" width="44" height="34" rx="5" fill="#F5A623" stroke="#0D1B2A" strokeWidth="4" />
+        <path
+          d="M28 46 L50 38 L72 46 M50 38 L50 50"
+          stroke="#0D1B2A"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        <path d="M28 46 L50 54 L72 46" stroke="#0D1B2A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
 
       {withWordmark && (
