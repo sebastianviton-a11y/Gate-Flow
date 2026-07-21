@@ -14,6 +14,95 @@ export interface ResultadoImportacion {
   omitidas: { identificador: string; motivo: string }[];
 }
 
+export interface ActualizarUnidadInput {
+  tipo: "casa" | "departamento";
+  identificador: string;
+  contactoNombre?: string | null;
+  contactoTelefono?: string | null;
+  contactoTelefonoSecundario?: string | null;
+  contactoEmail?: string | null;
+  notas?: string | null;
+  activo: boolean;
+}
+
+/**
+ * Actualiza una unidad existente — nunca crea una nueva fila ni cambia
+ * su id. Los campos opcionales se guardan como `null` cuando llegan
+ * vacíos, nunca como texto "N/A" o similar (punto 3 de la
+ * especificación) — `?.trim() || null` ya es la convención que usa
+ * agregar-manual.tsx, se mantiene aquí exactamente igual.
+ */
+export async function actualizarUnidad(supabase: SupabaseClient, unidadId: string, input: ActualizarUnidadInput): Promise<void> {
+  const { error } = await supabase
+    .from("unidades")
+    .update({
+      tipo: input.tipo,
+      identificador: input.identificador.trim(),
+      contacto_nombre: input.contactoNombre?.trim() || null,
+      contacto_telefono: input.contactoTelefono?.trim() || null,
+      contacto_telefono_secundario: input.contactoTelefonoSecundario?.trim() || null,
+      contacto_email: input.contactoEmail?.trim() || null,
+      notas: input.notas?.trim() || null,
+      activo: input.activo,
+    })
+    .eq("id", unidadId);
+  if (error) throw error;
+}
+
+export interface UnidadDuplicada {
+  id: string;
+  identificador: string;
+  campoCoincidente: "contacto_telefono" | "contacto_telefono_secundario" | "contacto_email";
+}
+
+/**
+ * Advertencia, no bloqueo (punto 7 de la especificación): antes de
+ * guardar, se avisa si otra unidad ya usa el mismo teléfono o correo —
+ * pero nunca impide guardar, y siempre excluye la propia unidad que se
+ * está editando (para no "detectarse a sí misma" como duplicado).
+ */
+export async function buscarUnidadesDuplicadas(
+  supabase: SupabaseClient,
+  tenantId: string,
+  datos: { contactoTelefono?: string | null; contactoTelefonoSecundario?: string | null; contactoEmail?: string | null },
+  excluirUnidadId: string,
+): Promise<UnidadDuplicada[]> {
+  const valores = [datos.contactoTelefono, datos.contactoTelefonoSecundario, datos.contactoEmail].filter(
+    (v): v is string => !!v && v.trim().length > 0,
+  );
+  if (valores.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("unidades")
+    .select("id, identificador, contacto_telefono, contacto_telefono_secundario, contacto_email")
+    .eq("tenant_id", tenantId)
+    .neq("id", excluirUnidadId)
+    .or(
+      [
+        datos.contactoTelefono ? `contacto_telefono.eq.${datos.contactoTelefono}` : null,
+        datos.contactoTelefonoSecundario ? `contacto_telefono_secundario.eq.${datos.contactoTelefonoSecundario}` : null,
+        datos.contactoEmail ? `contacto_email.eq.${datos.contactoEmail}` : null,
+      ]
+        .filter(Boolean)
+        .join(","),
+    );
+  if (error) throw error;
+
+  const resultado: UnidadDuplicada[] = [];
+  for (const fila of data ?? []) {
+    if (datos.contactoTelefono && fila.contacto_telefono === datos.contactoTelefono) {
+      resultado.push({ id: fila.id, identificador: fila.identificador, campoCoincidente: "contacto_telefono" });
+    }
+    if (datos.contactoTelefonoSecundario && fila.contacto_telefono_secundario === datos.contactoTelefonoSecundario) {
+      resultado.push({ id: fila.id, identificador: fila.identificador, campoCoincidente: "contacto_telefono_secundario" });
+    }
+    if (datos.contactoEmail && fila.contacto_email === datos.contactoEmail) {
+      resultado.push({ id: fila.id, identificador: fila.identificador, campoCoincidente: "contacto_email" });
+    }
+  }
+  return resultado;
+}
+
 /**
  * Importa unidades en lote. No crea filas en `casas`/`departamentos`
  * (la ubicación por calle/manzana/edificio se administra por separado,

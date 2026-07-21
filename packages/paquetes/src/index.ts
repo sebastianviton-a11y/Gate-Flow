@@ -35,11 +35,15 @@ export {
   guardarFirmaEntrega,
   importarUnidadesMasivo,
   subirFotografiaPaquete,
+  actualizarUnidad,
+  buscarUnidadesDuplicadas,
   type FilaImportarUnidad,
   type ResultadoImportacion,
   type ResultadoRegistro,
   type GuardarFirmaInput,
   type SubirFotografiaInput,
+  type ActualizarUnidadInput,
+  type UnidadDuplicada,
 } from "./mutations";
 
 export {

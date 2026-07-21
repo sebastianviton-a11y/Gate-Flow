@@ -302,13 +302,16 @@ export interface UnidadListItem {
   identificador: string;
   contactoNombre: string | null;
   contactoTelefono: string | null;
+  contactoTelefonoSecundario: string | null;
+  contactoEmail: string | null;
+  notas: string | null;
   activo: boolean;
 }
 
 export async function listarUnidades(supabase: SupabaseClient, tenantId: string): Promise<UnidadListItem[]> {
   const { data, error } = await supabase
     .from("unidades")
-    .select("id, tipo, identificador, contacto_nombre, contacto_telefono, activo")
+    .select("id, tipo, identificador, contacto_nombre, contacto_telefono, contacto_telefono_secundario, contacto_email, notas, activo")
     .eq("tenant_id", tenantId)
     .order("identificador");
 
@@ -320,6 +323,9 @@ export async function listarUnidades(supabase: SupabaseClient, tenantId: string)
     identificador: u.identificador,
     contactoNombre: u.contacto_nombre,
     contactoTelefono: u.contacto_telefono,
+    contactoTelefonoSecundario: u.contacto_telefono_secundario,
+    contactoEmail: u.contacto_email,
+    notas: u.notas,
     activo: u.activo,
   }));
 }
