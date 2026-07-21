@@ -32,20 +32,18 @@ export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, 
         {/* Naranja Conexión — arco inferior */}
         <path d="M 63 91 A 42 42 0 0 1 12 57" stroke="#FF8A00" strokeWidth="9" strokeLinecap="round" fill="none" />
         <path d="M 76 79 L 68 92 L 58 80 Z" fill="#FF8A00" />
-        {/* Caja central — forma de caja de cartón con solapa superior,
-            no un cuadrado plano. Color ámbar/naranja (antes decía
-            amarillo #FFC107 por error — la referencia de marca real usa
-            un tono naranja/ámbar, más cercano a #F5A623). */}
-        <rect x="28" y="38" width="44" height="34" rx="5" fill="#F5A623" stroke="#0D1B2A" strokeWidth="4" />
-        <path
-          d="M28 46 L50 38 L72 46 M50 38 L50 50"
-          stroke="#0D1B2A"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-        <path d="M28 46 L50 54 L72 46" stroke="#0D1B2A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {/* Caja central en perspectiva isométrica — cara superior (rombo)
+            + dos caras laterales con sombreado distinto, para que se lea
+            como una caja de cartón con profundidad real, no una silueta
+            plana de frente (que se leía como sobre/buzón, no como caja). */}
+        {/* Cara superior */}
+        <path d="M50 28 L69 39 L50 50 L31 39 Z" fill="#FFCE7A" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
+        {/* Cara lateral izquierda (más clara) */}
+        <path d="M31 39 L50 50 L50 74 L31 63 Z" fill="#F5A623" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
+        {/* Cara lateral derecha (más oscura, "en sombra") */}
+        <path d="M69 39 L50 50 L50 74 L69 63 Z" fill="#D4870F" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
+        {/* Línea del pliegue central de la cara superior (cinta de la caja) */}
+        <path d="M50 28 L50 50" stroke="#0D1B2A" strokeWidth="2.5" strokeLinecap="round" />
       </svg>
 
       {withWordmark && (
