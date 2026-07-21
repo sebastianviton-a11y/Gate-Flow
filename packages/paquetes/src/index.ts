@@ -46,6 +46,7 @@ export {
   construirEnlaceWhatsApp,
   construirMensajeNotificacion,
   construirUrlEscaneo,
+  construirUrlVerQr,
   normalizarTelefonoWhatsApp,
   type EnlaceWhatsApp,
 } from "./whatsapp";

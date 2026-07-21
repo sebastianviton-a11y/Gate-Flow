@@ -16,15 +16,18 @@ interface PickupShareCardProps {
 }
 
 /**
- * Encontrado con uso real: WhatsApp no siempre acepta texto + imagen
- * juntos cuando llegan vía Web Share API — según el dispositivo, puede
- * abrir sin el mensaje prellenado, obligando a escribirlo a mano. El
- * enlace wa.me (solo texto) SÍ prellena el mensaje de forma confiable
- * en todos los casos — por eso es la acción principal, no un respaldo.
- * "Compartir QR" (con imagen) queda como acción secundaria para quien
- * también quiera enviar la imagen, con su limitación explicada en texto,
- * no oculta. wa.me en sí NUNCA permite adjuntar imagen — es una
- * limitación real de wa.me, no de esta app.
+ * El mensaje de WhatsApp (botón principal) ya incluye un enlace a
+ * /escanear/[token]/qr — una página pública que muestra solo la imagen
+ * del QR, sin datos del paquete. Así, un solo toque abre directo la
+ * conversación del residente (wa.me lo permite, sin preguntar a quién)
+ * con TODO incluido en el mensaje, sin depender de que el sistema deje
+ * elegir "compartir con WhatsApp" y sin la limitación de que wa.me nunca
+ * puede adjuntar un archivo de imagen directamente.
+ *
+ * "Compartir QR" / "Descargar" / "Copiar" quedan como acciones
+ * secundarias, útiles para el guardia (por ejemplo, mostrar el QR en su
+ * propia pantalla si el residente está presente), no para el flujo
+ * principal de aviso a distancia.
  */
 export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl, size = 200 }: PickupShareCardProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -103,8 +106,8 @@ export function PickupShareCard({ scanUrl, codigoGateflow, mensaje, whatsappUrl,
         )}
 
         <p className="text-center text-[11px] text-muted-foreground">
-          El botón de arriba abre WhatsApp con el mensaje ya escrito. Comparte también la imagen del QR con alguna de
-          las opciones de abajo — WhatsApp no siempre acepta texto e imagen juntos en un solo paso.
+          El mensaje ya incluye un enlace para que el residente vea su código QR — no necesitas compartir la imagen
+          por separado. Las opciones de abajo son solo para ti, si quieres guardarla o mostrarla en tu pantalla.
         </p>
 
         <div className="grid grid-cols-3 gap-2">

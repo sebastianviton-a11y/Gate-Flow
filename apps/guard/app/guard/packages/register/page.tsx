@@ -11,6 +11,7 @@ import {
   construirEnlaceWhatsApp,
   construirMensajeNotificacion,
   construirUrlEscaneo,
+  construirUrlVerQr,
   type Catalogos,
   type UbicacionItem,
   type ResultadoRegistro,
@@ -142,16 +143,17 @@ export default function RegisterPackagePage() {
   if (confirmacion) {
     const { paquete, notificacion } = confirmacion;
     const nombreDestinatario = notificacion?.destinatario ?? "residente";
-    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario);
-    const enlaceWhatsApp = notificacion
-      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario)
-      : null;
     // NEXT_PUBLIC_GUARD_APP_URL es la URL pública real de este sitio en
     // Netlify — nunca un dominio temporal escrito en el código. Si
     // todavía no se configuró (ej. en desarrollo local), se usa el
     // origin del navegador como respaldo razonable.
     const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
     const scanUrl = paquete.pickupToken ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
+    const urlVerQr = paquete.pickupToken ? construirUrlVerQr(paquete.pickupToken, baseUrl) : undefined;
+    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr);
+    const enlaceWhatsApp = notificacion
+      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr)
+      : null;
 
     return (
       <div className="flex h-full flex-col">

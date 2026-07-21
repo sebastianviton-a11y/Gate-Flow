@@ -12,6 +12,7 @@ import {
   construirEnlaceWhatsApp,
   construirMensajeNotificacion,
   construirUrlEscaneo,
+  construirUrlVerQr,
   type Catalogos,
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
@@ -101,10 +102,13 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
   if (confirmacion) {
     const { paquete, notificacion } = confirmacion;
     const nombreDestinatario = notificacion?.destinatario ?? "residente";
-    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario);
-    const enlaceWhatsApp = notificacion ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario) : null;
     const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || "";
     const scanUrl = paquete.pickupToken && baseUrl ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
+    const urlVerQr = paquete.pickupToken && baseUrl ? construirUrlVerQr(paquete.pickupToken, baseUrl) : undefined;
+    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr);
+    const enlaceWhatsApp = notificacion
+      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr)
+      : null;
 
     return (
       <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-8 text-center">
