@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import type { SessionContext, RoleKey, Tenant } from "@gateflow/types";
 
@@ -69,6 +70,43 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       logoUrl: tenantRow.configuracion?.logoUrl ?? null,
     };
     const role = (membership.roles as unknown as { clave: RoleKey })?.clave ?? "admin_residencial";
+
+    // "Entrar como soporte": solo aplica si el rol REAL es super_admin —
+    // una cookie manipulada por cualquier otro rol se ignora en
+    // silencio, nunca concede acceso. No se crea sesión de otro usuario
+    // real (exigiría la clave de servicio) — simplemente se cambia a
+    // qué tenant apunta `session.tenant`, con la propia identidad.
+    if (role === "super_admin") {
+      const tenantSoporteId = cookies().get("gf_soporte_tenant")?.value;
+      if (tenantSoporteId && tenantSoporteId !== tenant.id) {
+        const { data: tenantSoporte } = await supabase
+          .from("tenants")
+          .select("id, nombre, tipo, plan, activo, configuracion")
+          .eq("id", tenantSoporteId)
+          .maybeSingle();
+
+        if (tenantSoporte) {
+          const tenantImpersonado: Tenant = {
+            id: tenantSoporte.id,
+            nombre: tenantSoporte.nombre,
+            tipo: tenantSoporte.tipo,
+            plan: tenantSoporte.plan,
+            activo: tenantSoporte.activo,
+            logoUrl: (tenantSoporte.configuracion as { logoUrl?: string } | null)?.logoUrl ?? null,
+          };
+          return {
+            user: baseUser,
+            tenant: tenantImpersonado,
+            role: "admin_residencial",
+            availableTenants: [tenantImpersonado],
+            isDemo: false,
+            impersonando: true,
+            tenantReal: tenant,
+            rolReal: role,
+          };
+        }
+      }
+    }
 
     return {
       user: baseUser,

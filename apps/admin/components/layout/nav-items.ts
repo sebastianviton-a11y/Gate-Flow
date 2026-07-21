@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/paquetes", label: "Paquetes", icon: "Package" },
   { href: "/unidades", label: "Unidades", icon: "Building2" },
   { href: "/configuracion", label: "Configuración", icon: "Settings", roles: ["admin_residencial", "super_admin"] },
+  { href: "/superadmin", label: "Super Admin", icon: "ShieldCheck", roles: ["super_admin"] },
 ];
 
 export function navItemsForRole(role: RoleKey): NavItem[] {

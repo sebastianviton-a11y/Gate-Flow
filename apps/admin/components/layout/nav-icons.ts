@@ -6,6 +6,7 @@ import {
   Building2,
   UserCog,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,4 +23,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   Building2,
   UserCog,
   Settings,
+  ShieldCheck,
 };

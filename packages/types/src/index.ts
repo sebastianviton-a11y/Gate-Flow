@@ -63,6 +63,18 @@ export interface SessionContext {
   isDemo: boolean;
   /** Motivo del fallback, solo presente cuando isDemo === true. */
   demoReason?: "schema_not_migrated" | "no_membership_row" | "unexpected_error";
+  /**
+   * "Entrar como soporte": true cuando un super_admin está viendo el
+   * panel de OTRO residencial bajo su propia identidad — nunca se crea
+   * una sesión falsa de otro usuario real (exigiría la clave de
+   * servicio de Supabase, que no debe vivir en el navegador). `tenant`
+   * ya queda resuelto al residencial que se está soportando; `rolReal`
+   * y `tenantReal` guardan quién es realmente el usuario detrás, para
+   * el banner de "Salir de modo soporte" y la auditoría.
+   */
+  impersonando?: boolean;
+  tenantReal?: Tenant;
+  rolReal?: RoleKey;
 }
 
 export type UnidadTipo = "casa" | "departamento";

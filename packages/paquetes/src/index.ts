@@ -84,3 +84,22 @@ export {
   type ReportarIncidenciaInput,
   type SubirFotografiaIncidenciaInput,
 } from "./incidencias";
+
+export {
+  obtenerMetricasGlobales,
+  listarResidenciales,
+  crearResidencial,
+  actualizarResidencial,
+  cambiarEstadoServicio,
+  actualizarPlanResidencial,
+  eliminarResidencial,
+  obtenerResidencialDetalle,
+  ESTADO_SERVICIO_LABEL,
+  PLAN_LABEL,
+  type MetricasGlobales,
+  type ResidencialListItem,
+  type ResidencialDetalle,
+  type ResidencialInput,
+  type EstadoServicio,
+  type PlanClave,
+} from "./superadmin";

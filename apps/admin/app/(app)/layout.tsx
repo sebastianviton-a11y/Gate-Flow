@@ -3,6 +3,7 @@ import { getSessionContext } from "@gateflow/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { DemoSessionBanner } from "@/components/layout/demo-session-banner";
+import { SoporteBanner } from "@/components/layout/soporte-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSessionContext();
@@ -19,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <Header session={session} />
         <DemoSessionBanner session={session} />
+        <SoporteBanner session={session} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
     </div>
