@@ -110,6 +110,8 @@ export interface ResidencialListItem {
   totalUsuarios: number;
   creadoEn: string;
   planFechaRenovacion: string | null;
+  empresaId: string;
+  empresaNombre: string;
 }
 
 interface TenantRow {
@@ -123,16 +125,27 @@ interface TenantRow {
   admin_contacto_nombre: string | null;
   created_at: string;
   plan_fecha_renovacion: string | null;
+  empresa_id: string;
+  empresas: { nombre: string } | null;
 }
 
-export async function listarResidenciales(supabase: SupabaseClient): Promise<ResidencialListItem[]> {
-  const { data: tenants, error } = await supabase
+/** `empresaId` filtra a los residenciales de una sola empresa — es lo
+ * que usa la pantalla de detalle de empresa (Super Admin → Empresas →
+ * [una empresa] → sus residenciales), reutilizando esta misma función
+ * y el mismo componente de tabla que ya existía. */
+export async function listarResidenciales(supabase: SupabaseClient, empresaId?: string): Promise<ResidencialListItem[]> {
+  let consulta = supabase
     .from("tenants")
-    .select("id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, created_at, plan_fecha_renovacion")
+    .select(
+      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, created_at, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
+    )
     .order("created_at", { ascending: false });
+  if (empresaId) consulta = consulta.eq("empresa_id", empresaId);
+
+  const { data: tenants, error } = await consulta;
   if (error) throw error;
 
-  const filas = (tenants ?? []) as TenantRow[];
+  const filas = (tenants ?? []) as unknown as TenantRow[];
   if (filas.length === 0) return [];
 
   const ids = filas.map((f) => f.id);
@@ -177,11 +190,14 @@ export async function listarResidenciales(supabase: SupabaseClient): Promise<Res
     totalUsuarios: conteoUsuarios.get(f.id) ?? 0,
     creadoEn: f.created_at,
     planFechaRenovacion: f.plan_fecha_renovacion,
+    empresaId: f.empresa_id,
+    empresaNombre: f.empresas?.nombre ?? "—",
   }));
 }
 
 export interface ResidencialInput {
   nombre: string;
+  empresaId: string;
   ciudad?: string | null;
   estadoGeografico?: string | null;
   pais?: string;
@@ -198,6 +214,7 @@ export async function crearResidencial(supabase: SupabaseClient, input: Residenc
     .insert({
       nombre: input.nombre.trim(),
       tipo: "residencial",
+      empresa_id: input.empresaId,
       ciudad: input.ciudad?.trim() || null,
       estado_geografico: input.estadoGeografico?.trim() || null,
       pais: input.pais || "MX",
@@ -274,12 +291,14 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
   const { data, error } = await supabase
     .from("tenants")
     .select(
-      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, plan_precio, plan_fecha_inicio, plan_fecha_renovacion",
+      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, plan_precio, plan_fecha_inicio, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+
+  const empresaRelacionada = data.empresas as unknown as { nombre: string } | null;
 
   const [unidades, userTenants, admins] = await Promise.all([
     supabase.from("unidades").select("id", { count: "exact", head: true }).eq("tenant_id", id),
@@ -310,5 +329,7 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
     adminContactoEmail: data.admin_contacto_email,
     adminContactoTelefono: data.admin_contacto_telefono,
     observaciones: data.observaciones,
+    empresaId: data.empresa_id,
+    empresaNombre: empresaRelacionada?.nombre ?? "—",
   };
 }

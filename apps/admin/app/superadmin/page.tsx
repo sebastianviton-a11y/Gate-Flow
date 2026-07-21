@@ -1,4 +1,5 @@
-import { TrendingUp, TrendingDown, Building2, Users, Package, PackageCheck } from "lucide-react";
+import { TrendingUp, TrendingDown, Building, Building2, Users, Package, PackageCheck, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { obtenerMetricasGlobales } from "@gateflow/paquetes";
 
@@ -18,9 +19,16 @@ export default async function SuperAdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Métricas globales de toda la plataforma GateFlow.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Métricas globales de toda la plataforma GateFlow.</p>
+        </div>
+        <Link href="/superadmin/empresas" className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+          <Building className="h-4 w-4" />
+          Ver empresas
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

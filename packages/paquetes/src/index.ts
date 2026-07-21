@@ -103,3 +103,15 @@ export {
   type EstadoServicio,
   type PlanClave,
 } from "./superadmin";
+
+export {
+  listarEmpresas,
+  listarEmpresasParaSelector,
+  crearEmpresa,
+  actualizarEmpresa,
+  cambiarEstadoEmpresa,
+  obtenerEmpresaDetalle,
+  type EmpresaListItem,
+  type EmpresaDetalle,
+  type EmpresaInput,
+} from "./empresas";

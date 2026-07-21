@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Building2, LogOut } from "lucide-react";
+import { LayoutDashboard, Building, Building2, LogOut } from "lucide-react";
 import { getSessionContext, requireRole } from "@gateflow/auth";
 import { GateFlowLogo } from "@gateflow/ui";
 
@@ -35,6 +35,10 @@ export default async function SuperAdminLayout({ children }: { children: React.R
           <Link href="/superadmin" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white">
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
+          </Link>
+          <Link href="/superadmin/empresas" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white">
+            <Building className="h-4 w-4" />
+            Empresas
           </Link>
           <Link
             href="/superadmin/residenciales"

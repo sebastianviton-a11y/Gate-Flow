@@ -190,6 +190,7 @@ function TabInformacionGeneral({ residencial, onGuardado }: { residencial: Resid
     try {
       await actualizarResidencial(supabase, residencial.id, {
         nombre,
+        empresaId: residencial.empresaId,
         ciudad,
         estadoGeografico,
         adminContactoNombre: adminNombre,

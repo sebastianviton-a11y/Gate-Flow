@@ -10,7 +10,12 @@ const ESTADO_CLASE: Record<string, string> = {
   cancelado: "bg-muted-foreground/10 text-muted-foreground",
 };
 
-export function ResidencialesTable({ residenciales }: { residenciales: ResidencialListItem[] }) {
+/** `mostrarEmpresa` se apaga desde la pantalla de detalle de una
+ * empresa (donde los residenciales listados ya son todos de la MISMA
+ * empresa — repetir esa columna sería ruido, no información) y se
+ * deja encendida por defecto para la vista general de todos los
+ * residenciales, donde sí ayuda a distinguir de quién es cada uno. */
+export function ResidencialesTable({ residenciales, mostrarEmpresa = true }: { residenciales: ResidencialListItem[]; mostrarEmpresa?: boolean }) {
   if (residenciales.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -25,6 +30,7 @@ export function ResidencialesTable({ residenciales }: { residenciales: Residenci
         <thead className="bg-muted text-left text-xs text-muted-foreground">
           <tr>
             <th className="px-4 py-2 font-medium">Residencial</th>
+            {mostrarEmpresa && <th className="px-4 py-2 font-medium">Empresa</th>}
             <th className="px-4 py-2 font-medium">Ciudad</th>
             <th className="px-4 py-2 font-medium">Administrador</th>
             <th className="px-4 py-2 font-medium">Viviendas</th>
@@ -51,6 +57,13 @@ export function ResidencialesTable({ residenciales }: { residenciales: Residenci
                   {r.nombre}
                 </Link>
               </td>
+              {mostrarEmpresa && (
+                <td className="px-4 py-2.5">
+                  <Link href={`/superadmin/empresas/${r.empresaId}`} className="text-muted-foreground hover:text-primary hover:underline">
+                    {r.empresaNombre}
+                  </Link>
+                </td>
+              )}
               <td className="px-4 py-2.5 text-muted-foreground">
                 {r.ciudad ?? "—"}
                 {r.estadoGeografico ? `, ${r.estadoGeografico}` : ""}

@@ -45,7 +45,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
 
   const { data: membership, error } = await supabase
     .from("user_tenants")
-    .select("rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo, configuracion)")
+    .select("rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo, configuracion, empresa_id)")
     .eq("user_id", user.id)
     .eq("activo", true)
     .limit(1)
@@ -60,6 +60,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       plan: Tenant["plan"];
       activo: boolean;
       configuracion: { logoUrl?: string } | null;
+      empresa_id: string;
     };
     const tenant: Tenant = {
       id: tenantRow.id,
@@ -68,6 +69,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       plan: tenantRow.plan,
       activo: tenantRow.activo,
       logoUrl: tenantRow.configuracion?.logoUrl ?? null,
+      empresaId: tenantRow.empresa_id,
     };
     const role = (membership.roles as unknown as { clave: RoleKey })?.clave ?? "admin_residencial";
 
@@ -81,7 +83,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       if (tenantSoporteId && tenantSoporteId !== tenant.id) {
         const { data: tenantSoporte } = await supabase
           .from("tenants")
-          .select("id, nombre, tipo, plan, activo, configuracion")
+          .select("id, nombre, tipo, plan, activo, configuracion, empresa_id")
           .eq("id", tenantSoporteId)
           .maybeSingle();
 
@@ -93,6 +95,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
             plan: tenantSoporte.plan,
             activo: tenantSoporte.activo,
             logoUrl: (tenantSoporte.configuracion as { logoUrl?: string } | null)?.logoUrl ?? null,
+            empresaId: tenantSoporte.empresa_id,
           };
           return {
             user: baseUser,
@@ -138,6 +141,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     tipo: "residencial",
     plan: "trial",
     activo: true,
+    empresaId: "demo-empresa",
   };
 
   return {

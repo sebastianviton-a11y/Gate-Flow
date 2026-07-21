@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
@@ -9,10 +10,16 @@ import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
 
 const PLANES_NUEVOS: PlanClave[] = ["piloto", "starter", "business", "enterprise"];
 
-export function FormularioResidencial() {
+interface Props {
+  empresas: { id: string; nombre: string }[];
+  empresaIdInicial?: string;
+}
+
+export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
+  const [empresaId, setEmpresaId] = useState(empresaIdInicial ?? "");
   const [nombre, setNombre] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [estadoGeografico, setEstadoGeografico] = useState("");
@@ -27,12 +34,13 @@ export function FormularioResidencial() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleCrear() {
-    if (!nombre.trim()) return;
+    if (!nombre.trim() || !empresaId) return;
     setEnviando(true);
     setError(null);
     try {
       const { id } = await crearResidencial(supabase, {
         nombre,
+        empresaId,
         ciudad,
         estadoGeografico,
         pais,
@@ -49,9 +57,42 @@ export function FormularioResidencial() {
     }
   }
 
+  if (empresas.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-10 text-center">
+        <AlertCircle className="h-6 w-6 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
+          Todo residencial debe pertenecer a una empresa. Crea la primera empresa antes de poder crear un residencial.
+        </p>
+        <Link href="/superadmin/empresas/nueva" className="text-sm font-medium text-primary underline">
+          Crear empresa
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 rounded-lg border border-border bg-card p-5">
-      <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label htmlFor="r-empresa">
+          Empresa <span className="text-destructive">*</span>
+        </Label>
+        <select
+          id="r-empresa"
+          value={empresaId}
+          onChange={(e) => setEmpresaId(e.target.value)}
+          className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">Selecciona…</option>
+          {empresas.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.nombre}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
         <div className="col-span-2">
           <Label htmlFor="r-nombre">
             Nombre <span className="text-destructive">*</span>
@@ -130,7 +171,7 @@ export function FormularioResidencial() {
         <Button variant="ghost" onClick={() => router.push("/superadmin/residenciales")}>
           Cancelar
         </Button>
-        <Button onClick={handleCrear} disabled={!nombre.trim() || enviando}>
+        <Button onClick={handleCrear} disabled={!nombre.trim() || !empresaId || enviando}>
           {enviando ? "Creando…" : "Crear residencial"}
         </Button>
       </div>

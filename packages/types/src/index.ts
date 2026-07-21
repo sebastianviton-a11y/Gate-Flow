@@ -13,7 +13,10 @@
 // Núcleo de plataforma
 // ─────────────────────────────────────────────────────────────────────────
 
-export type RoleKey = "super_admin" | "admin_residencial" | "guardia" | "residente";
+/** admin_empresa, supervisor y recepcion existen desde la migración de
+ * empresas — preparados para el futuro (punto "Permisos" de la
+ * especificación), sin pantallas ni permisos propios todavía. */
+export type RoleKey = "super_admin" | "admin_empresa" | "admin_residencial" | "supervisor" | "guardia" | "recepcion" | "residente";
 
 export interface Role {
   id: string;
@@ -33,6 +36,34 @@ export interface Tenant {
    * cuando no se ha personalizado; la UI cae de vuelta a la marca de
    * GateFlow (ver packages/ui/src/tenant-logo.tsx). */
   logoUrl?: string | null;
+  /** Toda tenant pertenece a una empresa desde la migración de
+   * empresas — obligatorio a nivel de base de datos, no opcional. */
+  empresaId: string;
+}
+
+/**
+ * Capa por encima de Tenant — una empresa puede tener uno o varios
+ * residenciales. No reemplaza a Tenant ni cambia su significado, solo
+ * lo agrupa (ver supabase/migrations/20260724000000_empresas.sql).
+ */
+export interface Empresa {
+  id: string;
+  nombre: string;
+  razonSocial?: string | null;
+  rfc?: string | null;
+  correoPrincipal?: string | null;
+  telefono?: string | null;
+  ciudad?: string | null;
+  estadoGeografico?: string | null;
+  pais: string;
+  logoUrl?: string | null;
+  colorPrincipal?: string | null;
+  plan: string;
+  estadoServicio: "piloto" | "activo" | "suspendido" | "cancelado";
+  planFechaRenovacion?: string | null;
+  observaciones?: string | null;
+  creadaEn: string;
+  totalResidenciales: number;
 }
 
 export interface UserProfile {

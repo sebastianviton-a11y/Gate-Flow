@@ -1,6 +1,11 @@
+import { createServerSupabaseClient } from "@gateflow/supabase";
+import { listarEmpresasParaSelector } from "@gateflow/paquetes";
 import { FormularioResidencial } from "./formulario-residencial";
 
-export default function NuevoResidencialPage() {
+export default async function NuevoResidencialPage({ searchParams }: { searchParams: { empresaId?: string } }) {
+  const supabase = createServerSupabaseClient();
+  const empresas = await listarEmpresasParaSelector(supabase);
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -10,7 +15,7 @@ export default function NuevoResidencialPage() {
           nota al final del formulario.
         </p>
       </div>
-      <FormularioResidencial />
+      <FormularioResidencial empresas={empresas} empresaIdInicial={searchParams.empresaId} />
     </div>
   );
 }
