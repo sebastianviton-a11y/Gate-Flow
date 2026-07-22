@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle } from "lucide-react";
-import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { crearResidencial, PLAN_LABEL, type PlanClave } from "@gateflow/paquetes";
-import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
+import { AlertCircle, Send, CheckCircle2 } from "lucide-react";
+import { PLAN_LABEL, type PlanClave } from "@gateflow/paquetes";
+import { Button, Input, Label } from "@gateflow/ui";
+import { invitarAdministrador } from "../../invitacion-actions";
 
 const PLANES_NUEVOS: PlanClave[] = ["piloto", "starter", "business", "enterprise"];
 
@@ -15,44 +15,48 @@ interface Props {
   empresaIdInicial?: string;
 }
 
+/**
+ * A partir de este sprint, Super Admin ya NO configura el residencial
+ * — solo crea el registro mínimo y envía la invitación. El
+ * administrador hace el resto (asistente de configuración, en su
+ * primer acceso). Por eso este formulario ya no pide nombre/teléfono
+ * del administrador — solo su correo, que es lo único que la
+ * invitación necesita.
+ */
 export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
   const router = useRouter();
-  const supabase = createBrowserSupabaseClient();
 
   const [empresaId, setEmpresaId] = useState(empresaIdInicial ?? "");
   const [nombre, setNombre] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [estadoGeografico, setEstadoGeografico] = useState("");
-  const [pais, setPais] = useState("MX");
   const [plan, setPlan] = useState<PlanClave>("piloto");
-  const [adminNombre, setAdminNombre] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminTelefono, setAdminTelefono] = useState("");
-  const [observaciones, setObservaciones] = useState("");
+  const [correoAdmin, setCorreoAdmin] = useState("");
 
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
 
-  async function handleCrear() {
-    if (!nombre.trim() || !empresaId) return;
+  async function handleEnviarInvitacion() {
+    if (!nombre.trim() || !empresaId || !correoAdmin.trim()) return;
     setEnviando(true);
     setError(null);
     try {
-      const { id } = await crearResidencial(supabase, {
-        nombre,
+      const resultado = await invitarAdministrador({
         empresaId,
+        nombreResidencial: nombre,
         ciudad,
         estadoGeografico,
-        pais,
         plan,
-        adminContactoNombre: adminNombre,
-        adminContactoEmail: adminEmail,
-        adminContactoTelefono: adminTelefono,
-        observaciones,
+        correoAdministrador: correoAdmin,
       });
-      router.push(`/superadmin/residenciales/${id}`);
-    } catch (e) {
-      setError(obtenerMensajeError(e, "No se pudo crear el residencial."));
+      if (!resultado.ok) {
+        setError(resultado.mensaje);
+        return;
+      }
+      setExito(true);
+      setTimeout(() => router.push(`/superadmin/residenciales/${resultado.tenantId}`), 1800);
+    } finally {
       setEnviando(false);
     }
   }
@@ -67,6 +71,16 @@ export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
         <Link href="/superadmin/empresas/nueva" className="text-sm font-medium text-primary underline">
           Crear empresa
         </Link>
+      </div>
+    );
+  }
+
+  if (exito) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-10 text-center">
+        <CheckCircle2 className="h-8 w-8 text-success" />
+        <p className="font-medium">Invitación enviada a {correoAdmin}</p>
+        <p className="text-sm text-muted-foreground">El administrador recibirá un correo para crear su contraseña y comenzar la configuración.</p>
       </div>
     );
   }
@@ -95,7 +109,7 @@ export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
       <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
         <div className="col-span-2">
           <Label htmlFor="r-nombre">
-            Nombre <span className="text-destructive">*</span>
+            Nombre del residencial <span className="text-destructive">*</span>
           </Label>
           <Input id="r-nombre" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1.5" />
         </div>
@@ -107,11 +121,7 @@ export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
           <Label htmlFor="r-estado">Estado</Label>
           <Input id="r-estado" placeholder="Ej. Quintana Roo" value={estadoGeografico} onChange={(e) => setEstadoGeografico(e.target.value)} className="mt-1.5" />
         </div>
-        <div>
-          <Label htmlFor="r-pais">País</Label>
-          <Input id="r-pais" value={pais} onChange={(e) => setPais(e.target.value)} className="mt-1.5" />
-        </div>
-        <div>
+        <div className="col-span-2">
           <Label htmlFor="r-plan">Plan</Label>
           <select
             id="r-plan"
@@ -129,40 +139,21 @@ export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
       </div>
 
       <div className="border-t border-border pt-4">
-        <p className="mb-3 text-sm font-medium">Administrador principal (contacto)</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="r-admin-nombre">Nombre</Label>
-            <Input id="r-admin-nombre" value={adminNombre} onChange={(e) => setAdminNombre(e.target.value)} className="mt-1.5" />
-          </div>
-          <div>
-            <Label htmlFor="r-admin-email">Correo</Label>
-            <Input id="r-admin-email" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} className="mt-1.5" />
-          </div>
-          <div className="col-span-2">
-            <Label htmlFor="r-admin-tel">Teléfono</Label>
-            <Input id="r-admin-tel" type="tel" value={adminTelefono} onChange={(e) => setAdminTelefono(e.target.value)} className="mt-1.5" />
-          </div>
-        </div>
-        <div className="mt-3 flex items-start gap-2 rounded-md bg-info/10 p-3 text-xs text-info">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Esto solo guarda el contacto — no crea la cuenta de acceso todavía. Crear la cuenta real del administrador (con la que inicia sesión)
-            exige la clave de servicio de Supabase, que no puede manejarse desde el navegador. Se hace igual que los usuarios demo: desde
-            Supabase → Authentication → Add user, y vinculándolo después en <code>user_tenants</code>.
-          </p>
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="r-obs">Observaciones (opcional)</Label>
-        <textarea
-          id="r-obs"
-          rows={2}
-          value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
-          className="mt-1.5 w-full rounded-md border border-input bg-background p-2 text-sm"
+        <Label htmlFor="r-correo-admin">
+          Correo del administrador principal <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="r-correo-admin"
+          type="email"
+          placeholder="admin@residencial.com"
+          value={correoAdmin}
+          onChange={(e) => setCorreoAdmin(e.target.value)}
+          className="mt-1.5"
         />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Recibirá un correo para crear su contraseña. A partir de ahí, toda la configuración del residencial es responsabilidad suya —
+          Super Admin no la realiza.
+        </p>
       </div>
 
       {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
@@ -171,8 +162,9 @@ export function FormularioResidencial({ empresas, empresaIdInicial }: Props) {
         <Button variant="ghost" onClick={() => router.push("/superadmin/residenciales")}>
           Cancelar
         </Button>
-        <Button onClick={handleCrear} disabled={!nombre.trim() || !empresaId || enviando}>
-          {enviando ? "Creando…" : "Crear residencial"}
+        <Button onClick={handleEnviarInvitacion} disabled={!nombre.trim() || !empresaId || !correoAdmin.trim() || enviando}>
+          <Send className="h-4 w-4" />
+          {enviando ? "Enviando…" : "Enviar invitación"}
         </Button>
       </div>
     </div>
