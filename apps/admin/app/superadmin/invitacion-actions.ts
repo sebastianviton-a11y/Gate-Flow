@@ -66,14 +66,48 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
     return { ok: false, mensaje: e instanceof Error ? e.message : "Falta configurar SUPABASE_SERVICE_ROLE_KEY." };
   }
 
-  const { error: errorInvite } = await servicioClient.auth.admin.inviteUserByEmail(input.correoAdministrador.trim(), {
+  const { data: dataInvite, error: errorInvite } = await servicioClient.auth.admin.inviteUserByEmail(input.correoAdministrador.trim(), {
     data: { tenant_id: tenant.id, rol_clave: "admin_residencial" },
     redirectTo: `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/aceptar-invitacion`,
   });
 
   if (errorInvite) {
+    // ── DIAGNÓSTICO TEMPORAL — imprimir absolutamente todo ──────
+    // Los console.error de una Server Action salen en los logs de
+    // FUNCIONES de Netlify (Netlify → Logs → Functions), no en la
+    // consola del navegador.
+    console.error("=== ERROR COMPLETO DE inviteUserByEmail ===");
+    console.error(errorInvite);
+    console.error("message:", errorInvite.message);
+    console.error("stack:", (errorInvite as Error).stack);
+    console.error("cause:", (errorInvite as Error).cause);
+    console.error("typeof:", typeof errorInvite);
+    console.error("propiedades:", Object.getOwnPropertyNames(errorInvite));
+    const e = errorInvite as unknown as Record<string, unknown>;
+    console.error("status:", e.status);
+    console.error("statusCode:", e.statusCode);
+    console.error("code:", e.code);
+    console.error("error:", e.error);
+    console.error("details:", e.details);
+    console.error("body:", e.body);
+    console.error("response:", e.response);
+    console.error("dataInvite:", JSON.stringify(dataInvite));
+    console.error("=== FIN ERROR COMPLETO ===");
+
+    // Mensaje visible en pantalla con todo el detalle disponible,
+    // propiedad por propiedad (no JSON.stringify del objeto, que en
+    // AuthError esconde las propiedades no-enumerables — por eso se
+    // veía "{}").
+    const detalle = [
+      `message=${String(errorInvite.message)}`,
+      `name=${String((errorInvite as Error).name)}`,
+      `status=${String(e.status)}`,
+      `code=${String(e.code)}`,
+      `props=[${Object.getOwnPropertyNames(errorInvite).join(", ")}]`,
+    ].join(" | ");
+
     await supabase.from("tenants").delete().eq("id", tenant.id);
-    return { ok: false, mensaje: `No se pudo enviar la invitación: ${errorInvite.message}` };
+    return { ok: false, mensaje: `No se pudo enviar la invitación: ${detalle}` };
   }
 
   await supabase.rpc("registrar_auditoria", {
