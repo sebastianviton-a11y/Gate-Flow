@@ -10,7 +10,7 @@ const RUTAS_SOLO_INVITADOS = ["/login"];
 // la regla de "solo invitados" ahí sacaría a la persona a mitad del
 // proceso), y /terminos porque es contenido informativo que cualquiera
 // — con sesión o sin ella — debe poder leer sin ser redirigido.
-const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos"];
+const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos", "/residencial-suspendido"];
 
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);
@@ -37,22 +37,40 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Onboarding obligatorio: si el tenant del usuario todavía no
-  // completó el asistente, cualquier ruta protegida que no sea el
-  // propio /onboarding (ni /superadmin, que un super_admin siempre
-  // debe poder usar sin que su propio tenant nominal se lo impida)
-  // redirige ahí. Una sola consulta liviana, solo cuando aplica —
-  // nunca en rutas públicas ni ya dentro del asistente.
+  // Onboarding obligatorio y bloqueo de tenant suspendido: una sola
+  // consulta liviana trae ambos datos — solo cuando aplica, nunca en
+  // rutas públicas ni dentro del propio /onboarding.
   if (user && !esPublica && !esRutaOnboarding && !esRutaSuperadmin) {
     const { data: membership } = await supabase
       .from("user_tenants")
-      .select("tenants(onboarding_completado)")
+      .select("tenants(onboarding_completado, estado_servicio)")
       .eq("user_id", user.id)
       .eq("activo", true)
       .limit(1)
       .maybeSingle();
 
-    const tenantData = membership?.tenants as unknown as { onboarding_completado: boolean } | null;
+    const tenantData = membership?.tenants as unknown as { onboarding_completado: boolean; estado_servicio: string } | null;
+
+    // RIESGO 3 (PERMISSIONS.md): antes, "suspendido" era solo
+    // informativo — un residencial suspendido seguía operando con
+    // normalidad. Ahora se bloquea de verdad, salvo para super_admin
+    // (que necesita poder entrar como soporte a un tenant suspendido
+    // para resolver el motivo de la suspensión).
+    if (tenantData?.estado_servicio === "suspendido") {
+      const { data: rolReal } = await supabase
+        .from("user_tenants")
+        .select("roles(clave)")
+        .eq("user_id", user.id)
+        .eq("activo", true)
+        .limit(1)
+        .maybeSingle();
+      const claveRol = (rolReal?.roles as unknown as { clave: string } | null)?.clave;
+
+      if (claveRol !== "super_admin") {
+        return NextResponse.redirect(new URL("/residencial-suspendido", request.url));
+      }
+    }
+
     if (tenantData && tenantData.onboarding_completado === false) {
       return NextResponse.redirect(new URL("/onboarding", request.url));
     }
