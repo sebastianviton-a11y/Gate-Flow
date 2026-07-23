@@ -20,3 +20,4 @@ export { PickupShareCard } from "./pickup-share-card";
 export { TenantLogo } from "./tenant-logo";
 export { EstadoBadge } from "./estado-badge";
 export { GateFlowLogo } from "./gateflow-logo";
+export { PasswordInput } from "./password-input";

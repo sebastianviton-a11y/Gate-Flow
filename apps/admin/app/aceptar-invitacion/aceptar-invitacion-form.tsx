@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -89,11 +89,11 @@ export function AceptarInvitacionForm() {
         <div className="space-y-4 rounded-xl bg-white p-6">
           <div>
             <Label htmlFor="ai-password">Contraseña</Label>
-            <Input id="ai-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="ai-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="ai-password2">Confirmar contraseña</Label>
-            <Input id="ai-password2" type="password" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="ai-password2" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
           </div>
 
           <label className="flex items-start gap-2 text-sm">

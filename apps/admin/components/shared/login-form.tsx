@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
 export function LoginForm() {
   const router = useRouter();
@@ -67,15 +67,15 @@ export function LoginForm() {
             <Label htmlFor="password" className="text-white/80">
               Contraseña
             </Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               required
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
               className="border-white/10 bg-ink-950 text-white placeholder:text-white/30"
+              iconClassName="text-white/50 hover:text-white"
             />
           </div>
 
