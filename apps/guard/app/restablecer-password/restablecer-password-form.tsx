@@ -68,7 +68,9 @@ export function RestablecerPasswordForm() {
         <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white">
           <ShieldAlert className="h-10 w-10 text-warn" />
           <p className="font-display text-lg font-semibold">Este enlace ya no es válido</p>
-          <p className="text-sm text-white/60">Puede haber expirado o ya haberse usado. Solicita un enlace nuevo desde "¿Olvidaste tu contraseña?".</p>
+          <p className="text-sm text-white/60">
+            Puede haber expirado o ya haberse usado. Solicita un enlace nuevo desde &quot;¿Olvidaste tu contraseña?&quot;.
+          </p>
         </div>
       </div>
     );
