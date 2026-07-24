@@ -1,4 +1,4 @@
-export { cn, obtenerMensajeError } from "./utils";
+export { cn, obtenerMensajeError, ejecutarConTimeout, obtenerMensajeErrorConTimeout, esErrorDeRed, ErrorTiempoAgotado } from "./utils";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export { Card, CardHeader, CardTitle, CardContent } from "./card";
 export { Avatar, AvatarImage, AvatarFallback } from "./avatar";

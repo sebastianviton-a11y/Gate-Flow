@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
@@ -89,6 +90,12 @@ export function LoginForm() {
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Ingresando..." : "Ingresar"}
           </Button>
+
+          <p className="text-center text-sm">
+            <Link href="/recuperar-password" className="text-primary/80 underline hover:text-primary">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
         </form>
 
         <p className="mt-6 text-center text-xs text-white/30">

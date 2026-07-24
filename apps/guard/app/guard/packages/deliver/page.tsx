@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { Search, Loader2, Check, MapPin } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes, entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
-import { Button, Input, EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, EstadoBadge, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { SignaturePad } from "@/components/signature-pad";
 import { useGuardSession } from "@/components/session-provider";
@@ -52,28 +52,30 @@ export default function DeliverPackagePage() {
     setEnviando(true);
     setError(null);
     try {
-      // La firma se guarda ANTES de la transición de estado — si esto
-      // falla, entregar_paquete() nunca se llama, así que no puede
-      // existir una entrega sin evidencia (BR-27).
-      await guardarFirmaEntrega(supabase, {
-        tenantId: session.tenant.id,
-        paqueteId: seleccionado.id,
-        firmaData,
-        firmanteNombre: entregadoA.trim(),
-      });
+      await ejecutarConTimeout(async () => {
+        // La firma se guarda ANTES de la transición de estado — si esto
+        // falla, entregar_paquete() nunca se llama, así que no puede
+        // existir una entrega sin evidencia (BR-27).
+        await guardarFirmaEntrega(supabase, {
+          tenantId: session.tenant.id,
+          paqueteId: seleccionado.id,
+          firmaData,
+          firmanteNombre: entregadoA.trim(),
+        });
 
-      // La función SQL entregar_paquete() es quien decide si esto es
-      // válido — si en el intervalo entre buscar y confirmar alguien más
-      // ya lo entregó, esta llamada falla explícitamente (BR-14), no se
-      // verifica "a mano" en el cliente antes de enviar.
-      await entregarPaquete(supabase, {
-        paqueteId: seleccionado.id,
-        entregadoPor: session.user.id,
-        entregadoANombre: entregadoA.trim(),
+        // La función SQL entregar_paquete() es quien decide si esto es
+        // válido — si en el intervalo entre buscar y confirmar alguien más
+        // ya lo entregó, esta llamada falla explícitamente (BR-14), no se
+        // verifica "a mano" en el cliente antes de enviar.
+        await entregarPaquete(supabase, {
+          paqueteId: seleccionado.id,
+          entregadoPor: session.user.id,
+          entregadoANombre: entregadoA.trim(),
+        });
       });
       setEntregado(true);
     } catch (e) {
-      setError(obtenerMensajeError(e, "No se pudo registrar la entrega."));
+      setError(obtenerMensajeErrorConTimeout(e, "No se pudo registrar la entrega."));
     } finally {
       setEnviando(false);
     }

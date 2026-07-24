@@ -17,7 +17,7 @@ import {
   type ResultadoRegistro,
 } from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
-import { Button, Input, PickupShareCard, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, PickupShareCard, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
@@ -99,21 +99,23 @@ export default function RegisterPackagePage() {
     setEnviando(true);
     setError(null);
     try {
-      const resultado = await registrarPaquete(supabase, {
-        tenantId: session.tenant.id,
-        unidadId: unidadSeleccionada.id,
-        residenteId,
-        remitente: remitente || null,
-        empresaPaqueteriaId: empresaId || null,
-        numeroGuia: numeroGuia || null,
-        tamanoId: tamanoId || null,
-        prioridadId: prioridadId || null,
-        ubicacionId,
-        notas: notas || null,
-        recibidoPor: session.user.id,
-        destinatarioNombre: residenteId ? null : unidadSeleccionada.contactoNombre,
-        destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
-      });
+      const resultado = await ejecutarConTimeout(() =>
+        registrarPaquete(supabase, {
+          tenantId: session.tenant.id,
+          unidadId: unidadSeleccionada.id,
+          residenteId,
+          remitente: remitente || null,
+          empresaPaqueteriaId: empresaId || null,
+          numeroGuia: numeroGuia || null,
+          tamanoId: tamanoId || null,
+          prioridadId: prioridadId || null,
+          ubicacionId,
+          notas: notas || null,
+          recibidoPor: session.user.id,
+          destinatarioNombre: residenteId ? null : unidadSeleccionada.contactoNombre,
+          destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
+        }),
+      );
       setConfirmacion(resultado);
 
       // La foto es opcional (no bloquea el registro, BR-17 solo exige
@@ -134,7 +136,7 @@ export default function RegisterPackagePage() {
         }
       }
     } catch (e) {
-      setError(obtenerMensajeError(e, "No se pudo registrar el paquete. Intenta de nuevo."));
+      setError(obtenerMensajeErrorConTimeout(e, "No se pudo registrar el paquete. Intenta de nuevo."));
     } finally {
       setEnviando(false);
     }

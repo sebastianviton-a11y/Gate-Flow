@@ -6,7 +6,7 @@ import { Loader2, Check, PackageCheck, Package } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete, SessionContext } from "@gateflow/types";
-import { Button, Input, EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, EstadoBadge, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { SignaturePad } from "@/components/signature-pad";
 
 export function EscaneoResultado({
@@ -33,23 +33,25 @@ export function EscaneoResultado({
     setEnviando(true);
     setError(null);
     try {
-      // Igual que en el flujo de entrega normal: la firma se guarda
-      // ANTES de la transición de estado — si falla, nunca se intenta
-      // la entrega, así que no puede existir una sin evidencia (BR-27).
-      await guardarFirmaEntrega(supabase, {
-        tenantId: session.tenant.id,
-        paqueteId: paquete.id,
-        firmaData: firma,
-        firmanteNombre: entregadoA.trim(),
-      });
-      await entregarPaquete(supabase, {
-        paqueteId: paquete.id,
-        entregadoPor: session.user.id,
-        entregadoANombre: entregadoA.trim(),
+      await ejecutarConTimeout(async () => {
+        // Igual que en el flujo de entrega normal: la firma se guarda
+        // ANTES de la transición de estado — si falla, nunca se intenta
+        // la entrega, así que no puede existir una sin evidencia (BR-27).
+        await guardarFirmaEntrega(supabase, {
+          tenantId: session.tenant.id,
+          paqueteId: paquete.id,
+          firmaData: firma,
+          firmanteNombre: entregadoA.trim(),
+        });
+        await entregarPaquete(supabase, {
+          paqueteId: paquete.id,
+          entregadoPor: session.user.id,
+          entregadoANombre: entregadoA.trim(),
+        });
       });
       setEntregado(true);
     } catch (e) {
-      setError(obtenerMensajeError(e, "No se pudo confirmar la entrega."));
+      setError(obtenerMensajeErrorConTimeout(e, "No se pudo confirmar la entrega."));
     } finally {
       setEnviando(false);
     }

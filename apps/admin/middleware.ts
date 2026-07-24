@@ -10,7 +10,7 @@ const RUTAS_SOLO_INVITADOS = ["/login"];
 // la regla de "solo invitados" ahí sacaría a la persona a mitad del
 // proceso), y /terminos porque es contenido informativo que cualquiera
 // — con sesión o sin ella — debe poder leer sin ser redirigido.
-const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos", "/residencial-suspendido"];
+const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos", "/residencial-suspendido", "/recuperar-password", "/restablecer-password"];
 
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);

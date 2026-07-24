@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@gateflow/supabase";
 
-const PUBLIC_PATHS = ["/login", "/escanear"];
+const PUBLIC_PATHS = ["/login", "/escanear", "/recuperar-password", "/restablecer-password"];
 // /escanear es pública para AMBOS casos (con y sin sesión) — vive fuera
 // de app/guard/ precisamente para no heredar su layout, que redirige a
 // /login si no hay sesión (eso rompería el mensaje neutro exigido para

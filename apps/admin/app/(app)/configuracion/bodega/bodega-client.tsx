@@ -46,6 +46,8 @@ export function BodegaClient({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmarEliminar, setConfirmarEliminar] = useState<string | null>(null);
+  const [confirmarDesactivar, setConfirmarDesactivar] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
   const ubicaciones = ubicacionesIniciales;
 
@@ -97,27 +99,28 @@ export function BodegaClient({
   }
 
   async function handleActivarDesactivar(u: UbicacionAdmin) {
-    if (u.activo && u.totalPaquetesActivos > 0) {
-      const confirmar = window.confirm(
-        `"${u.ruta}" tiene ${u.totalPaquetesActivos} paquete(s) pendiente(s) de entrega ahí. ¿Desactivarla igual? Los paquetes existentes no se moverán, pero ya no se podrá asignar a paquetes nuevos.`,
-      );
-      if (!confirmar) return;
+    if (u.activo && u.totalPaquetesActivos > 0 && confirmarDesactivar !== u.id) {
+      setConfirmarDesactivar(u.id);
+      return;
     }
+    setConfirmarDesactivar(null);
+    setErrorAccion(null);
     try {
       await cambiarActivoUbicacion(supabase, u.id, !u.activo);
       router.refresh();
     } catch (e) {
-      alert(obtenerMensajeError(e, "No se pudo cambiar el estado."));
+      setErrorAccion(obtenerMensajeError(e, "No se pudo cambiar el estado."));
     }
   }
 
   async function handleEliminar(u: UbicacionAdmin) {
+    setErrorAccion(null);
     try {
       await eliminarUbicacion(supabase, u.id);
       setConfirmarEliminar(null);
       router.refresh();
     } catch (e) {
-      alert(obtenerMensajeError(e, "No se pudo eliminar la ubicación."));
+      setErrorAccion(obtenerMensajeError(e, "No se pudo eliminar la ubicación."));
     }
   }
 
@@ -129,6 +132,8 @@ export function BodegaClient({
           {ubicaciones.length === 0 ? "Crear primera ubicación" : "Agregar ubicación"}
         </Button>
       </div>
+
+      {errorAccion && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{errorAccion}</p>}
 
       {abierto && (
         <div className="space-y-4 rounded-lg border border-primary bg-primary/5 p-5">
@@ -226,7 +231,7 @@ export function BodegaClient({
           <p className="text-sm text-muted-foreground">Configura las áreas, estantes o espacios donde se almacenan los paquetes.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="bg-muted text-left text-xs text-muted-foreground">
               <tr>
@@ -262,13 +267,27 @@ export function BodegaClient({
                       <button onClick={() => abrirEditar(u)} className="rounded p-1.5 text-muted-foreground hover:bg-muted" title="Editar">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        onClick={() => handleActivarDesactivar(u)}
-                        className="rounded p-1.5 text-muted-foreground hover:bg-muted"
-                        title={u.activo ? "Desactivar" : "Activar"}
-                      >
-                        {u.activo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      </button>
+                      {confirmarDesactivar === u.id ? (
+                        <span className="flex items-center gap-1 whitespace-nowrap text-xs">
+                          <span className="text-muted-foreground">
+                            {u.totalPaquetesActivos} paquete(s) pendiente(s) ahí —{" "}
+                          </span>
+                          <button onClick={() => handleActivarDesactivar(u)} className="font-medium text-destructive">
+                            Desactivar igual
+                          </button>
+                          <button onClick={() => setConfirmarDesactivar(null)} className="text-muted-foreground">
+                            Cancelar
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleActivarDesactivar(u)}
+                          className="rounded p-1.5 text-muted-foreground hover:bg-muted"
+                          title={u.activo ? "Desactivar" : "Activar"}
+                        >
+                          {u.activo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
                       {u.totalPaquetesHistoricos === 0 ? (
                         confirmarEliminar === u.id ? (
                           <span className="flex items-center gap-1">
