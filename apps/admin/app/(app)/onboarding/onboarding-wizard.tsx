@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronRight, Loader2, Send, Upload, Building2, Users, Package, Warehouse, PartyPopper } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import type { UbicacionAdmin } from "@gateflow/paquetes";
+import { ROLES_INVITABLES, type UbicacionAdmin } from "@gateflow/paquetes";
 import type { RoleKey } from "@gateflow/types";
 import { Button, Input, Label, GateFlowLogo, obtenerMensajeError } from "@gateflow/ui";
 import { ImportarUnidades } from "../unidades/importar-unidades";
@@ -235,13 +235,6 @@ function PasoImportarResidentes({ tenantId, onImportado, onContinuar }: { tenant
     </TarjetaPaso>
   );
 }
-
-const ROLES_INVITABLES: { clave: RoleKey; etiqueta: string }[] = [
-  { clave: "admin_residencial", etiqueta: "Administrador adicional" },
-  { clave: "guardia", etiqueta: "Guardia" },
-  { clave: "recepcion", etiqueta: "Recepción" },
-  { clave: "supervisor", etiqueta: "Supervisor" },
-];
 
 function PasoCrearUsuarios({
   onInvitado,
