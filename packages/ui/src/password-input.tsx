@@ -10,9 +10,15 @@ import { cn } from "./utils";
  * onChange, id, required, autoComplete, className, etc.) — todos se
  * reenvían tal cual a Input.
  *
- * Solo cambia el `type` visualmente (password <-> text); no toca
- * value/onChange, así que no modifica ninguna lógica de autenticación
- * que ya exista en los formularios que lo usan.
+ * autoCorrect/autoCapitalize/spellCheck quedan forzados a apagado —
+ * SIEMPRE, sin poder sobreescribirse desde afuera (no están en
+ * PasswordInputProps) — porque iOS/Safari puede reactivar la
+ * autocorrección justo cuando el campo cambia de type="password" a
+ * type="text" al presionar el ícono del ojo (deja de reconocerse como
+ * campo seguro). Sin esto, un carácter especial al final de la
+ * contraseña (guion, punto) puede alterarse en silencio sin que la
+ * persona lo note, y la contraseña que ve en pantalla ya no es la que
+ * realmente se está enviando.
  */
 interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
   /** Para inputs sobre fondo oscuro (los formularios de login) — por
@@ -26,7 +32,15 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
 
     return (
       <div className="relative">
-        <Input ref={ref} type={visible ? "text" : "password"} className={cn("pr-10", className)} {...props} />
+        <Input
+          ref={ref}
+          type={visible ? "text" : "password"}
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          className={cn("pr-10", className)}
+          {...props}
+        />
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}

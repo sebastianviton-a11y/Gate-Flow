@@ -75,7 +75,7 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password });
+    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password: password.trim() });
 
     // No basta con "sin error" — se exige explícitamente que el
     // usuario actualizado exista en la respuesta real de Supabase
@@ -139,11 +139,11 @@ export function AceptarInvitacionForm() {
         <div className="space-y-4 rounded-xl bg-white p-6">
           <div>
             <Label htmlFor="ai-password">Contraseña</Label>
-            <PasswordInput id="ai-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="ai-password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="ai-password2">Confirmar contraseña</Label>
-            <PasswordInput id="ai-password2" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="ai-password2" autoComplete="new-password" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
           </div>
 
           <label className="flex items-start gap-2 text-sm">

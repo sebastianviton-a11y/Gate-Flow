@@ -58,7 +58,7 @@ export function RestablecerPasswordForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password });
+    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password: password.trim() });
 
     if (errorPassword || !dataUpdate.user) {
       console.error(
@@ -127,11 +127,11 @@ export function RestablecerPasswordForm() {
         <div className="space-y-4 rounded-xl bg-white p-6">
           <div>
             <Label htmlFor="rp-password">Nueva contraseña</Label>
-            <PasswordInput id="rp-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="rp-password" autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="rp-password2">Confirmar contraseña</Label>
-            <PasswordInput id="rp-password2" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
+            <PasswordInput id="rp-password2" autoComplete="new-password" value={confirmarPassword} onChange={(e) => setConfirmarPassword(e.target.value)} className="mt-1.5" />
           </div>
 
           {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}

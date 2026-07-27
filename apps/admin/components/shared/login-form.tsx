@@ -28,7 +28,7 @@ export function LoginForm() {
     // desde el correo de invitación) podría fallar la comparación.
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
-      password,
+      password: password.trim(),
     });
 
     if (signInError) {

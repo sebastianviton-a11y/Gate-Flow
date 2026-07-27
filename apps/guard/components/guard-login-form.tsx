@@ -25,7 +25,7 @@ export function GuardLoginForm() {
     const supabase = createBrowserSupabaseClient();
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
-      password,
+      password: password.trim(),
     });
 
     if (signInError) {
