@@ -22,14 +22,22 @@ export function LoginForm() {
     setError(null);
 
     const supabase = createBrowserSupabaseClient();
-    // trim + lowercase: Supabase normaliza el correo así al guardarlo
-    // en auth.users — si esto no se hiciera aquí también, un correo
-    // escrito con mayúsculas o un espacio de más (frecuente al copiar
-    // desde el correo de invitación) podría fallar la comparación.
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password: password.trim(),
+    const emailNormalizado = email.trim().toLowerCase();
+    const passwordNormalizada = password.trim();
+    console.log(
+      "STEP 8: intentando signInWithPassword ->",
+      JSON.stringify({ email: emailNormalizado, longitudPassword: passwordNormalizada.length }),
+    );
+
+    const { data: dataSignIn, error: signInError } = await supabase.auth.signInWithPassword({
+      email: emailNormalizado,
+      password: passwordNormalizada,
     });
+
+    console.log(
+      "STEP 9: resultado signInWithPassword ->",
+      JSON.stringify({ huboSesion: !!dataSignIn?.session, userId: dataSignIn?.user?.id, error: signInError?.message }),
+    );
 
     if (signInError) {
       console.error(

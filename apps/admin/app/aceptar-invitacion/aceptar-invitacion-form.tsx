@@ -28,19 +28,17 @@ export function AceptarInvitacionForm() {
 
   useEffect(() => {
     async function verificarSesion() {
-      // El enlace real que genera admin.inviteUserByEmail() con
-      // redirectTo entrega el token en el FRAGMENTO de la URL
-      // (#access_token=...) — @supabase/ssr lo detecta y procesa solo,
-      // al crear el cliente (detectSessionInUrl, activado por
-      // defecto). Por si el proyecto llegara a emitir el otro formato
-      // (?code=..., típico de PKCE en flujos iniciados por el propio
-      // navegador), se soporta también aquí sin necesitar una ruta
-      // /auth/callback separada — ninguno de los dos casos se descarta
-      // a ciegas.
+      console.log("STEP 1: aceptar-invitacion montado. URL completa:", window.location.href);
+      console.log("STEP 1b: hash presente:", window.location.hash ? "SÍ" : "NO", "| search presente:", window.location.search ? "SÍ" : "NO");
+
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
+      console.log("STEP 2: ?code= en la URL:", code ? `presente (${code.slice(0, 8)}...)` : "ausente");
+
       if (code) {
-        const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
+        const { data: dataExchange, error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
+        console.log("STEP 2b: exchangeCodeForSession data:", JSON.stringify({ hasSession: !!dataExchange?.session, userId: dataExchange?.user?.id }));
+        console.log("STEP 2c: exchangeCodeForSession error:", errorCambio ? `${errorCambio.message} | status: ${errorCambio.status}` : "ninguno");
         if (errorCambio) {
           console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
           setEstado("invalida");
@@ -49,6 +47,15 @@ export function AceptarInvitacionForm() {
       }
 
       const { data, error: errorSesion } = await supabase.auth.getSession();
+      console.log(
+        "STEP 3: getSession() ->",
+        JSON.stringify({
+          haySesion: !!data.session,
+          userId: data.session?.user?.id,
+          email: data.session?.user?.email,
+          expiresAt: data.session?.expires_at,
+        }),
+      );
       if (errorSesion) {
         console.error("[GateFlow] getSession falló:", errorSesion.message, errorSesion.status);
       }
@@ -76,7 +83,17 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
+    // STEP 4: confirmar, justo antes de llamar a la Server Action, que
+    // el navegador SÍ tiene sesión — si esto ya sale vacío aquí, el
+    // problema está antes de llegar siquiera a establecerPasswordInvitado.
+    const { data: sesionAntes } = await supabase.auth.getSession();
+    console.log(
+      "STEP 4: sesión justo antes de establecerPasswordInvitado ->",
+      JSON.stringify({ haySesion: !!sesionAntes.session, userId: sesionAntes.session?.user?.id, email: sesionAntes.session?.user?.email }),
+    );
+
     const resultado = await establecerPasswordInvitado(password);
+    console.log("STEP 5: resultado de establecerPasswordInvitado ->", JSON.stringify(resultado));
 
     if (!resultado.ok) {
       setError(resultado.mensaje);
@@ -85,8 +102,13 @@ export function AceptarInvitacionForm() {
     }
 
     const { data: userData } = await supabase.auth.getUser();
+    console.log("STEP 6: getUser() después del éxito ->", JSON.stringify({ userId: userData.user?.id, email: userData.user?.email }));
     if (userData.user) {
-      await supabase.from("users").update({ terminos_aceptados_en: new Date().toISOString() }).eq("id", userData.user.id);
+      const { error: errorTerminos } = await supabase
+        .from("users")
+        .update({ terminos_aceptados_en: new Date().toISOString() })
+        .eq("id", userData.user.id);
+      console.log("STEP 6b: update terminos_aceptados_en error:", errorTerminos ? errorTerminos.message : "ninguno");
     }
 
     // Cierra la sesión temporal de la invitación a propósito, en vez
@@ -96,6 +118,9 @@ export function AceptarInvitacionForm() {
     // que de verdad funciona — no basta con que updateUser() no haya
     // devuelto error.
     await supabase.auth.signOut();
+    const { data: sesionDespues } = await supabase.auth.getSession();
+    console.log("STEP 7: signOut() ejecutado. Sesión residual:", sesionDespues.session ? "TODAVÍA HAY SESIÓN (inesperado)" : "ninguna, correcto");
+    console.log("STEP 7b: redirigiendo a /login?password_created=1");
     router.replace("/login?password_created=1");
     router.refresh();
   }
