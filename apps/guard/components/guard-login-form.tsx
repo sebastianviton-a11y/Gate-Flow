@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Input, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
 
 export function GuardLoginForm() {
   const router = useRouter();
@@ -37,7 +37,9 @@ export function GuardLoginForm() {
         "status:",
         signInError.status,
       );
-      setError("No pudimos iniciar sesión. Verifica tu correo y contraseña.");
+      setError(
+        `[DEBUG] ${signInError.message} | code: ${(signInError as { code?: string }).code ?? "—"} | status: ${signInError.status ?? "—"}`,
+      );
       setLoading(false);
       return;
     }
@@ -118,6 +120,7 @@ export function GuardLoginForm() {
           </p>
         </form>
       </div>
+      <DebugConsole />
     </div>
   );
 }

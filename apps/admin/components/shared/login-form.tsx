@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Input, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
 
 export function LoginForm() {
   const router = useRouter();
@@ -32,11 +32,6 @@ export function LoginForm() {
     });
 
     if (signInError) {
-      // El error TÉCNICO real siempre queda en consola (sin exponer
-      // la contraseña) — el mensaje amigable en pantalla se mantiene
-      // genérico a propósito (no revela si el correo existe o no),
-      // pero la causa real queda disponible para depurar sin tener
-      // que pedirle a nadie que reproduzca el problema.
       console.error(
         "[GateFlow] signInWithPassword falló:",
         signInError.message,
@@ -45,7 +40,14 @@ export function LoginForm() {
         "status:",
         signInError.status,
       );
-      setError("No pudimos iniciar sesión. Verifica tu correo y contraseña.");
+      // ── DIAGNÓSTICO TEMPORAL ──────────────────────────────────
+      // Mostrando el error técnico real en pantalla, sin reemplazarlo
+      // por el mensaje genérico, porque en iPad no hay forma sencilla
+      // de leer la consola del navegador. Quitar esto una vez
+      // resuelto — no debe quedar en producción.
+      setError(
+        `[DEBUG] ${signInError.message} | code: ${(signInError as { code?: string }).code ?? "—"} | status: ${signInError.status ?? "—"}`,
+      );
       setLoading(false);
       return;
     }
@@ -124,6 +126,7 @@ export function LoginForm() {
           El acceso de guardias en campo se realiza desde la app móvil offline-first.
         </p>
       </div>
+      <DebugConsole />
     </div>
   );
 }
