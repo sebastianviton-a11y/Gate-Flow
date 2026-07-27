@@ -31,6 +31,17 @@ export function RestablecerPasswordForm() {
           setEstado("invalida");
           return;
         }
+      } else {
+        // Ver la nota completa en aceptar-invitacion-form.tsx — si el
+        // navegador ya tenía una sesión guardada, detectSessionInUrl
+        // no siempre la reemplaza con el token nuevo del enlace. Se
+        // fuerza explícitamente con setSession().
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        }
       }
 
       const { data, error: errorSesion } = await supabase.auth.getSession();

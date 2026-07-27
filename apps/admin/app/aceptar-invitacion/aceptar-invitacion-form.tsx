@@ -44,6 +44,32 @@ export function AceptarInvitacionForm() {
           setEstado("invalida");
           return;
         }
+      } else {
+        // CAUSA RAÍZ CONFIRMADA: si el navegador YA tenía una sesión
+        // guardada (típicamente porque la misma persona que invita
+        // también abre el enlace de invitación, en el mismo
+        // navegador), detectSessionInUrl no siempre reemplaza esa
+        // sesión existente con el token nuevo del enlace — se queda
+        // con la vieja. Por eso el formulario terminaba actualizando
+        // la contraseña de quien YA estaba con sesión iniciada, no la
+        // del usuario invitado. Aquí se extrae el token del fragmento
+        // a mano y se fuerza con setSession(), que sí sobreescribe
+        // cualquier sesión previa sin ambigüedad.
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+        console.log("STEP 2d: token en el fragmento ->", JSON.stringify({ hayAccessToken: !!accessToken, hayRefreshToken: !!refreshToken }));
+
+        if (accessToken && refreshToken) {
+          const { data: dataSetSession, error: errorSetSession } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          console.log(
+            "STEP 2e: setSession() forzado ->",
+            JSON.stringify({ userId: dataSetSession?.user?.id, email: dataSetSession?.user?.email, error: errorSetSession?.message }),
+          );
+        }
       }
 
       const { data, error: errorSesion } = await supabase.auth.getSession();
