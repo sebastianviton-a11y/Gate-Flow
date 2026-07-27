@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
@@ -15,15 +14,37 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const passwordCreated = searchParams.get("password_created") === "1";
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
 
     const supabase = createBrowserSupabaseClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    // trim + lowercase: Supabase normaliza el correo así al guardarlo
+    // en auth.users — si esto no se hiciera aquí también, un correo
+    // escrito con mayúsculas o un espacio de más (frecuente al copiar
+    // desde el correo de invitación) podría fallar la comparación.
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
     if (signInError) {
+      // El error TÉCNICO real siempre queda en consola (sin exponer
+      // la contraseña) — el mensaje amigable en pantalla se mantiene
+      // genérico a propósito (no revela si el correo existe o no),
+      // pero la causa real queda disponible para depurar sin tener
+      // que pedirle a nadie que reproduzca el problema.
+      console.error(
+        "[GateFlow] signInWithPassword falló:",
+        signInError.message,
+        "code:",
+        (signInError as { code?: string }).code,
+        "status:",
+        signInError.status,
+      );
       setError("No pudimos iniciar sesión. Verifica tu correo y contraseña.");
       setLoading(false);
       return;
@@ -43,6 +64,13 @@ export function LoginForm() {
           <p className="mt-1 text-xs uppercase tracking-wide text-primary">Panel de administración</p>
           <p className="mt-1 text-sm text-white/50">Envíos que fluyen, conexiones que llegan.</p>
         </div>
+
+        {passwordCreated && (
+          <p className="mb-4 flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success">
+            <CheckCircle2 className="h-4 w-4" />
+            Contraseña creada. Inicia sesión con ella a continuación.
+          </p>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -90,12 +118,6 @@ export function LoginForm() {
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Ingresando..." : "Ingresar"}
           </Button>
-
-          <p className="text-center text-sm">
-            <Link href="/recuperar-password" className="text-primary/80 underline hover:text-primary">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </p>
         </form>
 
         <p className="mt-6 text-center text-xs text-white/30">

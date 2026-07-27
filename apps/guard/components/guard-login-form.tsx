@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
@@ -15,15 +15,28 @@ export function GuardLoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const passwordCreated = searchParams.get("password_created") === "1";
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
 
     const supabase = createBrowserSupabaseClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
     if (signInError) {
+      console.error(
+        "[GateFlow] signInWithPassword falló:",
+        signInError.message,
+        "code:",
+        (signInError as { code?: string }).code,
+        "status:",
+        signInError.status,
+      );
       setError("No pudimos iniciar sesión. Verifica tu correo y contraseña.");
       setLoading(false);
       return;
@@ -43,6 +56,13 @@ export function GuardLoginForm() {
           <p className="mt-1 text-xs uppercase tracking-wide text-primary">Portería</p>
           <p className="mt-1 text-sm text-white/50">Envíos que fluyen, conexiones que llegan.</p>
         </div>
+
+        {passwordCreated && (
+          <p className="mb-4 flex items-center gap-2 rounded-md bg-success/10 px-3 py-2 text-sm text-success">
+            <CheckCircle2 className="h-4 w-4" />
+            Contraseña creada. Inicia sesión con ella a continuación.
+          </p>
+        )}
 
         <form
           onSubmit={handleSubmit}

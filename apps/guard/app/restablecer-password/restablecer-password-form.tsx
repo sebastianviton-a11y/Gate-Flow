@@ -10,7 +10,12 @@ type Estado = "verificando" | "lista" | "invalida" | "enviando" | "exito";
 
 export function RestablecerPasswordForm() {
   const router = useRouter();
-  const supabase = createBrowserSupabaseClient();
+  // Ver la nota equivalente en apps/admin — createBrowserSupabaseClient()
+  // llamado directo en el cuerpo del componente creaba una instancia
+  // nueva en cada render, y el useEffect con [supabase] como
+  // dependencia se re-ejecutaba en cada una, compitiendo con el
+  // procesamiento del token de la URL.
+  const [supabase] = useState(() => createBrowserSupabaseClient());
 
   const [estado, setEstado] = useState<Estado>("verificando");
   const [password, setPassword] = useState("");
@@ -18,14 +23,27 @@ export function RestablecerPasswordForm() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Igual que en aceptar-invitacion: el token de recuperación llega
-    // en el fragmento de la URL (#access_token=...), invisible para el
-    // servidor a propósito — el cliente de navegador ya lo procesa
-    // solo al crearse, aquí solo se confirma que quedó una sesión real.
-    supabase.auth.getSession().then(({ data }) => {
+    async function verificarSesion() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code) {
+        const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
+        if (errorCambio) {
+          console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
+          setEstado("invalida");
+          return;
+        }
+      }
+
+      const { data, error: errorSesion } = await supabase.auth.getSession();
+      if (errorSesion) {
+        console.error("[GateFlow] getSession falló:", errorSesion.message, errorSesion.status);
+      }
       setEstado(data.session ? "lista" : "invalida");
-    });
-  }, [supabase]);
+    }
+    verificarSesion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit() {
     if (password.length < 8) {
@@ -40,18 +58,28 @@ export function RestablecerPasswordForm() {
     setEstado("enviando");
     setError(null);
 
-    const { error: errorPassword } = await supabase.auth.updateUser({ password });
-    if (errorPassword) {
-      setError(errorPassword.message);
+    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password });
+
+    if (errorPassword || !dataUpdate.user) {
+      console.error(
+        "[GateFlow] updateUser falló al restablecer contraseña:",
+        errorPassword?.message,
+        "code:",
+        (errorPassword as { code?: string } | undefined)?.code,
+        "status:",
+        errorPassword?.status,
+      );
+      setError(errorPassword?.message ?? "No se pudo guardar la contraseña. Intenta de nuevo.");
       setEstado("lista");
       return;
     }
 
+    await supabase.auth.signOut();
     setEstado("exito");
     setTimeout(() => {
-      router.replace("/guard");
+      router.replace("/login?password_created=1");
       router.refresh();
-    }, 1800);
+    }, 1500);
   }
 
   if (estado === "verificando") {
@@ -82,7 +110,7 @@ export function RestablecerPasswordForm() {
         <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white">
           <CheckCircle2 className="h-10 w-10 text-success" />
           <p className="font-display text-lg font-semibold">Contraseña actualizada</p>
-          <p className="text-sm text-white/60">Entrando a tu panel…</p>
+          <p className="text-sm text-white/60">Ahora inicia sesión con tu nueva contraseña…</p>
         </div>
       </div>
     );
