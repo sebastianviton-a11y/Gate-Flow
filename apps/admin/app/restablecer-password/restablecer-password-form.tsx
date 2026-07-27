@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
+import { establecerPasswordInvitado } from "../establecer-password-action";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "exito";
 
@@ -55,18 +56,10 @@ export function RestablecerPasswordForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password: password.trim() });
+    const resultado = await establecerPasswordInvitado(password);
 
-    if (errorPassword || !dataUpdate.user) {
-      console.error(
-        "[GateFlow] updateUser falló al restablecer contraseña:",
-        errorPassword?.message,
-        "code:",
-        (errorPassword as { code?: string } | undefined)?.code,
-        "status:",
-        errorPassword?.status,
-      );
-      setError(errorPassword?.message ?? "No se pudo guardar la contraseña. Intenta de nuevo.");
+    if (!resultado.ok) {
+      setError(resultado.mensaje);
       setEstado("lista");
       return;
     }

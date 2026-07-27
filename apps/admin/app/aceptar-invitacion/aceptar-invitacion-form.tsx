@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
+import { establecerPasswordInvitado } from "../establecer-password-action";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -75,26 +76,18 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: dataUpdate, error: errorPassword } = await supabase.auth.updateUser({ password: password.trim() });
+    const resultado = await establecerPasswordInvitado(password);
 
-    // No basta con "sin error" — se exige explícitamente que el
-    // usuario actualizado exista en la respuesta real de Supabase
-    // antes de mostrar cualquier éxito.
-    if (errorPassword || !dataUpdate.user) {
-      console.error(
-        "[GateFlow] updateUser falló al crear contraseña:",
-        errorPassword?.message,
-        "code:",
-        (errorPassword as { code?: string } | undefined)?.code,
-        "status:",
-        errorPassword?.status,
-      );
-      setError(errorPassword?.message ?? "No se pudo guardar la contraseña. Intenta de nuevo.");
+    if (!resultado.ok) {
+      setError(resultado.mensaje);
       setEstado("lista");
       return;
     }
 
-    await supabase.from("users").update({ terminos_aceptados_en: new Date().toISOString() }).eq("id", dataUpdate.user.id);
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user) {
+      await supabase.from("users").update({ terminos_aceptados_en: new Date().toISOString() }).eq("id", userData.user.id);
+    }
 
     // Cierra la sesión temporal de la invitación a propósito, en vez
     // de continuar directo al dashboard con ella. Forzar un login
