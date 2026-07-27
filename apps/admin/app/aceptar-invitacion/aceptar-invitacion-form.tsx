@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
@@ -129,6 +129,7 @@ export function AceptarInvitacionForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-950">
         <Loader2 className="h-6 w-6 animate-spin text-white/60" />
+        <DebugConsole />
       </div>
     );
   }
@@ -141,6 +142,7 @@ export function AceptarInvitacionForm() {
           <p className="font-display text-lg font-semibold">Este enlace ya no es válido</p>
           <p className="text-sm text-white/60">Puede haber expirado o ya haberse usado. Solicita una nueva invitación.</p>
         </div>
+        <DebugConsole />
       </div>
     );
   }
@@ -182,6 +184,7 @@ export function AceptarInvitacionForm() {
           </Button>
         </div>
       </div>
+      <DebugConsole />
     </div>
   );
 }
