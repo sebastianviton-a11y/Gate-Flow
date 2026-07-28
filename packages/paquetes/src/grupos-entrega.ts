@@ -68,54 +68,87 @@ export interface GrupoConPaquetes {
 /**
  * Trae el grupo completo (con la unidad y todos sus paquetes) a partir
  * del token del QR — es lo que usa la pantalla de escaneo para
- * mostrar la lista con casillas de selección. Se construye con una
- * consulta propia y liviana (no reutiliza el mapeador interno de
- * `Paquete` que ya usa el escaneo individual, para no depender de
- * columnas que ese mapeador quizás no expone) — trae solo los campos
- * que esta pantalla necesita mostrar.
+ * mostrar la lista con casillas de selección.
+ *
+ * A propósito NO usa la sintaxis de "join automático" de Supabase
+ * (`.select("*, unidades(...)")`) — esa sintaxis depende de que
+ * PostgREST pueda resolver la relación sin ambigüedad, y puede fallar
+ * en silencio (mostrando solo "Algo salió mal" en producción) si hay
+ * más de un camino posible entre las tablas. En su lugar, se hacen
+ * consultas simples y separadas, uniéndolas a mano en TypeScript —
+ * más explícito y sin ese riesgo.
  */
 export async function obtenerGrupoPorTokenConPaquetes(supabase: SupabaseClient, token: string): Promise<GrupoConPaquetes | null> {
   const { data: grupoData, error: errorGrupo } = await supabase
     .from("paquete_grupos_entrega")
-    .select("*, unidades(id, identificador, contacto_nombre, contacto_telefono)")
+    .select("*")
     .eq("token", token)
     .maybeSingle();
 
   if (errorGrupo) throw errorGrupo;
   if (!grupoData) return null;
 
-  const unidadRaw = (grupoData as unknown as { unidades: { id: string; identificador: string; contacto_nombre: string | null; contacto_telefono: string | null } }).unidades;
+  const fila = grupoData as FilaGrupoEntrega;
+
+  const { data: unidadData, error: errorUnidad } = await supabase
+    .from("unidades")
+    .select("id, identificador, contacto_nombre, contacto_telefono")
+    .eq("id", fila.unidad_id)
+    .maybeSingle();
+
+  if (errorUnidad) throw errorUnidad;
+  if (!unidadData) return null;
 
   const { data: paquetesData, error: errorPaquetes } = await supabase
     .from("paquetes")
-    .select("id, codigo_gateflow, numero_guia, estado_id, fecha_recepcion, empresas_paqueteria(nombre), ubicaciones(ruta)")
-    .eq("grupo_entrega_id", grupoData.id)
+    .select("id, codigo_gateflow, numero_guia, estado_id, fecha_recepcion, empresa_paqueteria_id, ubicacion_id")
+    .eq("grupo_entrega_id", fila.id)
     .order("fecha_recepcion", { ascending: true });
 
   if (errorPaquetes) throw errorPaquetes;
 
+  const filasPaquetes = (paquetesData ?? []) as Array<{
+    id: string;
+    codigo_gateflow: string;
+    numero_guia: string | null;
+    estado_id: string;
+    fecha_recepcion: string;
+    empresa_paqueteria_id: string | null;
+    ubicacion_id: string | null;
+  }>;
+
+  // Nombres de empresa/ubicación resueltos aparte, en una sola
+  // consulta cada uno por los IDs que sí aparecieron — igual de
+  // simple, sin depender del join automático.
+  const idsEmpresa = [...new Set(filasPaquetes.map((p) => p.empresa_paqueteria_id).filter((v): v is string => !!v))];
+  const idsUbicacion = [...new Set(filasPaquetes.map((p) => p.ubicacion_id).filter((v): v is string => !!v))];
+
+  const [{ data: empresasData }, { data: ubicacionesData }] = await Promise.all([
+    idsEmpresa.length > 0
+      ? supabase.from("empresas_paqueteria").select("id, nombre").in("id", idsEmpresa)
+      : Promise.resolve({ data: [] as { id: string; nombre: string }[] }),
+    idsUbicacion.length > 0
+      ? supabase.from("ubicaciones").select("id, ruta").in("id", idsUbicacion)
+      : Promise.resolve({ data: [] as { id: string; ruta: string }[] }),
+  ]);
+
+  const mapaEmpresas = new Map((empresasData ?? []).map((e) => [e.id, e.nombre]));
+  const mapaUbicaciones = new Map((ubicacionesData ?? []).map((u) => [u.id, u.ruta]));
+
   return {
-    grupo: mapearGrupo(grupoData as FilaGrupoEntrega),
+    grupo: mapearGrupo(fila),
     unidad: {
-      id: unidadRaw.id,
-      identificador: unidadRaw.identificador,
-      contactoNombre: unidadRaw.contacto_nombre,
-      contactoTelefono: unidadRaw.contacto_telefono,
+      id: unidadData.id,
+      identificador: unidadData.identificador,
+      contactoNombre: unidadData.contacto_nombre,
+      contactoTelefono: unidadData.contacto_telefono,
     },
-    paquetes: ((paquetesData ?? []) as unknown as Array<{
-      id: string;
-      codigo_gateflow: string;
-      numero_guia: string | null;
-      estado_id: string;
-      fecha_recepcion: string;
-      empresas_paqueteria: { nombre: string } | null;
-      ubicaciones: { ruta: string } | null;
-    }>).map((p) => ({
+    paquetes: filasPaquetes.map((p) => ({
       id: p.id,
       codigoGateflow: p.codigo_gateflow,
-      empresaPaqueteriaNombre: p.empresas_paqueteria?.nombre ?? null,
+      empresaPaqueteriaNombre: p.empresa_paqueteria_id ? mapaEmpresas.get(p.empresa_paqueteria_id) ?? null : null,
       numeroGuia: p.numero_guia,
-      ubicacionRuta: p.ubicaciones?.ruta ?? null,
+      ubicacionRuta: p.ubicacion_id ? mapaUbicaciones.get(p.ubicacion_id) ?? null : null,
       estadoId: p.estado_id,
       fechaRecepcion: p.fecha_recepcion,
     })),

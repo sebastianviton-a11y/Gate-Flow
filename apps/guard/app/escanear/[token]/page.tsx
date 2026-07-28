@@ -63,7 +63,17 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
 
   // No se encontró como paquete individual — intentar como token de
   // GRUPO de entrega antes de rendirse.
-  const grupoConPaquetes = await obtenerGrupoPorTokenConPaquetes(supabase, params.token);
+  let grupoConPaquetes;
+  try {
+    grupoConPaquetes = await obtenerGrupoPorTokenConPaquetes(supabase, params.token);
+  } catch (e) {
+    console.error("[GateFlow] obtenerGrupoPorTokenConPaquetes falló:", e instanceof Error ? e.message : e);
+    return (
+      <EstadoNeutral
+        titulo={`No se pudo cargar este código. ${e instanceof Error ? e.message : "Intenta de nuevo en unos segundos."}`}
+      />
+    );
+  }
 
   if (!grupoConPaquetes) {
     return <EstadoNeutral titulo="No se encontró un paquete relacionado con este código." />;
