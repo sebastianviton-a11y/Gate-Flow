@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import {
   registrarPaquete,
@@ -12,15 +12,26 @@ import {
   construirMensajeNotificacion,
   construirUrlEscaneo,
   construirUrlVerQr,
+  buscarGrupoAbiertoDeUnidad,
+  obtenerOCrearGrupoEntrega,
+  crearGrupoEntregaSeparado,
+  ligarPaqueteAGrupo,
+  obtenerGrupoEntrega,
+  marcarWhatsappGrupoEnviado,
+  construirMensajeNotificacionGrupo,
+  construirEnlaceWhatsAppGrupo,
   type Catalogos,
   type UbicacionItem,
   type ResultadoRegistro,
+  type GrupoEntrega,
 } from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
 import { Button, Input, PickupShareCard, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
+
+type DecisionAgrupacion = "existente" | "separado";
 
 export default function RegisterPackagePage() {
   const session = useGuardSession();
@@ -48,6 +59,17 @@ export default function RegisterPackagePage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmacion, setConfirmacion] = useState<ResultadoRegistro | null>(null);
   const [masDetalles, setMasDetalles] = useState(false);
+
+  // ── Agrupación de paquetes por unidad ────────────────────────
+  const [grupoAbierto, setGrupoAbierto] = useState<GrupoEntrega | null>(null);
+  const [mostrarPromptAgrupacion, setMostrarPromptAgrupacion] = useState(false);
+  const [decisionAgrupacion, setDecisionAgrupacion] = useState<DecisionAgrupacion | null>(null);
+  const [grupoActivoId, setGrupoActivoId] = useState<string | null>(null);
+  const [grupoActivo, setGrupoActivo] = useState<GrupoEntrega | null>(null);
+  const [paquetesEnSesion, setPaquetesEnSesion] = useState(0);
+  const [pasoPostGuardado, setPasoPostGuardado] = useState(false);
+  const [flujoTerminado, setFlujoTerminado] = useState(false);
+  const [enviandoNotificacion, setEnviandoNotificacion] = useState(false);
 
   useEffect(() => {
     obtenerCatalogos(supabase, session.tenant.id)
@@ -77,6 +99,19 @@ export default function RegisterPackagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, unidadSeleccionada]);
 
+  // Al elegir una unidad, revisar si ya tiene un grupo de entrega
+  // abierto — con datos reales, no solo suponiendo que puede haberlo.
+  useEffect(() => {
+    if (!unidadSeleccionada) {
+      setGrupoAbierto(null);
+      return;
+    }
+    buscarGrupoAbiertoDeUnidad(supabase, session.tenant.id, unidadSeleccionada.id)
+      .then((grupo) => setGrupoAbierto(grupo && grupo.cantidadTotal > 0 ? grupo : null))
+      .catch(() => setGrupoAbierto(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unidadSeleccionada]);
+
   function reiniciar() {
     setQuery("");
     setUnidades([]);
@@ -92,10 +127,45 @@ export default function RegisterPackagePage() {
     setFoto(null);
     setError(null);
     setConfirmacion(null);
+    setGrupoAbierto(null);
+    setMostrarPromptAgrupacion(false);
+    setDecisionAgrupacion(null);
+    setGrupoActivoId(null);
+    setGrupoActivo(null);
+    setPaquetesEnSesion(0);
+    setPasoPostGuardado(false);
+    setFlujoTerminado(false);
   }
 
-  async function handleConfirmar() {
+  /** Limpia solo los campos del PAQUETE — conserva unidad, residente y
+   * la decisión de agrupación (BR §10: "conservar residente y
+   * domicilio seleccionados"). */
+  function limpiarCamposPaquete() {
+    setEmpresaId("");
+    setRemitente("");
+    setNumeroGuia("");
+    setTamanoId("");
+    setPrioridadId("");
+    setUbicacionId("");
+    setNotas("");
+    setFoto(null);
+    setError(null);
+  }
+
+  function handleClickConfirmar() {
     if (!unidadSeleccionada || !ubicacionId) return; // BR-17: ubicación obligatoria
+    // Solo se pregunta la PRIMERA vez en esta sesión de registro — ya
+    // decidido, los siguientes paquetes de la misma unidad usan la
+    // misma decisión sin volver a interrumpir al guardia.
+    if (grupoAbierto && !decisionAgrupacion) {
+      setMostrarPromptAgrupacion(true);
+      return;
+    }
+    void registrarYAgrupar();
+  }
+
+  async function registrarYAgrupar() {
+    if (!unidadSeleccionada || !ubicacionId) return;
     setEnviando(true);
     setError(null);
     try {
@@ -118,10 +188,6 @@ export default function RegisterPackagePage() {
       );
       setConfirmacion(resultado);
 
-      // La foto es opcional (no bloquea el registro, BR-17 solo exige
-      // ubicación) — si falla la subida, el paquete ya quedó registrado
-      // correctamente; se registra el error en consola, no se le muestra
-      // al guardia como si el registro completo hubiera fallado.
       if (foto) {
         try {
           await subirFotografiaPaquete(supabase, {
@@ -135,6 +201,24 @@ export default function RegisterPackagePage() {
           console.error("[GateFlow] No se pudo subir la fotografía de recepción:", fotoError);
         }
       }
+
+      // ── Ligar el paquete al grupo correspondiente ──────────────
+      let idGrupo = grupoActivoId;
+      if (!idGrupo) {
+        const decision: DecisionAgrupacion = decisionAgrupacion ?? "existente";
+        idGrupo =
+          decision === "separado"
+            ? await crearGrupoEntregaSeparado(supabase, session.tenant.id, unidadSeleccionada.id, residenteId)
+            : await obtenerOCrearGrupoEntrega(supabase, session.tenant.id, unidadSeleccionada.id, residenteId);
+        setGrupoActivoId(idGrupo);
+      }
+      await ligarPaqueteAGrupo(supabase, resultado.paquete.id, idGrupo);
+      const grupoActualizado = await obtenerGrupoEntrega(supabase, idGrupo);
+      setGrupoActivo(grupoActualizado);
+
+      setPaquetesEnSesion((n) => n + 1);
+      setMostrarPromptAgrupacion(false);
+      setPasoPostGuardado(true);
     } catch (e) {
       setError(obtenerMensajeErrorConTimeout(e, "No se pudo registrar el paquete. Intenta de nuevo."));
     } finally {
@@ -142,47 +226,90 @@ export default function RegisterPackagePage() {
     }
   }
 
-  if (confirmacion) {
-    const { paquete, notificacion } = confirmacion;
-    const nombreDestinatario = notificacion?.destinatario ?? "residente";
-    // NEXT_PUBLIC_GUARD_APP_URL es la URL pública real de este sitio en
-    // Netlify — nunca un dominio temporal escrito en el código. Si
-    // todavía no se configuró (ej. en desarrollo local), se usa el
-    // origin del navegador como respaldo razonable.
+  function handleAgregarOtroPaquete() {
+    limpiarCamposPaquete();
+    setPasoPostGuardado(false);
+    setConfirmacion(null);
+  }
+
+  function nombreDestinatarioActual(): string {
+    if (residenteId) {
+      const r = unidadSeleccionada?.residentes.find((r) => r.id === residenteId);
+      if (r) return r.nombreCompleto;
+    }
+    return unidadSeleccionada?.contactoNombre ?? "residente";
+  }
+
+  async function handleEnviarNotificacion() {
+    if (!grupoActivo || !unidadSeleccionada) return;
+    setEnviandoNotificacion(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
+      const urlVerQr = construirUrlVerQr(grupoActivo.token, baseUrl);
+      const mensaje = construirMensajeNotificacionGrupo(
+        grupoActivo.cantidadTotal,
+        session.tenant.nombre,
+        nombreDestinatarioActual(),
+        grupoActivo.codigoGrupo ?? grupoActivo.token,
+        urlVerQr,
+      );
+      const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje);
+      if (enlace) window.open(enlace.url, "_blank");
+      await marcarWhatsappGrupoEnviado(supabase, grupoActivo.id);
+      setGrupoActivo({ ...grupoActivo, whatsappEnviado: true });
+    } catch (e) {
+      console.error("[GateFlow] No se pudo enviar la notificación agrupada:", e);
+    } finally {
+      setEnviandoNotificacion(false);
+      setPasoPostGuardado(false);
+      setFlujoTerminado(true);
+    }
+  }
+
+  function handleGuardarSinNotificar() {
+    setPasoPostGuardado(false);
+    setFlujoTerminado(true);
+  }
+
+  // ── Pantalla final: confirmación con QR del GRUPO ──────────────
+  if (grupoActivo && flujoTerminado) {
     const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
-    const scanUrl = paquete.pickupToken ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
-    const urlVerQr = paquete.pickupToken ? construirUrlVerQr(paquete.pickupToken, baseUrl) : undefined;
-    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr);
-    const enlaceWhatsApp = notificacion
-      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr)
-      : null;
+    const scanUrl = construirUrlEscaneo(grupoActivo.token, baseUrl);
+    const urlVerQr = construirUrlVerQr(grupoActivo.token, baseUrl);
+    const nombreDestinatario = nombreDestinatarioActual();
+    const mensaje = construirMensajeNotificacionGrupo(
+      grupoActivo.cantidadTotal,
+      session.tenant.nombre,
+      nombreDestinatario,
+      grupoActivo.codigoGrupo ?? grupoActivo.token,
+      urlVerQr,
+    );
+    const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje);
 
     return (
       <div className="flex h-full flex-col">
-        <OperationalHeader title="Paquete registrado" />
+        <OperationalHeader title="Paquetes registrados" />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
           <span className="flex h-14 w-14 animate-in zoom-in-50 items-center justify-center rounded-full bg-success/10 duration-300">
             <Check className="h-7 w-7 text-success" />
           </span>
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <h2 className="font-display text-lg font-semibold">Registrado — {paquete.unidadIdentificador}</h2>
-            {notificacion ? (
-              <p className="text-sm text-muted-foreground">Notificación en cola para {notificacion.destinatario}.</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sin residente asociado — no se generó notificación.</p>
-            )}
+            <h2 className="font-display text-lg font-semibold">
+              {grupoActivo.cantidadTotal === 1 ? "1 paquete" : `${grupoActivo.cantidadTotal} paquetes`} — {unidadSeleccionada?.identificador}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {grupoActivo.whatsappEnviado ? `Notificación enviada a ${nombreDestinatario}.` : "Sin notificación enviada."}
+            </p>
           </div>
 
-          {scanUrl && (
-            <div className="animate-in fade-in zoom-in-95 duration-300">
-              <PickupShareCard
-                scanUrl={scanUrl}
-                codigoGateflow={paquete.codigoGateflow}
-                mensaje={mensaje}
-                whatsappUrl={enlaceWhatsApp?.url ?? null}
-              />
-            </div>
-          )}
+          <div className="animate-in fade-in zoom-in-95 duration-300">
+            <PickupShareCard
+              scanUrl={scanUrl}
+              codigoGateflow={grupoActivo.codigoGrupo ?? grupoActivo.token}
+              mensaje={mensaje}
+              whatsappUrl={enlaceWhatsApp?.url ?? null}
+            />
+          </div>
 
           <Button onClick={reiniciar} className="min-h-touch w-full max-w-xs text-base">
             <RotateCcw className="h-4 w-4" />
@@ -193,18 +320,49 @@ export default function RegisterPackagePage() {
     );
   }
 
+  // ── Paso intermedio: 3 botones tras guardar cada paquete ────────
+  if (pasoPostGuardado && grupoActivo) {
+    return (
+      <div className="flex h-full flex-col">
+        <OperationalHeader title="Paquete guardado" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/10">
+            <Check className="h-7 w-7 text-success" />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-semibold">
+              {unidadSeleccionada?.identificador} — {grupoActivo.cantidadTotal === 1 ? "1 paquete pendiente" : `${grupoActivo.cantidadTotal} paquetes pendientes`}
+            </h2>
+            <p className="text-sm text-muted-foreground">Paquetes registrados en esta sesión: {paquetesEnSesion}</p>
+          </div>
+
+          <div className="flex w-full max-w-xs flex-col gap-2">
+            <Button variant="outline" onClick={handleAgregarOtroPaquete} className="min-h-touch w-full text-base">
+              Guardar y agregar otro paquete
+            </Button>
+            <Button onClick={handleEnviarNotificacion} disabled={enviandoNotificacion} className="min-h-touch w-full text-base">
+              {enviandoNotificacion && <Loader2 className="h-4 w-4 animate-spin" />}
+              Guardar y enviar notificación
+            </Button>
+            <button onClick={handleGuardarSinNotificar} className="mt-1 text-sm text-muted-foreground underline">
+              Guardar sin notificar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <OperationalHeader title="Registrar paquete" />
-
-      <div className="flex-1 space-y-5 p-4 pb-28">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-28">
         {!unidadSeleccionada ? (
           <div>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                autoFocus
-                placeholder="Unidad o nombre del residente…"
+                placeholder="Buscar unidad, residente o teléfono…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-14 pl-11 text-lg"
@@ -246,6 +404,19 @@ export default function RegisterPackagePage() {
               <span className="text-xs text-primary">Cambiar</span>
             </button>
 
+            {grupoAbierto && (
+              <div className="flex items-center gap-2 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm">
+                <Users className="h-4 w-4 flex-none text-warn-foreground" />
+                <span>
+                  {grupoAbierto.cantidadTotal === 1
+                    ? "Esta unidad ya tiene 1 paquete pendiente."
+                    : `Esta unidad ya tiene ${grupoAbierto.cantidadTotal} paquetes pendientes.`}
+                  {decisionAgrupacion === "existente" && " Este se agregará al mismo grupo."}
+                  {decisionAgrupacion === "separado" && " Este irá en un grupo separado."}
+                </span>
+              </div>
+            )}
+
             {unidadSeleccionada.residentes.length > 1 && (
               <div>
                 <p className="mb-1.5 text-sm font-medium text-muted-foreground">¿Para quién es? (opcional)</p>
@@ -266,7 +437,7 @@ export default function RegisterPackagePage() {
             )}
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Empresa de paquetería</p>
+              <p className="text-sm font-medium text-muted-foreground">Empresa de paquetería (opcional)</p>
               <div className="flex flex-wrap gap-2">
                 {(catalogos?.empresasPaqueteria ?? []).map((e) => (
                   <button
@@ -312,10 +483,6 @@ export default function RegisterPackagePage() {
               <PhotoCapture onChange={setFoto} />
             </div>
 
-            {/* UX_REVIEW.md §3: solo empresa y ubicación quedan siempre
-                visibles — remitente, guía, tamaño, prioridad y notas rara
-                vez son críticos para registrar en segundos, así que se
-                colapsan por defecto en vez de competir por atención. */}
             <button
               type="button"
               onClick={() => setMasDetalles((v) => !v)}
@@ -378,13 +545,51 @@ export default function RegisterPackagePage() {
             )}
 
             {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+
+            {/* Aviso de agrupación — solo aparece la primera vez que se
+                detecta un grupo abierto para esta unidad, antes de
+                registrar el paquete. BR §2: opción predeterminada es
+                agregar al grupo existente. */}
+            {mostrarPromptAgrupacion && grupoAbierto && (
+              <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                <p className="text-sm font-medium">
+                  {grupoAbierto.cantidadTotal === 1
+                    ? "Este residente ya tiene 1 paquete pendiente."
+                    : `Este residente ya tiene ${grupoAbierto.cantidadTotal} paquetes pendientes.`}{" "}
+                  ¿Deseas agregar este paquete al mismo grupo de entrega?
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => {
+                      setDecisionAgrupacion("existente");
+                      setMostrarPromptAgrupacion(false);
+                      void registrarYAgrupar();
+                    }}
+                    className="min-h-touch w-full text-base"
+                  >
+                    Agregar al grupo existente
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDecisionAgrupacion("separado");
+                      setMostrarPromptAgrupacion(false);
+                      void registrarYAgrupar();
+                    }}
+                    className="min-h-touch w-full text-base"
+                  >
+                    Crear un grupo separado
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {unidadSeleccionada && (
+      {unidadSeleccionada && !mostrarPromptAgrupacion && (
         <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background p-4">
-          <Button onClick={handleConfirmar} disabled={!ubicacionId || enviando} className="min-h-touch w-full text-base">
+          <Button onClick={handleClickConfirmar} disabled={!ubicacionId || enviando} className="min-h-touch w-full text-base">
             {enviando && <Loader2 className="h-5 w-5 animate-spin" />}
             {enviando ? "Registrando…" : "Confirmar recepción"}
           </Button>
