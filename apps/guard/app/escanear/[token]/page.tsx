@@ -115,6 +115,17 @@ function EstadoNeutral({ titulo, tono = "warn" }: { titulo: string; tono?: "warn
         <GateFlowLogo size={28} />
       </span>
       <p className="max-w-xs text-sm text-muted-foreground">{titulo}</p>
+      {/* Enlace simple, no un <Button> con useRouter — EstadoNeutral es
+          un Server Component sin "use client", y esto evita tener que
+          convertirlo solo para una navegación básica. Antes no había
+          ninguna salida desde esta pantalla más que cerrar y volver a
+          abrir la app. */}
+      <a
+        href="/guard"
+        className="min-h-touch flex w-full max-w-xs items-center justify-center rounded-lg bg-primary text-base font-medium text-primary-foreground"
+      >
+        Volver al inicio
+      </a>
     </div>
   );
 }
