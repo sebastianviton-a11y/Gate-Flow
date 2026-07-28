@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Check, PackageCheck, Package } from "lucide-react";
+import { Loader2, Check, PackageCheck, Package, MapPin } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { guardarFirmaEntrega, entregarGrupoPaquetes, type GrupoConPaquetes } from "@gateflow/paquetes";
 import type { SessionContext } from "@gateflow/types";
@@ -21,7 +21,9 @@ export function EscaneoGrupoResultado({ datos, session }: { datos: GrupoConPaque
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
-  const paquetesPendientes = datos.paquetes.filter((p) => p.estadoId !== "entregado");
+  const paquetesPendientes = datos.paquetes
+    .filter((p) => p.estadoId !== "entregado")
+    .sort((a, b) => (a.ubicacionRuta ?? "").localeCompare(b.ubicacionRuta ?? ""));
   const paquetesYaEntregados = datos.paquetes.filter((p) => p.estadoId === "entregado");
 
   // Todos los pendientes empiezan seleccionados, tal como pide la
@@ -142,9 +144,17 @@ export function EscaneoGrupoResultado({ datos, session }: { datos: GrupoConPaque
                     <Package className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="gf-code font-medium">{p.codigoGateflow}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {[p.empresaPaqueteriaNombre, p.ubicacionRuta].filter(Boolean).join(" · ") || "Sin detalles adicionales"}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    {p.ubicacionRuta ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                        <MapPin className="h-3 w-3" />
+                        {p.ubicacionRuta}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Sin ubicación registrada</span>
+                    )}
+                    {p.empresaPaqueteriaNombre && <span className="text-xs text-muted-foreground">{p.empresaPaqueteriaNombre}</span>}
+                  </div>
                 </div>
               </label>
             ))}
