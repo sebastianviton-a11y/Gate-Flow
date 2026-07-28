@@ -134,3 +134,10 @@ export {
   type GrupoConPaquetes,
   type PaqueteDeGrupo,
 } from "./grupos-entrega";
+
+export {
+  contarIncidenciasPorPaquetes,
+  listarIncidenciasDePaquete,
+  type IncidenciaConFotos,
+  type FotoIncidencia,
+} from "./incidencias-historial";

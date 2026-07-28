@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Loader2, MapPin } from "lucide-react";
+import { Search, Loader2, MapPin, AlertTriangle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { buscarPaquetes } from "@gateflow/paquetes";
+import { buscarPaquetes, contarIncidenciasPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { Input, EstadoBadge } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
@@ -29,6 +29,7 @@ export default function SearchPackagePage() {
   const [buscado, setBuscado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroEstado>("todos");
+  const [incidenciasPorPaquete, setIncidenciasPorPaquete] = useState<Map<string, number>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -45,6 +46,13 @@ export default function SearchPackagePage() {
       try {
         const data = await buscarPaquetes(supabase, session.tenant.id, query);
         setResultados(data);
+        if (data.length > 0) {
+          contarIncidenciasPorPaquetes(supabase, data.map((p) => p.id))
+            .then(setIncidenciasPorPaquete)
+            .catch((e) => console.error("[GateFlow] No se pudo cargar el conteo de incidencias:", e));
+        } else {
+          setIncidenciasPorPaquete(new Map());
+        }
       } catch (e) {
         setResultados([]);
         setError(e instanceof Error ? e.message : "No se pudo completar la búsqueda. Intenta de nuevo.");
@@ -123,17 +131,27 @@ export default function SearchPackagePage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium">{p.unidadIdentificador}</p>
-                      <EstadoBadge estado={p.estado} />
+                      <div className="flex items-center gap-1.5">
+                        <EstadoBadge estado={p.estado} />
+                      </div>
                     </div>
+                    {(incidenciasPorPaquete.get(p.id) ?? 0) > 0 && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-destructive">
+                        <AlertTriangle className="h-3 w-3" />
+                        {(incidenciasPorPaquete.get(p.id) ?? 0) === 1
+                          ? "Incidencia"
+                          : `Incidencias (${incidenciasPorPaquete.get(p.id)})`}
+                      </p>
+                    )}
                     {p.residenteNombre && <p className="text-sm text-muted-foreground">{p.residenteNombre}</p>}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="gf-code">{p.codigoGateflow}</span>
                       {p.fechaRecepcion && <span>{new Date(p.fechaRecepcion).toLocaleString("es-MX")}</span>}
                     </div>
-                    {!yaEntregado && p.ubicacionNombre && (
+                    {!yaEntregado && p.ubicacionDescripcion && (
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         <MapPin className="h-3 w-3" />
-                        {p.ubicacionNombre}
+                        {p.ubicacionDescripcion}
                       </span>
                     )}
                   </div>
