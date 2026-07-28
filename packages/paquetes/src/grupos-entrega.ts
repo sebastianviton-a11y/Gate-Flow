@@ -123,17 +123,20 @@ export async function obtenerGrupoPorTokenConPaquetes(supabase: SupabaseClient, 
   const idsEmpresa = [...new Set(filasPaquetes.map((p) => p.empresa_paqueteria_id).filter((v): v is string => !!v))];
   const idsUbicacion = [...new Set(filasPaquetes.map((p) => p.ubicacion_id).filter((v): v is string => !!v))];
 
-  const [{ data: empresasData }, { data: ubicacionesData }] = await Promise.all([
+  const [resultadoEmpresas, resultadoUbicaciones] = await Promise.all([
     idsEmpresa.length > 0
       ? supabase.from("empresas_paqueteria").select("id, nombre").in("id", idsEmpresa)
-      : Promise.resolve({ data: [] as { id: string; nombre: string }[] }),
+      : Promise.resolve({ data: [] as { id: string; nombre: string }[], error: null }),
     idsUbicacion.length > 0
-      ? supabase.from("ubicaciones").select("id, ruta").in("id", idsUbicacion)
-      : Promise.resolve({ data: [] as { id: string; ruta: string }[] }),
+      ? supabase.from("ubicaciones").select("id, nombre").in("id", idsUbicacion)
+      : Promise.resolve({ data: [] as { id: string; nombre: string }[], error: null }),
   ]);
 
-  const mapaEmpresas = new Map((empresasData ?? []).map((e) => [e.id, e.nombre]));
-  const mapaUbicaciones = new Map((ubicacionesData ?? []).map((u) => [u.id, u.ruta]));
+  if (resultadoEmpresas.error) console.error("[GateFlow] No se pudieron resolver nombres de empresa de paquetería:", resultadoEmpresas.error.message);
+  if (resultadoUbicaciones.error) console.error("[GateFlow] No se pudieron resolver nombres de ubicación:", resultadoUbicaciones.error.message);
+
+  const mapaEmpresas = new Map((resultadoEmpresas.data ?? []).map((e) => [e.id, e.nombre]));
+  const mapaUbicaciones = new Map((resultadoUbicaciones.data ?? []).map((u) => [u.id, u.nombre]));
 
   return {
     grupo: mapearGrupo(fila),
