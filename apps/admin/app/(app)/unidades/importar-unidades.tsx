@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Upload, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@gateflow/ui";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
@@ -9,18 +9,75 @@ import { validarCSVUnidades, type FilaValidada } from "@/lib/csv";
 
 type Paso = "inicio" | "revisando" | "importando" | "resumen";
 
-export function ImportarUnidades({ tenantId, onImportado }: { tenantId: string; onImportado: () => void }) {
+const ACCEPT_ARCHIVOS =
+  ".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+
+interface ImportarUnidadesProps {
+  tenantId: string;
+  onImportado: () => void;
+  /**
+   * Modo de input compartido — lo usa Residentes, donde el botón
+   * "Importar Excel/CSV" (fuera de este componente) y el botón interno
+   * "Subir archivo" deben abrir EXACTAMENTE el mismo selector, no dos
+   * independientes. Si no se pasan estas 3 props, el componente sigue
+   * funcionando exactamente igual que antes, con su propio input
+   * interno — así la pantalla de Unidades, que ya lo usa así, no se
+   * rompe con este cambio.
+   */
+  archivoExterno?: File | null;
+  onArchivoConsumido?: () => void;
+  onSolicitarArchivo?: () => void;
+}
+
+export function ImportarUnidades({
+  tenantId,
+  onImportado,
+  archivoExterno,
+  onArchivoConsumido,
+  onSolicitarArchivo,
+}: ImportarUnidadesProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [paso, setPaso] = useState<Paso>("inicio");
   const [filas, setFilas] = useState<FilaValidada[]>([]);
   const [encabezadoInvalido, setEncabezadoInvalido] = useState(false);
+  const [errorLectura, setErrorLectura] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacion | null>(null);
 
-  async function handleArchivo(event: React.ChangeEvent<HTMLInputElement>) {
-    const archivo = event.target.files?.[0];
-    if (!archivo) return;
+  /**
+   * Único punto de entrada para procesar CUALQUIER archivo (CSV o
+   * Excel) — sin importar si vino del input interno o del externo.
+   * Un XLSX/XLS se convierte a texto CSV con SheetJS y de ahí en
+   * adelante corre exactamente por la misma validación que ya existía
+   * (validarCSVUnidades) — cero lógica de validación duplicada.
+   */
+  async function procesarArchivo(archivo: File) {
+    setErrorLectura(null);
+    const nombre = archivo.name.toLowerCase();
+    const esExcel = nombre.endsWith(".xlsx") || nombre.endsWith(".xls");
 
-    const contenido = await archivo.text();
+    let contenido: string;
+    try {
+      if (esExcel) {
+        const XLSX = await import("xlsx");
+        const buffer = await archivo.arrayBuffer();
+        const libro = XLSX.read(buffer, { type: "array" });
+        const nombrePrimeraHoja = libro.SheetNames[0];
+        if (!nombrePrimeraHoja) throw new Error("El archivo no tiene ninguna hoja.");
+        const hoja = libro.Sheets[nombrePrimeraHoja];
+        // sheet_to_csv reproduce el mismo formato de texto que ya
+        // consume validarCSVUnidades — es la razón por la que no hace
+        // falta ninguna ruta de validación nueva para Excel.
+        contenido = XLSX.utils.sheet_to_csv(hoja);
+      } else {
+        contenido = await archivo.text();
+      }
+    } catch (e) {
+      console.error("[GateFlow] No se pudo leer el archivo de importación:", e);
+      setErrorLectura("No fue posible leer el archivo.");
+      setPaso("revisando");
+      return;
+    }
+
     const { encabezadoValido, filas: filasValidadas } = validarCSVUnidades(contenido);
 
     if (!encabezadoValido) {
@@ -32,8 +89,24 @@ export function ImportarUnidades({ tenantId, onImportado }: { tenantId: string; 
     setEncabezadoInvalido(false);
     setFilas(filasValidadas);
     setPaso("revisando");
+  }
+
+  async function handleArchivoInterno(event: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+    await procesarArchivo(archivo);
     if (inputRef.current) inputRef.current.value = "";
   }
+
+  // Modo de input compartido: cuando el padre (Residentes) entrega un
+  // archivo elegido desde SU propio input, se procesa aquí igual que
+  // si hubiera venido del input interno.
+  useEffect(() => {
+    if (archivoExterno) {
+      procesarArchivo(archivoExterno).then(() => onArchivoConsumido?.());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivoExterno]);
 
   async function handleConfirmarImportacion() {
     setPaso("importando");
@@ -60,7 +133,7 @@ export function ImportarUnidades({ tenantId, onImportado }: { tenantId: string; 
     return (
       <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-5">
         <p className="text-sm text-muted-foreground">
-          Importa tus unidades desde una plantilla — sin recapturar una por una.
+          Importa tus unidades desde una plantilla — sin recapturar una por una. Acepta CSV, XLSX o XLS.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
@@ -69,17 +142,38 @@ export function ImportarUnidades({ tenantId, onImportado }: { tenantId: string; 
               Descargar plantilla
             </a>
           </Button>
-          <Button size="sm" onClick={() => inputRef.current?.click()}>
+          <Button size="sm" onClick={() => (onSolicitarArchivo ? onSolicitarArchivo() : inputRef.current?.click())}>
             <Upload className="h-4 w-4" />
             Subir archivo
           </Button>
-          <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={handleArchivo} />
+          {/* Sin modo compartido (Unidades, uso original): este input
+              propio sigue existiendo tal cual como antes. En modo
+              compartido (Residentes), onSolicitarArchivo ya viene
+              definido y este input interno nunca se usa — el que
+              importa es el del padre. */}
+          {!onSolicitarArchivo && (
+            <input ref={inputRef} type="file" accept={ACCEPT_ARCHIVOS} className="hidden" onChange={handleArchivoInterno} />
+          )}
         </div>
       </div>
     );
   }
 
   if (paso === "revisando") {
+    if (errorLectura) {
+      return (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            <p className="text-sm font-medium">{errorLectura}</p>
+          </div>
+          <Button variant="ghost" size="sm" className="mt-3" onClick={() => setPaso("inicio")}>
+            Intentar de nuevo
+          </Button>
+        </div>
+      );
+    }
+
     if (encabezadoInvalido) {
       return (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
