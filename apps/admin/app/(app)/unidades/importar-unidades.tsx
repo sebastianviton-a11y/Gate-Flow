@@ -7,6 +7,35 @@ import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { importarUnidadesMasivo, type FilaImportarUnidad, type ResultadoImportacion } from "@gateflow/paquetes";
 import { validarCSVUnidades, type FilaValidada } from "@/lib/csv";
 
+/**
+ * Carga SheetJS (xlsx) desde un CDN público en el navegador, en vez de
+ * instalarlo como dependencia del proyecto — evita depender de tener
+ * Node.js/pnpm funcionando en la máquina de quien despliega. Se
+ * guarda en window para no volver a descargarlo si ya se cargó antes
+ * en esta misma sesión del navegador.
+ */
+declare global {
+  interface Window {
+    XLSX?: any;
+  }
+}
+
+function cargarXLSXDesdeCDN(): Promise<NonNullable<Window["XLSX"]>> {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.async = true;
+    script.onload = () => {
+      if (window.XLSX) resolve(window.XLSX);
+      else reject(new Error("XLSX no quedó disponible después de cargar el script."));
+    };
+    script.onerror = () => reject(new Error("No se pudo cargar la librería para leer archivos Excel."));
+    document.head.appendChild(script);
+  });
+}
+
 type Paso = "inicio" | "revisando" | "importando" | "resumen";
 
 const ACCEPT_ARCHIVOS =
@@ -58,7 +87,7 @@ export function ImportarUnidades({
     let contenido: string;
     try {
       if (esExcel) {
-        const XLSX = await import("xlsx");
+        const XLSX = await cargarXLSXDesdeCDN();
         const buffer = await archivo.arrayBuffer();
         const libro = XLSX.read(buffer, { type: "array" });
         const nombrePrimeraHoja = libro.SheetNames[0];
