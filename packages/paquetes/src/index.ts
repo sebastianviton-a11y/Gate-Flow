@@ -124,10 +124,13 @@ export {
   crearGrupoEntregaSeparado,
   ligarPaqueteAGrupo,
   obtenerGrupoEntrega,
+  obtenerGrupoPorTokenConPaquetes,
   marcarWhatsappGrupoEnviado,
   entregarGrupoPaquetes,
   construirMensajeNotificacionGrupo,
   construirEnlaceWhatsAppGrupo,
   type GrupoEntrega,
   type EstadoGrupoEntrega,
+  type GrupoConPaquetes,
+  type PaqueteDeGrupo,
 } from "./grupos-entrega";

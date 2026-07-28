@@ -1,8 +1,9 @@
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
-import { buscarPaquetePorPickupToken, listarPendientesPorUnidad } from "@gateflow/paquetes";
+import { buscarPaquetePorPickupToken, listarPendientesPorUnidad, obtenerGrupoPorTokenConPaquetes } from "@gateflow/paquetes";
 import { GateFlowLogo } from "@gateflow/ui";
 import { EscaneoResultado } from "./escaneo-resultado";
+import { EscaneoGrupoResultado } from "./escaneo-grupo-resultado";
 
 /**
  * Esta ruta es pública en el middleware (apps/guard/middleware.ts) — se
@@ -11,6 +12,13 @@ import { EscaneoResultado } from "./escaneo-resultado";
  * error. Por eso el chequeo de sesión ocurre AQUÍ, explícitamente, antes
  * de tocar cualquier dato — nunca se consulta la base de datos si no hay
  * sesión activa, ni siquiera para confirmar si el token existe.
+ *
+ * Desde el sistema de agrupación de paquetes: un mismo token de la URL
+ * ahora puede ser el de un PAQUETE individual (como siempre) o el de un
+ * GRUPO de entrega (nuevo). Se intenta primero como paquete individual
+ * — el caso más común y el que ya funcionaba — y solo si no se
+ * encuentra ahí, se intenta como grupo. Ningún paquete individual deja
+ * de funcionar por este cambio.
  */
 export default async function EscanearTokenPage({ params }: { params: { token: string } }) {
   const session = await getSessionContext();
@@ -27,36 +35,63 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
   const supabase = createServerSupabaseClient();
   const paquete = await buscarPaquetePorPickupToken(supabase, params.token);
 
-  if (!paquete) {
+  if (paquete) {
+    if (paquete.estado === "rechazado" || paquete.estado === "devuelto") {
+      return <EstadoNeutral titulo="Este paquete fue cancelado y no está disponible para entrega." />;
+    }
+
+    if (paquete.estado === "entregado") {
+      const fecha = paquete.fechaEntrega ? new Date(paquete.fechaEntrega).toLocaleString("es-MX") : "";
+      return <EstadoNeutral titulo={`Este paquete ya fue entregado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
+    }
+
+    const otrosPendientes = await listarPendientesPorUnidad(supabase, paquete.unidadId, paquete.id);
+
+    supabase
+      .rpc("registrar_auditoria", {
+        p_tenant_id: session.tenant.id,
+        p_accion: "paquete.qr_escaneado",
+        p_entidad: "paquetes",
+        p_entidad_id: paquete.id,
+        p_datos_anteriores: {},
+        p_datos_nuevos: { escaneado_por: session.user.id },
+      })
+      .then(() => {});
+
+    return <EscaneoResultado paquete={paquete} otrosPendientes={otrosPendientes} session={session} />;
+  }
+
+  // No se encontró como paquete individual — intentar como token de
+  // GRUPO de entrega antes de rendirse.
+  const grupoConPaquetes = await obtenerGrupoPorTokenConPaquetes(supabase, params.token);
+
+  if (!grupoConPaquetes) {
     return <EstadoNeutral titulo="No se encontró un paquete relacionado con este código." />;
   }
 
-  if (paquete.estado === "rechazado" || paquete.estado === "devuelto") {
-    return <EstadoNeutral titulo="Este paquete fue cancelado y no está disponible para entrega." />;
+  if (grupoConPaquetes.grupo.estado === "cancelado") {
+    return <EstadoNeutral titulo="Este retiro fue cancelado y no está disponible para entrega." />;
   }
 
-  if (paquete.estado === "entregado") {
-    const fecha = paquete.fechaEntrega ? new Date(paquete.fechaEntrega).toLocaleString("es-MX") : "";
-    return <EstadoNeutral titulo={`Este paquete ya fue entregado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
+  if (grupoConPaquetes.grupo.estado === "completado") {
+    const fecha = grupoConPaquetes.grupo.fechaEntrega
+      ? new Date(grupoConPaquetes.grupo.fechaEntrega).toLocaleString("es-MX")
+      : "";
+    return <EstadoNeutral titulo={`Este retiro ya fue completado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
   }
 
-  const otrosPendientes = await listarPendientesPorUnidad(supabase, paquete.unidadId, paquete.id);
-
-  // Auditoría del escaneo — quién, cuándo, sobre qué paquete. No bloquea
-  // la respuesta al guardia si por algún motivo falla (BR-32: la
-  // operación real no debe depender de que la auditoría tenga éxito).
   supabase
     .rpc("registrar_auditoria", {
       p_tenant_id: session.tenant.id,
-      p_accion: "paquete.qr_escaneado",
-      p_entidad: "paquetes",
-      p_entidad_id: paquete.id,
+      p_accion: "grupo_entrega.qr_escaneado",
+      p_entidad: "paquete_grupos_entrega",
+      p_entidad_id: grupoConPaquetes.grupo.id,
       p_datos_anteriores: {},
       p_datos_nuevos: { escaneado_por: session.user.id },
     })
     .then(() => {});
 
-  return <EscaneoResultado paquete={paquete} otrosPendientes={otrosPendientes} session={session} />;
+  return <EscaneoGrupoResultado datos={grupoConPaquetes} session={session} />;
 }
 
 function EstadoNeutral({ titulo, tono = "warn" }: { titulo: string; tono?: "warn" | "success" }) {

@@ -49,6 +49,79 @@ function mapearGrupo(fila: FilaGrupoEntrega): GrupoEntrega {
   };
 }
 
+export interface PaqueteDeGrupo {
+  id: string;
+  codigoGateflow: string;
+  empresaPaqueteriaNombre: string | null;
+  numeroGuia: string | null;
+  ubicacionRuta: string | null;
+  estadoId: string;
+  fechaRecepcion: string;
+}
+
+export interface GrupoConPaquetes {
+  grupo: GrupoEntrega;
+  unidad: { id: string; identificador: string; contactoNombre: string | null; contactoTelefono: string | null };
+  paquetes: PaqueteDeGrupo[];
+}
+
+/**
+ * Trae el grupo completo (con la unidad y todos sus paquetes) a partir
+ * del token del QR — es lo que usa la pantalla de escaneo para
+ * mostrar la lista con casillas de selección. Se construye con una
+ * consulta propia y liviana (no reutiliza el mapeador interno de
+ * `Paquete` que ya usa el escaneo individual, para no depender de
+ * columnas que ese mapeador quizás no expone) — trae solo los campos
+ * que esta pantalla necesita mostrar.
+ */
+export async function obtenerGrupoPorTokenConPaquetes(supabase: SupabaseClient, token: string): Promise<GrupoConPaquetes | null> {
+  const { data: grupoData, error: errorGrupo } = await supabase
+    .from("paquete_grupos_entrega")
+    .select("*, unidades(id, identificador, contacto_nombre, contacto_telefono)")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (errorGrupo) throw errorGrupo;
+  if (!grupoData) return null;
+
+  const unidadRaw = (grupoData as unknown as { unidades: { id: string; identificador: string; contacto_nombre: string | null; contacto_telefono: string | null } }).unidades;
+
+  const { data: paquetesData, error: errorPaquetes } = await supabase
+    .from("paquetes")
+    .select("id, codigo_gateflow, numero_guia, estado_id, fecha_recepcion, empresas_paqueteria(nombre), ubicaciones(ruta)")
+    .eq("grupo_entrega_id", grupoData.id)
+    .order("fecha_recepcion", { ascending: true });
+
+  if (errorPaquetes) throw errorPaquetes;
+
+  return {
+    grupo: mapearGrupo(grupoData as FilaGrupoEntrega),
+    unidad: {
+      id: unidadRaw.id,
+      identificador: unidadRaw.identificador,
+      contactoNombre: unidadRaw.contacto_nombre,
+      contactoTelefono: unidadRaw.contacto_telefono,
+    },
+    paquetes: ((paquetesData ?? []) as unknown as Array<{
+      id: string;
+      codigo_gateflow: string;
+      numero_guia: string | null;
+      estado_id: string;
+      fecha_recepcion: string;
+      empresas_paqueteria: { nombre: string } | null;
+      ubicaciones: { ruta: string } | null;
+    }>).map((p) => ({
+      id: p.id,
+      codigoGateflow: p.codigo_gateflow,
+      empresaPaqueteriaNombre: p.empresas_paqueteria?.nombre ?? null,
+      numeroGuia: p.numero_guia,
+      ubicacionRuta: p.ubicaciones?.ruta ?? null,
+      estadoId: p.estado_id,
+      fechaRecepcion: p.fecha_recepcion,
+    })),
+  };
+}
+
 /**
  * Revisa si la unidad ya tiene un grupo de entrega abierto ANTES de
  * registrar el paquete nuevo — así la pantalla de registro puede
