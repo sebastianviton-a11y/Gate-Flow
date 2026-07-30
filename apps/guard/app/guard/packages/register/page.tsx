@@ -11,8 +11,6 @@ import {
   obtenerPaquetePorId,
   subirFotografiaPaquete,
   subirFotografiaIncidencia,
-  construirEnlaceWhatsApp,
-  construirMensajeNotificacion,
   construirUrlEscaneo,
   construirUrlVerQr,
   buscarGrupoAbiertoDeUnidad,
@@ -89,6 +87,13 @@ export default function RegisterPackagePage() {
   const [flujoTerminado, setFlujoTerminado] = useState(false);
   const [enviandoNotificacion, setEnviandoNotificacion] = useState(false);
 
+  // Se pone en true en cuanto CUALQUIER paquete de esta sesión de
+  // registro se guardó con incidencia — no se resetea al agregar otro
+  // paquete al mismo grupo, porque el aviso final debe reflejar si
+  // alguno de los paquetes del grupo tuvo un problema, no solo el
+  // último registrado.
+  const [sesionTieneIncidencia, setSesionTieneIncidencia] = useState(false);
+
   useEffect(() => {
     obtenerCatalogos(supabase, session.tenant.id)
       .then(setCatalogos)
@@ -156,6 +161,7 @@ export default function RegisterPackagePage() {
     setPaquetesEnSesion(0);
     setPasoPostGuardado(false);
     setFlujoTerminado(false);
+    setSesionTieneIncidencia(false);
   }
 
   function limpiarCamposPaquete() {
@@ -195,6 +201,8 @@ export default function RegisterPackagePage() {
       let resultado: ResultadoRegistro;
 
       if (estadoPaquete === "incidencia" && tipoIncidencia && nivelDanio) {
+        setSesionTieneIncidencia(true);
+
         // ── Registro con incidencia: transacción atómica vía RPC ──
         const { paqueteId: idCreado, incidenciaId } = await ejecutarConTimeout(() =>
           registrarPaqueteConIncidencia(supabase, {
@@ -216,9 +224,6 @@ export default function RegisterPackagePage() {
         );
         paqueteId = idCreado;
 
-        // Subir todas las fotos de evidencia — un fallo aquí no
-        // revierte el paquete ni la incidencia, ya quedaron registrados
-        // (mismo criterio que ya usa el flujo manual de incidencias).
         for (const archivoEvidencia of fotosIncidencia) {
           try {
             await subirFotografiaIncidencia(supabase, {
@@ -235,8 +240,6 @@ export default function RegisterPackagePage() {
         const paquete = await obtenerPaquetePorId(supabase, paqueteId);
         if (!paquete) throw new Error("El paquete se creó pero no se pudo releer — revisar RLS de SELECT.");
 
-        // Notificación al residente — igual criterio que registrarPaquete:
-        // un fallo aquí no debe hacer fallar el registro ya consumado.
         let notificacion: ResultadoRegistro["notificacion"] = null;
         const destinatarioNombre = paquete.residenteNombre ?? (residenteId ? null : unidadSeleccionada.contactoNombre);
         if (destinatarioNombre) {
@@ -342,6 +345,7 @@ export default function RegisterPackagePage() {
         nombreDestinatarioActual(),
         grupoActivo.codigoGrupo ?? grupoActivo.token,
         urlVerQr,
+        sesionTieneIncidencia,
       );
       const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje);
       if (enlace) window.open(enlace.url, "_blank");
@@ -372,6 +376,7 @@ export default function RegisterPackagePage() {
       nombreDestinatario,
       grupoActivo.codigoGrupo ?? grupoActivo.token,
       urlVerQr,
+      sesionTieneIncidencia,
     );
     const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje);
 
@@ -565,7 +570,7 @@ export default function RegisterPackagePage() {
               <PhotoCapture onChange={setFoto} />
             </div>
 
-            {/* ── Estado del paquete (punto 1 y 2 de la especificación) ── */}
+            {/* ── Estado del paquete ── */}
             <div className="space-y-3 rounded-xl border border-border bg-card p-4">
               <p className="text-sm font-semibold">Estado del paquete</p>
               <div className="flex flex-col gap-2">
