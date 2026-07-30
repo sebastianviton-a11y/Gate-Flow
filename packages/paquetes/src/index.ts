@@ -1,4 +1,76 @@
 export {
+  listarPaquetes,
+  buscarPaquetes,
+  obtenerPaquetePorId,
+  obtenerPaquetePorCodigo,
+  listarPendientes,
+  obtenerHistorial,
+  buscarUnidades,
+  obtenerResumenDashboard,
+  obtenerPorPrioridad,
+  obtenerPorUbicacion,
+  obtenerCatalogos,
+  obtenerVolumen30Dias,
+  obtenerActividadReciente,
+  listarUnidades,
+  obtenerFirmaEntrega,
+  obtenerFotografiasPaquete,
+  buscarPaquetePorPickupToken,
+  listarPendientesPorUnidad,
+  type ListarPaquetesResultado,
+  type DashboardResumen,
+  type DashboardConteoPorEtiqueta,
+  type Catalogos,
+  type CatalogoItem,
+  type UbicacionItem,
+  type VolumenDiario,
+  type ActividadRecienteItem,
+  type UnidadListItem,
+  type FirmaEntrega,
+} from "./queries";
+
+export {
+  registrarPaquete,
+  entregarPaquete,
+  guardarFirmaEntrega,
+  importarUnidadesMasivo,
+  subirFotografiaPaquete,
+  actualizarUnidad,
+  buscarUnidadesDuplicadas,
+  type FilaImportarUnidad,
+  type ResultadoImportacion,
+  type ResultadoRegistro,
+  type GuardarFirmaInput,
+  type SubirFotografiaInput,
+  type ActualizarUnidadInput,
+  type UnidadDuplicada,
+} from "./mutations";
+
+export {
+  construirEnlaceWhatsApp,
+  construirMensajeNotificacion,
+  construirUrlEscaneo,
+  construirUrlVerQr,
+  normalizarTelefonoWhatsApp,
+  type EnlaceWhatsApp,
+} from "./whatsapp";
+
+export {
+  listarUbicacionesAdmin,
+  listarUbicacionesActivas,
+  detectarCiclo,
+  crearUbicacion,
+  actualizarUbicacion,
+  cambiarActivoUbicacion,
+  eliminarUbicacion,
+  obtenerHistorialUbicacion,
+  cambiarUbicacionPaquete,
+  type UbicacionAdmin,
+  type UbicacionInput,
+  type UbicacionHistorialEvento,
+} from "./ubicaciones";
+
+export {
   reportarIncidencia,
   registrarPaqueteConIncidencia,
   subirFotografiaIncidencia,
@@ -18,18 +90,59 @@ export {
   type SubirFotografiaIncidenciaInput,
 } from "./incidencias";
 
-    .update({ estado: "abierta", resuelta_por: null, resuelta_en: null, comentario_resolucion: null })
-    .eq("id", incidenciaId);
-  if (error) throw error;
-}
+export {
+  obtenerMetricasGlobales,
+  listarResidenciales,
+  crearResidencial,
+  actualizarResidencial,
+  cambiarEstadoServicio,
+  actualizarPlanResidencial,
+  eliminarResidencial,
+  obtenerResidencialDetalle,
+  ESTADO_SERVICIO_LABEL,
+  PLAN_LABEL,
+  type MetricasGlobales,
+  type ResidencialListItem,
+  type ResidencialDetalle,
+  type ResidencialInput,
+  type EstadoServicio,
+  type PlanClave,
+} from "./superadmin";
 
-  TIPO_INCIDENCIA_LABEL,
-  NIVEL_DANIO_LABEL,
-  type Incidencia,
-  type TipoIncidencia,
-  type EstadoIncidencia,
-  type NivelDanio,
-  type ReportarIncidenciaInput,
-  type RegistrarPaqueteConIncidenciaInput,
-  type SubirFotografiaIncidenciaInput,
-} from "./incidencias";
+export {
+  listarEmpresas,
+  listarEmpresasParaSelector,
+  crearEmpresa,
+  actualizarEmpresa,
+  cambiarEstadoEmpresa,
+  obtenerEmpresaDetalle,
+  type EmpresaListItem,
+  type EmpresaDetalle,
+  type EmpresaInput,
+} from "./empresas";
+
+export { listarUsuariosTenant, ROLES_INVITABLES, type UsuarioTenant } from "./usuarios";
+
+export {
+  buscarGrupoAbiertoDeUnidad,
+  obtenerOCrearGrupoEntrega,
+  crearGrupoEntregaSeparado,
+  ligarPaqueteAGrupo,
+  obtenerGrupoEntrega,
+  obtenerGrupoPorTokenConPaquetes,
+  marcarWhatsappGrupoEnviado,
+  entregarGrupoPaquetes,
+  construirMensajeNotificacionGrupo,
+  construirEnlaceWhatsAppGrupo,
+  type GrupoEntrega,
+  type EstadoGrupoEntrega,
+  type GrupoConPaquetes,
+  type PaqueteDeGrupo,
+} from "./grupos-entrega";
+
+export {
+  contarIncidenciasPorPaquetes,
+  listarIncidenciasDePaquete,
+  type IncidenciaConFotos,
+  type FotoIncidencia,
+} from "./incidencias-historial";
