@@ -232,3 +232,13 @@ export async function cambiarEstadoSeguimiento(supabase: SupabaseClient, inciden
   const { error } = await supabase.from("incidencias").update({ estado: "en_seguimiento" }).eq("id", incidenciaId);
   if (error) throw error;
 }
+/** Reabre una incidencia que ya estaba resuelta o en seguimiento —
+ * limpia los datos de resolución para no dejar un estado "abierta"
+ * con resuelta_por/resuelta_en de una resolución anterior. */
+export async function reabrirIncidencia(supabase: SupabaseClient, incidenciaId: string): Promise<void> {
+  const { error } = await supabase
+    .from("incidencias")
+    .update({ estado: "abierta", resuelta_por: null, resuelta_en: null, comentario_resolucion: null })
+    .eq("id", incidenciaId);
+  if (error) throw error;
+}
