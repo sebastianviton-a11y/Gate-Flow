@@ -135,14 +135,14 @@ export default function SearchPackagePage() {
                         <EstadoBadge estado={p.estado} />
                       </div>
                     </div>
-                    {(incidenciasPorPaquete.get(p.id) ?? 0) > 0 && (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-destructive">
+                                        {(incidenciasPorPaquete.get(p.id) ?? 0) > 0 && (
+                      <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn-foreground">
                         <AlertTriangle className="h-3 w-3" />
-                        {(incidenciasPorPaquete.get(p.id) ?? 0) === 1
-                          ? "Incidencia"
-                          : `Incidencias (${incidenciasPorPaquete.get(p.id)})`}
-                      </p>
+                        Con incidencia
+                        {(incidenciasPorPaquete.get(p.id) ?? 0) > 1 && ` (${incidenciasPorPaquete.get(p.id)})`}
+                      </span>
                     )}
+
                     {p.residenteNombre && <p className="text-sm text-muted-foreground">{p.residenteNombre}</p>}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="gf-code">{p.codigoGateflow}</span>
