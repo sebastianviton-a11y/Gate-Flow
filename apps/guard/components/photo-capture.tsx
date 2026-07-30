@@ -3,59 +3,69 @@
 import { useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 
-interface PhotoCaptureMultipleProps {
-  onChange: (archivos: File[]) => void;
+interface PhotoCaptureProps {
+  onChange: (archivo: File | null) => void;
 }
 
-/** Hermano de PhotoCapture — mismo patrón de <input capture="environment">,
- * pero acumula un arreglo en vez de reemplazar un solo archivo. No
- * modifica PhotoCapture ni su uso existente en ningún otro lugar. */
-export function PhotoCaptureMultiple({ onChange }: PhotoCaptureMultipleProps) {
+/**
+ * `capture="environment"` abre la cámara trasera directamente en
+ * navegadores móviles (Safari iOS y Chrome Android lo soportan de forma
+ * nativa) — no requiere ninguna librería de acceso a cámara, es un
+ * atributo estándar de <input type="file">. En desktop, simplemente
+ * abre el selector de archivos normal (comportamiento esperado, no un
+ * bug: en desktop no hay cámara trasera que abrir).
+ */
+export function PhotoCapture({ onChange }: PhotoCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState<{ archivo: File; preview: string }[]>([]);
+  const [preview, setPreview] = useState<string | null>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0];
     if (!archivo) return;
-    const siguiente = [...items, { archivo, preview: URL.createObjectURL(archivo) }];
-    setItems(siguiente);
-    onChange(siguiente.map((i) => i.archivo));
+    setPreview(URL.createObjectURL(archivo));
+    onChange(archivo);
+  }
+
+  function limpiar() {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    onChange(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  function quitar(index: number) {
-    const item = items[index];
-    if (item) URL.revokeObjectURL(item.preview);
-    const siguiente = items.filter((_, i) => i !== index);
-    setItems(siguiente);
-    onChange(siguiente.map((i) => i.archivo));
+  if (preview) {
+    return (
+      <div className="relative inline-block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={preview} alt="Fotografía del paquete" className="h-32 w-32 rounded-xl border border-border object-cover" />
+        <button
+          type="button"
+          onClick={limpiar}
+          className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-white shadow"
+          aria-label="Quitar fotografía"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((item, index) => (
-        <div key={item.preview} className="relative inline-block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.preview} alt="Evidencia de incidencia" className="h-24 w-24 rounded-xl border border-border object-cover" />
-          <button
-            type="button"
-            onClick={() => quitar(index)}
-            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white shadow"
-            aria-label="Quitar fotografía"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-card text-muted-foreground"
-      >
-        <Camera className="h-5 w-5" />
-        <span className="text-xs">Agregar foto</span>
-        <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={() => inputRef.current?.click()}
+      className="flex h-32 w-32 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-card text-muted-foreground"
+    >
+      <Camera className="h-6 w-6" />
+      <span className="text-xs">Tomar foto</span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFile}
+        className="hidden"
+      />
+    </button>
   );
 }
