@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RoleKey } from "@gateflow/types";
 
+/** Única fuente de verdad para qué roles puede invitar un
+ * admin_residencial desde cualquier pantalla — antes vivía duplicada
+ * como constante local dentro del asistente de onboarding. */
 export const ROLES_INVITABLES: { clave: RoleKey; etiqueta: string }[] = [
   { clave: "admin_residencial", etiqueta: "Administrador adicional" },
   { clave: "guardia", etiqueta: "Guardia" },
@@ -27,6 +30,12 @@ export interface UsuarioTenant {
   perfilIncompleto: boolean;
 }
 
+/**
+ * Consulta user_tenants con el mismo aislamiento por tenant_id que ya
+ * usa el resto del producto (RLS lo garantiza, aunque esta consulta
+ * también filtra explícito para que el código sea legible por sí
+ * solo).
+ */
 export async function listarUsuariosTenant(supabase: SupabaseClient, tenantId: string): Promise<UsuarioTenant[]> {
   const { data, error } = await supabase
     .from("user_tenants")
