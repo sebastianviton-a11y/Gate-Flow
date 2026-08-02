@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
-import { Poppins, IBM_Plex_Mono } from "next/font/google";
+import { Manrope, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-// Poppins — tipografía oficial de marca GateFlow ("moderna, clara y
-// amigable que transmite confianza y tecnología"). Un solo family con
-// tres pesos cubre display y cuerpo de texto, tal como especifica el
-// brand board (Bold / Semibold / Regular) — ya no se combinan dos
-// familias distintas para esos dos roles.
-const fontDisplay = Poppins({
+// Manrope — tipografía oficial de marca GateFlow (manual de marca:
+// "moderna, clara y tecnológica"). Mismos roles que antes (display /
+// sans / mono), solo cambia la familia. Pesos alineados al manual:
+// Bold para títulos, Semibold para botones, Regular para texto.
+const fontDisplay = Manrope({
   subsets: ["latin"],
   weight: ["600", "700"],
   variable: "--font-display",
   display: "swap",
 });
 
-const fontSans = Poppins({
+const fontSans = Manrope({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-sans",
@@ -31,6 +30,15 @@ const fontMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "GateFlow",
   description: "Plataforma de operaciones de portería — GateFlow",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

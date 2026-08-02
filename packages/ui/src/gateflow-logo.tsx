@@ -1,56 +1,48 @@
-﻿import { cn } from "./utils";
+import { cn } from "./utils";
 
 interface GateFlowLogoProps {
-  /** Tamaño del ícono en px. El texto (si se muestra) escala junto con él. */
+  /** Alto del logo en px. El ancho se deriva de la proporción real del
+   *  SVG oficial (nunca se deforma). */
   size?: number;
-  /** Muestra el wordmark "Gate Flow" junto al ícono. */
+  /** Muestra el lockup completo (isotipo + wordmark "Gate Flow"). */
   withWordmark?: boolean;
-  /** Variante para fondos oscuros (sidebar, login) — el wordmark pasa a blanco/verde. */
+  /** Variante para fondos oscuros (sidebar, login, superadmin) — usa
+   *  los archivos oficiales de fondo oscuro (wordmark en blanco). */
   onDark?: boolean;
   className?: string;
 }
 
-/**
- * Marca oficial de GateFlow: una caja rodeada de tres flechas curvas en
- * flujo circular (verde, azul, naranja) — la identidad de marca aprobada,
- * reemplaza el ícono genérico (ShieldCheck) usado como placeholder hasta
- * v0.2. El ícono se construye en SVG propio, no como imagen importada,
- * para que escale con nitidez a cualquier tamaño (sidebar, login, favicon).
- */
+// Fuente única de verdad: los 5 SVG oficiales entregados por Sebastián
+// (gateflow-brand-assets.zip), servidos sin modificación desde
+// /public/brand/ en cada app (admin y guard). Este componente NO dibuja
+// el logo — solo selecciona qué archivo oficial mostrar y lo escala
+// proporcionalmente. Prohibido reintroducir SVG inline aquí.
+const ASSET_BASE = "/brand";
+
+// Proporción real del lockup horizontal (viewBox 720x220 en los 3
+// archivos con wordmark). El isotipo solo es cuadrado (viewBox 200x200).
+const WORDMARK_ASPECT_RATIO = 720 / 220;
+
 export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, className }: GateFlowLogoProps) {
-  const boxSize = size * 0.42;
+  const src = withWordmark
+    ? onDark
+      ? `${ASSET_BASE}/logo-dark.svg`
+      : `${ASSET_BASE}/logo-full.svg`
+    : onDark
+      ? `${ASSET_BASE}/isotipo-dark.svg`
+      : `${ASSET_BASE}/isotipo.svg`;
+
+  const height = size;
+  const width = withWordmark ? Math.round(size * WORDMARK_ASPECT_RATIO) : size;
 
   return (
-    <div className={cn("flex items-center gap-2.5", className)}>
-      <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        {/* Verde Flujo — arco superior */}
-        <path d="M 50 8 A 42 42 0 0 1 89 45" stroke="#00C49A" strokeWidth="9" strokeLinecap="round" fill="none" />
-        <path d="M 84 33 L 92 47 L 76 46 Z" fill="#00C49A" />
-        {/* Azul Envío — arco izquierdo */}
-        <path d="M 11 45 A 42 42 0 0 1 37 10" stroke="#1E88E5" strokeWidth="9" strokeLinecap="round" fill="none" />
-        <path d="M 25 12 L 8 17 L 18 31 Z" fill="#1E88E5" />
-        {/* Naranja Conexión — arco inferior */}
-        <path d="M 63 91 A 42 42 0 0 1 12 57" stroke="#FF8A00" strokeWidth="9" strokeLinecap="round" fill="none" />
-        <path d="M 76 79 L 68 92 L 58 80 Z" fill="#FF8A00" />
-        {/* Caja central en perspectiva isométrica — cara superior (rombo)
-            + dos caras laterales con sombreado distinto, para que se lea
-            como una caja de cartón con profundidad real, no una silueta
-            plana de frente (que se leía como sobre/buzón, no como caja). */}
-        {/* Cara superior */}
-        <path d="M50 28 L69 39 L50 50 L31 39 Z" fill="#FFCE7A" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
-        {/* Cara lateral izquierda (más clara) */}
-        <path d="M31 39 L50 50 L50 74 L31 63 Z" fill="#F5A623" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
-        {/* Cara lateral derecha (más oscura, "en sombra") */}
-        <path d="M69 39 L50 50 L50 74 L69 63 Z" fill="#D4870F" stroke="#0D1B2A" strokeWidth="3.5" strokeLinejoin="round" />
-        {/* Línea del pliegue central de la cara superior (cinta de la caja) */}
-        <path d="M50 28 L50 50" stroke="#0D1B2A" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-
-      {withWordmark && (
-        <span className={cn("gf-display text-xl font-bold leading-none tracking-tight", onDark ? "text-white" : "text-secondary")}>
-          Gate<span style={{ color: "#00C49A" }}> Flow</span>
-        </span>
-      )}
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      width={width}
+      height={height}
+      alt="Gate Flow"
+      className={cn("shrink-0", className)}
+    />
   );
 }
