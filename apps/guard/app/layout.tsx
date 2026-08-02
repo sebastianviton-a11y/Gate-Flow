@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins, IBM_Plex_Mono } from "next/font/google";
+import { Manrope, IBM_Plex_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
 
-// Poppins — tipografía oficial de marca GateFlow, mismo criterio que apps/admin.
-const fontDisplay = Poppins({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-display", display: "swap" });
-const fontSans = Poppins({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans", display: "swap" });
+// Manrope — tipografía oficial de marca GateFlow, mismo criterio que apps/admin.
+const fontDisplay = Manrope({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-display", display: "swap" });
+const fontSans = Manrope({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans", display: "swap" });
 const fontMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="title desc">
+  <title id="title">Gate Flow isotipo</title>
+  <desc id="desc">Paquete isométrico con las iniciales G y F integradas en su estructura.</desc>
+  <g fill="none" stroke="#10B981" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
+    <!-- Tapa del paquete -->
+    <path d="M100 18 L168 58 L100 98 L32 58 Z"/>
+    <!-- Aristas exteriores -->
+    <path d="M32 58 V140 L100 180 L168 140 V58"/>
+    <path d="M100 98 V180"/>
+    <!-- G integrada en la cara izquierda -->
+    <path d="M82 92 L48 112 V140 L82 160 V130 L66 120"/>
+    <!-- F integrada en la cara derecha -->
+    <path d="M118 92 L152 112"/>
+    <path d="M118 124 L146 140"/>
+  </g>
+</svg>

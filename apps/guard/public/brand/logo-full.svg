@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" role="img" aria-labelledby="title desc">
+  <title id="title">Gate Flow logo principal</title>
+  <desc id="desc">Isotipo de paquete GF y wordmark Gate Flow.</desc>
+  <g transform="translate(10,10) scale(1)">
+    <g fill="none" stroke="#10B981" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
+      <path d="M100 18 L168 58 L100 98 L32 58 Z"/>
+      <path d="M32 58 V140 L100 180 L168 140 V58"/>
+      <path d="M100 98 V180"/>
+      <path d="M82 92 L48 112 V140 L82 160 V130 L66 120"/>
+      <path d="M118 92 L152 112"/>
+      <path d="M118 124 L146 140"/>
+    </g>
+  </g>
+  <text x="235" y="137" font-family="Manrope, Inter, Arial, sans-serif" font-size="78" font-weight="700" letter-spacing="-2">
+    <tspan fill="#0F172A">Gate </tspan><tspan fill="#10B981">Flow</tspan>
+  </text>
+</svg>
