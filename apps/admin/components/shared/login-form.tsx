@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Input, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
+import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
 export function LoginForm() {
   const router = useRouter();
@@ -134,7 +134,6 @@ export function LoginForm() {
           El acceso de guardias en campo se realiza desde la app móvil offline-first.
         </p>
       </div>
-      <DebugConsole />
     </div>
   );
 }
