@@ -265,6 +265,12 @@ export async function entregarGrupoPaquetes(
  * individual), con el singular/plural exacto que pide la
  * especificación. No modifica ni reemplaza la función existente:
  * un paquete que nunca se agrupó sigue usando la de siempre.
+ *
+ * `tieneIncidencia` es deliberadamente un booleano, no el detalle de
+ * la incidencia (tipo, descripción, fotos) — este mensaje viaja por
+ * WhatsApp y puede reenviarse fuera de la app, así que solo se avisa
+ * que existe una revisión pendiente; el detalle completo sigue
+ * exigiendo abrir /escanear/[token] con sesión de guardia.
  */
 export function construirMensajeNotificacionGrupo(
   cantidadTotal: number,
@@ -272,6 +278,7 @@ export function construirMensajeNotificacionGrupo(
   nombreDestinatario: string,
   codigoGrupo: string,
   urlVerQr: string | undefined,
+  tieneIncidencia?: boolean,
 ): string {
   const textoCantidad = cantidadTotal === 1 ? "1 paquete" : `${cantidadTotal} paquetes`;
   const lineas = [
@@ -284,9 +291,18 @@ export function construirMensajeNotificacionGrupo(
     `Código de retiro: ${codigoGrupo}`,
   ];
   if (urlVerQr) lineas.push("", urlVerQr);
+  if (tieneIncidencia) {
+    lineas.push(
+      "",
+      cantidadTotal === 1
+        ? "Nota: este paquete fue recibido con una incidencia (daño, humedad u otro detalle). Te pedimos revisarlo al momento de recogerlo."
+        : "Nota: uno o más de tus paquetes fueron recibidos con alguna incidencia (daño, humedad u otro detalle). Te pedimos revisarlos al momento de recogerlos.",
+    );
+  }
   lineas.push("", "Por favor, no compartas este código con otras personas.");
   return lineas.join("\n");
 }
+
 
 export function construirEnlaceWhatsAppGrupo(
   telefonoDestinatario: string | null,

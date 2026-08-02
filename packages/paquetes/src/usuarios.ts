@@ -13,6 +13,9 @@ export const ROLES_INVITABLES: { clave: RoleKey; etiqueta: string }[] = [
 
 export interface UsuarioTenant {
   id: string;
+  /** id real en `users` — necesario para editar nombre_completo, que
+   * vive en esa tabla, no en user_tenants. */
+  userId: string;
   nombreCompleto: string;
   email: string | null;
   telefono: string | null;
@@ -20,20 +23,23 @@ export interface UsuarioTenant {
   rolNombre: string;
   activo: boolean;
   creadoEn: string;
+  /** true si nombre_completo nunca se llenó de verdad — el trigger de
+   * creación de usuario copia el correo ahí porque la columna es
+   * NOT NULL. No es una columna nueva: se deriva comparando los dos
+   * valores que ya trae esta misma consulta. */
+  perfilIncompleto: boolean;
 }
 
 /**
- * Reemplaza el placeholder que decía "se conecta junto con la
- * autenticación real en Sprint 02" — esa etapa ya pasó hace mucho;
- * esto consulta user_tenants de verdad, con el mismo aislamiento por
- * tenant_id que ya usa el resto del producto (RLS lo garantiza,
- * aunque esta consulta también filtra explícito para que el código
- * sea legible por sí solo).
+ * Consulta user_tenants con el mismo aislamiento por tenant_id que ya
+ * usa el resto del producto (RLS lo garantiza, aunque esta consulta
+ * también filtra explícito para que el código sea legible por sí
+ * solo).
  */
 export async function listarUsuariosTenant(supabase: SupabaseClient, tenantId: string): Promise<UsuarioTenant[]> {
   const { data, error } = await supabase
     .from("user_tenants")
-    .select("id, activo, created_at, users(nombre_completo, email, telefono), roles(clave, nombre)")
+    .select("id, activo, created_at, users(id, nombre_completo, email, telefono), roles(clave, nombre)")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
@@ -43,16 +49,22 @@ export async function listarUsuariosTenant(supabase: SupabaseClient, tenantId: s
     id: string;
     activo: boolean;
     created_at: string;
-    users: { nombre_completo: string; email: string | null; telefono: string | null } | null;
+    users: { id: string; nombre_completo: string; email: string | null; telefono: string | null } | null;
     roles: { clave: string; nombre: string } | null;
-  }>).map((fila) => ({
-    id: fila.id,
-    nombreCompleto: fila.users?.nombre_completo ?? "Sin nombre",
-    email: fila.users?.email ?? null,
-    telefono: fila.users?.telefono ?? null,
-    rolClave: fila.roles?.clave ?? "—",
-    rolNombre: fila.roles?.nombre ?? "—",
-    activo: fila.activo,
-    creadoEn: fila.created_at,
-  }));
+  }>).map((fila) => {
+    const nombreCompleto = fila.users?.nombre_completo ?? "Sin nombre";
+    const email = fila.users?.email ?? null;
+    return {
+      id: fila.id,
+      userId: fila.users?.id ?? "",
+      nombreCompleto,
+      email,
+      telefono: fila.users?.telefono ?? null,
+      rolClave: fila.roles?.clave ?? "—",
+      rolNombre: fila.roles?.nombre ?? "—",
+      activo: fila.activo,
+      creadoEn: fila.created_at,
+      perfilIncompleto: !!email && nombreCompleto === email,
+    };
+  });
 }

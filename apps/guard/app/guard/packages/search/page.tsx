@@ -12,10 +12,6 @@ import { useGuardSession } from "@/components/session-provider";
 
 type FiltroEstado = "todos" | "recibidos" | "entregados";
 
-// Estados reales de estados_paquete (verificados contra la base de
-// datos, no inventados) que corresponden a "recibido pero aún no
-// entregado" — rechazado/devuelto quedan fuera a propósito, son
-// paquetes cancelados, no pendientes de entrega normal.
 const ESTADOS_RECIBIDOS = ["recibido", "notificado"];
 const ESTADOS_ENTREGADOS = ["entregado"];
 
@@ -64,10 +60,6 @@ export default function SearchPackagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  // El filtro se aplica sobre lo que YA devolvió buscarPaquetes — no
-  // se duplica ni se cambia esa consulta (que ya respeta RLS y el
-  // aislamiento por residencial); esto solo decide qué mostrar de lo
-  // que ya llegó, tal como pidió la especificación explícitamente.
   const recibidos = useMemo(() => resultados.filter((p) => ESTADOS_RECIBIDOS.includes(p.estado)), [resultados]);
   const entregados = useMemo(() => resultados.filter((p) => ESTADOS_ENTREGADOS.includes(p.estado)), [resultados]);
 
@@ -97,8 +89,6 @@ export default function SearchPackagePage() {
           {buscando && <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />}
         </div>
 
-        {/* Selector segmentado — Todos / Recibidos / Entregados, con
-            conteo real de la búsqueda actual junto a cada opción. */}
         <div className="flex rounded-xl border border-border bg-muted/40 p-1">
           {(
             [
@@ -136,12 +126,11 @@ export default function SearchPackagePage() {
                       </div>
                     </div>
                     {(incidenciasPorPaquete.get(p.id) ?? 0) > 0 && (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-destructive">
+                      <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn-foreground">
                         <AlertTriangle className="h-3 w-3" />
-                        {(incidenciasPorPaquete.get(p.id) ?? 0) === 1
-                          ? "Incidencia"
-                          : `Incidencias (${incidenciasPorPaquete.get(p.id)})`}
-                      </p>
+                        Con incidencia
+                        {(incidenciasPorPaquete.get(p.id) ?? 0) > 1 && ` (${incidenciasPorPaquete.get(p.id)})`}
+                      </span>
                     )}
                     {p.residenteNombre && <p className="text-sm text-muted-foreground">{p.residenteNombre}</p>}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -158,24 +147,20 @@ export default function SearchPackagePage() {
                 </>
               );
 
-              // Para paquetes ya entregados: consulta histórica, sin
-              // ningún camino que permita volver a "entregarlos" — no
-              // se renderiza como enlace clicable en absoluto, para no
-              // depender de que la pantalla de destino también lo
-              // bloquee por su cuenta.
-              if (yaEntregado) {
-                return (
-                  <div key={p.id} className="flex min-h-touch items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 opacity-80">
-                    {contenido}
-                  </div>
-                );
-              }
-
+              // Para paquetes ya entregados: SÍ se puede entrar al
+              // detalle (para consultar incidencias, evidencia, quién
+              // recibió), pero la pantalla de destino nunca ofrece
+              // "Entregar este paquete" para un estado distinto de
+              // recibido/notificado — verificado en
+              // guard/packages/[id]/page.tsx, no supuesto. Solo cambia
+              // el estilo visual para diferenciarlo de uno pendiente.
               return (
                 <Link
                   key={p.id}
                   href={`/guard/packages/${p.id}`}
-                  className="flex min-h-touch items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:bg-muted"
+                  className={`flex min-h-touch items-center gap-3 rounded-xl border px-4 py-3 hover:bg-muted ${
+                    yaEntregado ? "border-dashed border-border bg-muted/20 opacity-80" : "border-border bg-card"
+                  }`}
                 >
                   {contenido}
                 </Link>

@@ -72,16 +72,21 @@ export {
 
 export {
   reportarIncidencia,
+  registrarPaqueteConIncidencia,
   subirFotografiaIncidencia,
   listarIncidencias,
   obtenerIncidenciasPaquete,
   resolverIncidencia,
   cambiarEstadoSeguimiento,
+  reabrirIncidencia,
   TIPO_INCIDENCIA_LABEL,
+  NIVEL_DANIO_LABEL,
   type Incidencia,
   type TipoIncidencia,
   type EstadoIncidencia,
+  type NivelDanio,
   type ReportarIncidenciaInput,
+  type RegistrarPaqueteConIncidenciaInput,
   type SubirFotografiaIncidenciaInput,
 } from "./incidencias";
 

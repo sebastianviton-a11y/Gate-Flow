@@ -12,6 +12,7 @@ export interface IncidenciaConFotos {
   tipo: string;
   descripcion: string;
   estado: string;
+  nivelDanio: string | null;
   reportadaPorNombre: string | null;
   resueltaPorNombre: string | null;
   comentarioResolucion: string | null;
@@ -20,18 +21,10 @@ export interface IncidenciaConFotos {
   fotos: FotoIncidencia[];
 }
 
-/**
- * Cuenta incidencias por paquete en UNA sola consulta — usada en
- * Buscar paquete para no hacer una consulta independiente por cada
- * resultado (BR §9). Solo trae paquete_id, nada más — es
- * deliberadamente la consulta más liviana posible para un listado.
- */
 export async function contarIncidenciasPorPaquetes(supabase: SupabaseClient, paqueteIds: string[]): Promise<Map<string, number>> {
   if (paqueteIds.length === 0) return new Map();
-
   const { data, error } = await supabase.from("incidencias").select("paquete_id").in("paquete_id", paqueteIds);
   if (error) throw error;
-
   const mapa = new Map<string, number>();
   for (const fila of (data ?? []) as { paquete_id: string }[]) {
     mapa.set(fila.paquete_id, (mapa.get(fila.paquete_id) ?? 0) + 1);
@@ -39,16 +32,10 @@ export async function contarIncidenciasPorPaquetes(supabase: SupabaseClient, paq
   return mapa;
 }
 
-/**
- * Trae TODAS las incidencias de un paquete, con sus fotos como URLs
- * firmadas (el bucket "evidencia" es privado — nunca se expone una
- * URL pública directa, BR §6/§10). Solo se llama al abrir el detalle
- * de un paquete, nunca desde el listado (BR §9).
- */
 export async function listarIncidenciasDePaquete(supabase: SupabaseClient, paqueteId: string): Promise<IncidenciaConFotos[]> {
   const { data: incidenciasData, error: errorIncidencias } = await supabase
     .from("incidencias")
-    .select("id, tipo, descripcion, estado, comentario_resolucion, created_at, resuelta_en, reportada_por, resuelta_por")
+    .select("id, tipo, descripcion, estado, nivel_danio, comentario_resolucion, created_at, resuelta_en, reportada_por, resuelta_por")
     .eq("paquete_id", paqueteId)
     .order("created_at", { ascending: false });
 
@@ -59,6 +46,7 @@ export async function listarIncidenciasDePaquete(supabase: SupabaseClient, paque
     tipo: string;
     descripcion: string;
     estado: string;
+    nivel_danio: string | null;
     comentario_resolucion: string | null;
     created_at: string;
     resuelta_en: string | null;
@@ -111,6 +99,7 @@ export async function listarIncidenciasDePaquete(supabase: SupabaseClient, paque
     tipo: f.tipo,
     descripcion: f.descripcion,
     estado: f.estado,
+    nivelDanio: f.nivel_danio,
     reportadaPorNombre: f.reportada_por ? mapaUsuarios.get(f.reportada_por) ?? null : null,
     resueltaPorNombre: f.resuelta_por ? mapaUsuarios.get(f.resuelta_por) ?? null : null,
     comentarioResolucion: f.comentario_resolucion,

@@ -11,16 +11,10 @@ type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
 export function AceptarInvitacionForm() {
   const router = useRouter();
-  // useState (no una variable normal) — createBrowserSupabaseClient()
-  // llamado directo en el cuerpo del componente creaba una instancia
-  // NUEVA en cada render (cada tecla escrita re-renderiza). El
-  // useEffect de abajo tenía [supabase] como dependencia, así que se
-  // volvía a ejecutar en cada render también, compitiendo con el
-  // procesamiento del token de la URL. Con useState, la instancia se
-  // crea una sola vez, en el montaje.
   const [supabase] = useState(() => createBrowserSupabaseClient());
 
   const [estado, setEstado] = useState<Estado>("verificando");
+  const [nombreCompleto, setNombreCompleto] = useState("");
   const [password, setPassword] = useState("");
   const [confirmarPassword, setConfirmarPassword] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
@@ -45,16 +39,6 @@ export function AceptarInvitacionForm() {
           return;
         }
       } else {
-        // CAUSA RAÍZ CONFIRMADA: si el navegador YA tenía una sesión
-        // guardada (típicamente porque la misma persona que invita
-        // también abre el enlace de invitación, en el mismo
-        // navegador), detectSessionInUrl no siempre reemplaza esa
-        // sesión existente con el token nuevo del enlace — se queda
-        // con la vieja. Por eso el formulario terminaba actualizando
-        // la contraseña de quien YA estaba con sesión iniciada, no la
-        // del usuario invitado. Aquí se extrae el token del fragmento
-        // a mano y se fuerza con setSession(), que sí sobreescribe
-        // cualquier sesión previa sin ambigüedad.
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
@@ -88,11 +72,14 @@ export function AceptarInvitacionForm() {
       setEstado(data.session ? "lista" : "invalida");
     }
     verificarSesion();
-    // Solo al montar — nunca debe repetirse por un re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSubmit() {
+    if (nombreCompleto.trim().length < 3) {
+      setError("Ingresa tu nombre completo.");
+      return;
+    }
     if (password.length < 8) {
       setError("La contraseña debe tener al menos 8 caracteres.");
       return;
@@ -109,9 +96,6 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
-    // STEP 4: confirmar, justo antes de llamar a la Server Action, que
-    // el navegador SÍ tiene sesión — si esto ya sale vacío aquí, el
-    // problema está antes de llegar siquiera a establecerPasswordInvitado.
     const { data: sesionAntes } = await supabase.auth.getSession();
     console.log(
       "STEP 4: sesión justo antes de establecerPasswordInvitado ->",
@@ -130,19 +114,13 @@ export function AceptarInvitacionForm() {
     const { data: userData } = await supabase.auth.getUser();
     console.log("STEP 6: getUser() después del éxito ->", JSON.stringify({ userId: userData.user?.id, email: userData.user?.email }));
     if (userData.user) {
-      const { error: errorTerminos } = await supabase
+      const { error: errorPerfil } = await supabase
         .from("users")
-        .update({ terminos_aceptados_en: new Date().toISOString() })
+        .update({ nombre_completo: nombreCompleto.trim(), terminos_aceptados_en: new Date().toISOString() })
         .eq("id", userData.user.id);
-      console.log("STEP 6b: update terminos_aceptados_en error:", errorTerminos ? errorTerminos.message : "ninguno");
+      console.log("STEP 6b: update perfil (nombre + términos) error:", errorPerfil ? errorPerfil.message : "ninguno");
     }
 
-    // Cierra la sesión temporal de la invitación a propósito, en vez
-    // de continuar directo al dashboard con ella. Forzar un login
-    // real con signInWithPassword aquí es la única forma de probar,
-    // de punta a punta, que la contraseña que se acaba de crear es la
-    // que de verdad funciona — no basta con que updateUser() no haya
-    // devuelto error.
     await supabase.auth.signOut();
     const { data: sesionDespues } = await supabase.auth.getSession();
     console.log("STEP 7: signOut() ejecutado. Sesión residual:", sesionDespues.session ? "TODAVÍA HAY SESIÓN (inesperado)" : "ninguna, correcto");
@@ -183,6 +161,19 @@ export function AceptarInvitacionForm() {
         </div>
 
         <div className="space-y-4 rounded-xl bg-white p-6">
+          <div>
+            <Label htmlFor="ai-nombre">Nombre completo</Label>
+            <input
+              id="ai-nombre"
+              type="text"
+              autoFocus
+              autoComplete="name"
+              value={nombreCompleto}
+              onChange={(e) => setNombreCompleto(e.target.value)}
+              className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              placeholder="Ej. Juan Pérez"
+            />
+          </div>
           <div>
             <Label htmlFor="ai-password">Contraseña</Label>
             <PasswordInput id="ai-password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
