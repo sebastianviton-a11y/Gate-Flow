@@ -69,10 +69,10 @@ export function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-ink-950 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center text-white">
-          <GateFlowLogo size={56} onDark />
-          <h1 className="font-display mt-3 text-xl font-semibold tracking-tight">Gate Flow</h1>
+          <GateFlowLogo size={77} onDark />
+          <h1 className="font-display mt-1.5 text-xl font-semibold tracking-tight">Gate Flow</h1>
           <p className="mt-1 text-xs uppercase tracking-wide text-primary">Panel de administración</p>
-          <p className="mt-1 text-sm text-white/50">Envíos que fluyen, conexiones que llegan.</p>
+          <p className="mt-1 text-sm text-white/50">Control inteligente de paquetes residenciales.</p>
         </div>
 
         {passwordCreated && (
