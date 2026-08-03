@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Paquete, FotografiaPaquete } from "@gateflow/types";
+import { obtenerPaquetePorId, obtenerFotografiasPaquete } from "./queries";
+import { listarIncidenciasDePaquete, type IncidenciaConFotos } from "./incidencias-historial";
 
 export type TipoIncidencia =
   | "danado" | "abierto" | "mojado" | "etiqueta_ilegible"
@@ -149,6 +152,7 @@ export async function subirFotografiaIncidencia(supabase: SupabaseClient, input:
 
 interface IncidenciaRow {
   id: string;
+  paquete_id: string;
   tipo: string;
   estado: string;
   descripcion: string | null;
@@ -162,7 +166,7 @@ interface IncidenciaRow {
 }
 
 const INCIDENCIA_SELECT = `
-  id, tipo, estado, descripcion, nivel_danio, created_at, resuelta_en,
+  id, paquete_id, tipo, estado, descripcion, nivel_danio, created_at, resuelta_en,
   paquetes ( codigo_gateflow, unidades ( identificador ) ),
   reportada:users!incidencias_reportada_por_fkey ( nombre_completo ),
   resuelta:users!incidencias_resuelta_por_fkey ( nombre_completo ),
@@ -172,7 +176,7 @@ const INCIDENCIA_SELECT = `
 function mapIncidenciaRow(row: IncidenciaRow): Incidencia {
   return {
     id: row.id,
-    paqueteId: "",
+    paqueteId: row.paquete_id,
     paqueteCodigoGateflow: row.paquetes?.codigo_gateflow ?? "—",
     unidadIdentificador: row.paquetes?.unidades?.identificador ?? "—",
     tipo: row.tipo as TipoIncidencia,
@@ -241,4 +245,40 @@ export async function reabrirIncidencia(supabase: SupabaseClient, incidenciaId: 
     .update({ estado: "abierta", resuelta_por: null, resuelta_en: null, comentario_resolucion: null })
     .eq("id", incidenciaId);
   if (error) throw error;
+}
+
+export interface DetalleIncidencia {
+  incidencia: IncidenciaConFotos;
+  paquete: Paquete;
+  fotografiasPaquete: FotografiaPaquete[];
+}
+
+/**
+ * Detalle completo para el modal del módulo Incidencias del panel de
+ * admin: datos del paquete + incidencia + evidencia fotográfica, todo
+ * en un solo lugar para que el administrador nunca tenga que salir del
+ * módulo de Incidencias a buscar esta información en Paquetes.
+ *
+ * Deliberadamente NO es una consulta nueva a la base de datos — compone
+ * tres funciones que ya existen y ya están probadas (obtenerPaquetePorId,
+ * listarIncidenciasDePaquete, obtenerFotografiasPaquete), así que
+ * hereda su mismo respeto de RLS sin duplicar ninguna lógica de acceso
+ * a datos ni de firma de URLs.
+ */
+export async function obtenerDetalleIncidencia(
+  supabase: SupabaseClient,
+  incidenciaId: string,
+  paqueteId: string,
+): Promise<DetalleIncidencia | null> {
+  const [paquete, incidenciasDelPaquete, fotografiasPaquete] = await Promise.all([
+    obtenerPaquetePorId(supabase, paqueteId),
+    listarIncidenciasDePaquete(supabase, paqueteId),
+    obtenerFotografiasPaquete(supabase, paqueteId),
+  ]);
+
+  if (!paquete) return null;
+  const incidencia = incidenciasDelPaquete.find((i) => i.id === incidenciaId);
+  if (!incidencia) return null;
+
+  return { incidencia, paquete, fotografiasPaquete };
 }

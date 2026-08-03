@@ -15,7 +15,6 @@ export {
   listarUnidades,
   obtenerFirmaEntrega,
   obtenerFotografiasPaquete,
-  obtenerFotoPrincipalPorPaquetes,
   buscarPaquetePorPickupToken,
   listarPendientesPorUnidad,
   type ListarPaquetesResultado,
@@ -77,6 +76,7 @@ export {
   subirFotografiaIncidencia,
   listarIncidencias,
   obtenerIncidenciasPaquete,
+  obtenerDetalleIncidencia,
   resolverIncidencia,
   cambiarEstadoSeguimiento,
   reabrirIncidencia,
@@ -89,6 +89,7 @@ export {
   type ReportarIncidenciaInput,
   type RegistrarPaqueteConIncidenciaInput,
   type SubirFotografiaIncidenciaInput,
+  type DetalleIncidencia,
 } from "./incidencias";
 
 export {
