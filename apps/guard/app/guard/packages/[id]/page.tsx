@@ -14,7 +14,7 @@ import {
   type IncidenciaConFotos,
 } from "@gateflow/paquetes";
 import type { Paquete, PaqueteHistorialEvento, FotografiaPaquete } from "@gateflow/types";
-import { EstadoBadge, PackageQRCode, Button } from "@gateflow/ui";
+import { EstadoBadge, PackageQRCode, Button, formatearFechaHora } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 import { AlertTriangle, Camera } from "lucide-react";
@@ -132,11 +132,11 @@ export default function GuardPackageDetailPage() {
             </>
           )}
           <dt className="text-muted-foreground">Recibido</dt>
-          <dd className="text-right font-medium">{new Date(paquete.fechaRecepcion).toLocaleString("es-MX")}</dd>
+          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
           {paquete.fechaEntrega && (
             <>
               <dt className="text-muted-foreground">Entregado</dt>
-              <dd className="text-right font-medium">{new Date(paquete.fechaEntrega).toLocaleString("es-MX")}</dd>
+              <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaEntrega)}</dd>
             </>
           )}
           {paquete.notas && (
@@ -183,7 +183,7 @@ export default function GuardPackageDetailPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={firma.firmaData} alt={`Firma de ${firma.firmanteNombre}`} className="mx-auto h-24" />
               <p className="mt-1 text-center text-xs text-muted-foreground">
-                {firma.firmanteNombre} · {new Date(firma.creadoEn).toLocaleString("es-MX")}
+                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn)}
               </p>
             </div>
           </div>
@@ -203,13 +203,13 @@ export default function GuardPackageDetailPage() {
                   </div>
                   <p className="mt-1 text-sm">{inc.descripcion}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {inc.reportadaPorNombre ?? "Guardia"} · {new Date(inc.createdAt).toLocaleString("es-MX")}
+                    {inc.reportadaPorNombre ?? "Guardia"} · {formatearFechaHora(inc.createdAt)}
                   </p>
 
                   {inc.resueltaEn && (
                     <div className="mt-2 rounded-lg bg-success/10 p-2 text-xs">
                       <p className="font-medium text-success">
-                        Resuelta {new Date(inc.resueltaEn).toLocaleString("es-MX")}
+                        Resuelta {formatearFechaHora(inc.resueltaEn)}
                         {inc.resueltaPorNombre ? ` · ${inc.resueltaPorNombre}` : ""}
                       </p>
                       {inc.comentarioResolucion && <p className="mt-0.5 text-muted-foreground">{inc.comentarioResolucion}</p>}
@@ -260,7 +260,7 @@ export default function GuardPackageDetailPage() {
                 <div key={h.id}>
                   <p className="text-sm font-medium">{ESTADO_LABEL[h.estadoNuevoId] ?? h.estadoNuevoId}</p>
                   <p className="text-xs text-muted-foreground">
-                    {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
+                    {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
                   </p>
                 </div>
               ))}

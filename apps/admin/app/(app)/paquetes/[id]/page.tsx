@@ -9,7 +9,7 @@ import {
   listarUbicacionesActivas,
   obtenerHistorialUbicacion,
 } from "@gateflow/paquetes";
-import { EstadoBadge, PackageQRCode } from "@gateflow/ui";
+import { EstadoBadge, PackageQRCode, formatearFechaHora } from "@gateflow/ui";
 import { PageHeader } from "@/components/shared/page-header";
 import { EditarNotas } from "./editar-notas";
 import { CambiarUbicacion } from "./cambiar-ubicacion";
@@ -86,14 +86,14 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
               <dd className="font-medium">{paquete.recibidoPorNombre ?? "—"}</dd>
 
               <dt className="text-muted-foreground">Fecha de recepción</dt>
-              <dd className="font-medium">{new Date(paquete.fechaRecepcion).toLocaleString("es-MX")}</dd>
+              <dd className="font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
 
               {paquete.fechaEntrega && (
                 <>
                   <dt className="text-muted-foreground">Entregado por</dt>
                   <dd className="font-medium">{paquete.entregadoPorNombre ?? "—"}</dd>
                   <dt className="text-muted-foreground">Fecha de entrega</dt>
-                  <dd className="font-medium">{new Date(paquete.fechaEntrega).toLocaleString("es-MX")}</dd>
+                  <dd className="font-medium">{formatearFechaHora(paquete.fechaEntrega)}</dd>
                   <dt className="text-muted-foreground">Recibió (persona)</dt>
                   <dd className="font-medium">{paquete.entregadoANombre ?? "—"}</dd>
                 </>
@@ -116,7 +116,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                   <div key={h.id}>
                     <p className="text-sm font-medium">{ESTADO_LABEL[h.estadoNuevoId] ?? h.estadoNuevoId}</p>
                     <p className="text-xs text-muted-foreground">
-                      {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
+                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
                     </p>
                   </div>
                 ))}
@@ -134,7 +134,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                       {h.ubicacionAnteriorRuta ?? "Sin ubicación"} → {h.ubicacionNuevaRuta ?? "Sin ubicación"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {h.usuarioNombre} · {new Date(h.creadoEn).toLocaleString("es-MX")}
+                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
                     </p>
                   </div>
                 ))}
@@ -159,7 +159,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                 <img src={firma.firmaData} alt={`Firma de ${firma.firmanteNombre}`} className="mx-auto h-20" />
               </div>
               <p className="mt-1 text-center text-xs text-muted-foreground">
-                {firma.firmanteNombre} · {new Date(firma.creadoEn).toLocaleString("es-MX")}
+                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn)}
               </p>
             </div>
           )}

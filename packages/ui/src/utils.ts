@@ -84,3 +84,55 @@ export function obtenerMensajeErrorConTimeout(error: unknown, mensajePorDefecto:
   }
   return obtenerMensajeError(error, mensajePorDefecto);
 }
+
+/**
+ * ÚNICO punto de toda la app donde se decide en qué zona horaria se
+ * MUESTRAN las fechas. Todo lo que se guarda en Supabase es
+ * `timestamptz` (instante absoluto en UTC, generado siempre por
+ * `now()` en Postgres) — eso ya está bien y no se toca. El bug real
+ * encontrado en producción fue que varias pantallas de admin, al ser
+ * Server Components que corren en el servidor de Netlify (UTC), hacían
+ * `toLocaleString()` SIN especificar `timeZone`, así que mostraban los
+ * dígitos crudos de UTC como si fueran hora local.
+ *
+ * No crear ningún otro `toLocaleString`/`toLocaleDateString` suelto en
+ * ninguna pantalla — siempre pasar por `formatearFecha`/
+ * `formatearFechaHora` para que exista un único criterio, sin importar
+ * si el componente corre en el servidor o en el navegador.
+ */
+export const ZONA_HORARIA_GATEFLOW = "America/Cancun";
+
+/** true durante la validación en producción del fix de fechas — deja
+ * trazas en la consola (servidor y navegador) para confirmar que la
+ * conversión de zona horaria funciona en cada pantalla. Poner en
+ * `false` una vez validado (ver README del delta de fechas). */
+const LOG_FECHAS_TEMPORAL = true;
+
+function logFechaTemporal(fn: string, iso: string, resultado: string) {
+  if (!LOG_FECHAS_TEMPORAL) return;
+  // eslint-disable-next-line no-console
+  console.log(`[GateFlow][fechas] ${fn}`, {
+    isoRecibido: iso,
+    timezoneEntorno: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    horaLocalEntorno: new Date().toString(),
+    zonaUsadaParaFormatear: ZONA_HORARIA_GATEFLOW,
+    resultadoMostrado: resultado,
+    entorno: typeof window === "undefined" ? "servidor" : "navegador",
+  });
+}
+
+/** Fecha + hora en la zona horaria de GateFlow (ej. "3/8/2026, 2:46:49 p.m."). */
+export function formatearFechaHora(iso: string | null | undefined, opciones?: Intl.DateTimeFormatOptions): string {
+  if (!iso) return "—";
+  const resultado = new Date(iso).toLocaleString("es-MX", { timeZone: ZONA_HORARIA_GATEFLOW, ...opciones });
+  logFechaTemporal("formatearFechaHora", iso, resultado);
+  return resultado;
+}
+
+/** Solo fecha, sin hora, en la zona horaria de GateFlow (ej. "3/8/2026"). */
+export function formatearFecha(iso: string | null | undefined, opciones?: Intl.DateTimeFormatOptions): string {
+  if (!iso) return "—";
+  const resultado = new Date(iso).toLocaleDateString("es-MX", { timeZone: ZONA_HORARIA_GATEFLOW, ...opciones });
+  logFechaTemporal("formatearFecha", iso, resultado);
+  return resultado;
+}

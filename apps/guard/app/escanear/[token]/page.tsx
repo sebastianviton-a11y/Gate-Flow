@@ -1,7 +1,7 @@
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { buscarPaquetePorPickupToken, listarPendientesPorUnidad, obtenerGrupoPorTokenConPaquetes } from "@gateflow/paquetes";
-import { GateFlowLogo } from "@gateflow/ui";
+import { GateFlowLogo, formatearFechaHora } from "@gateflow/ui";
 import { EscaneoResultado } from "./escaneo-resultado";
 import { EscaneoGrupoResultado } from "./escaneo-grupo-resultado";
 
@@ -41,7 +41,7 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
     }
 
     if (paquete.estado === "entregado") {
-      const fecha = paquete.fechaEntrega ? new Date(paquete.fechaEntrega).toLocaleString("es-MX") : "";
+      const fecha = paquete.fechaEntrega ? formatearFechaHora(paquete.fechaEntrega) : "";
       return <EstadoNeutral titulo={`Este paquete ya fue entregado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
     }
 
@@ -85,7 +85,7 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
 
   if (grupoConPaquetes.grupo.estado === "completado") {
     const fecha = grupoConPaquetes.grupo.fechaEntrega
-      ? new Date(grupoConPaquetes.grupo.fechaEntrega).toLocaleString("es-MX")
+      ? formatearFechaHora(grupoConPaquetes.grupo.fechaEntrega)
       : "";
     return <EstadoNeutral titulo={`Este retiro ya fue completado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
   }

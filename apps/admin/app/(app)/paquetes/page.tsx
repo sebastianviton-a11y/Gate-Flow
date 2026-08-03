@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { getSessionContext } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { listarPaquetes, buscarPaquetes } from "@gateflow/paquetes";
-import { EstadoBadge, Button } from "@gateflow/ui";
+import { EstadoBadge, Button, formatearFecha } from "@gateflow/ui";
 import type { EstadoPaquete } from "@gateflow/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { FiltrosPaquetes } from "@/components/paquetes/filtros-paquetes";
@@ -109,9 +109,9 @@ export default async function PaquetesPage({
                 <td className="px-4 py-2.5">
                   <EstadoBadge estado={p.estado} />
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{new Date(p.fechaRecepcion).toLocaleDateString("es-MX")}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(p.fechaRecepcion)}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">
-                  {p.fechaEntrega ? new Date(p.fechaEntrega).toLocaleDateString("es-MX") : "—"}
+                  {formatearFecha(p.fechaEntrega)}
                 </td>
               </tr>
             ))}

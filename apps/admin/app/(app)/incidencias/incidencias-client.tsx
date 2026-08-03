@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, Eye, ExternalLink } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { resolverIncidencia, TIPO_INCIDENCIA_LABEL, type Incidencia, type EstadoIncidencia } from "@gateflow/paquetes";
+import { formatearFecha } from "@gateflow/ui";
 import { DetalleIncidenciaModal } from "./detalle-incidencia-modal";
 
 const ESTADO_LABEL: Record<EstadoIncidencia, string> = { abierta: "Abierta", en_seguimiento: "En seguimiento", resuelta: "Resuelta" };
@@ -82,7 +83,7 @@ export function IncidenciasClient({ incidenciasIniciales }: { incidenciasInicial
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">{TIPO_INCIDENCIA_LABEL[i.tipo]}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{i.reportadaPorNombre}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{new Date(i.creadaEn).toLocaleDateString("es-MX")}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(i.creadaEn)}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${ESTADO_CLASE[i.estado]}`}>{ESTADO_LABEL[i.estado]}</span>
                 </td>

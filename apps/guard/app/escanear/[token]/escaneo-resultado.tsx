@@ -6,7 +6,7 @@ import { Loader2, Check, PackageCheck, Package } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { entregarPaquete, guardarFirmaEntrega } from "@gateflow/paquetes";
 import type { Paquete, SessionContext } from "@gateflow/types";
-import { Button, Input, EstadoBadge, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
+import { Button, Input, EstadoBadge, ejecutarConTimeout, obtenerMensajeErrorConTimeout, formatearFechaHora } from "@gateflow/ui";
 import { SignaturePad } from "@/components/signature-pad";
 
 export function EscaneoResultado({
@@ -112,7 +112,7 @@ export function EscaneoResultado({
             </>
           )}
           <dt className="text-muted-foreground">Recibido</dt>
-          <dd className="text-right font-medium">{new Date(paquete.fechaRecepcion).toLocaleString("es-MX")}</dd>
+          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
         </dl>
 
         {otrosPendientes.length > 0 && (

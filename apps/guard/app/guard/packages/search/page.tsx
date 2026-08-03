@@ -6,7 +6,7 @@ import { Search, Loader2, MapPin, AlertTriangle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes, contarIncidenciasPorPaquetes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
-import { Input, EstadoBadge } from "@gateflow/ui";
+import { Input, EstadoBadge, formatearFechaHora } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
 
@@ -160,7 +160,7 @@ export default function SearchPackagePage() {
                     {p.residenteNombre && <p className="text-sm text-muted-foreground">{p.residenteNombre}</p>}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="gf-code">{p.codigoGateflow}</span>
-                      {p.fechaRecepcion && <span>{new Date(p.fechaRecepcion).toLocaleString("es-MX")}</span>}
+                      {p.fechaRecepcion && <span>{formatearFechaHora(p.fechaRecepcion)}</span>}
                     </div>
                     {!yaEntregado && p.ubicacionDescripcion && (
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">

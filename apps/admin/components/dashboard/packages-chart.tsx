@@ -10,11 +10,11 @@ import {
   Tooltip,
 } from "recharts";
 import type { VolumenDiario } from "@gateflow/paquetes";
-import { Card, CardContent, CardHeader, CardTitle } from "@gateflow/ui";
+import { Card, CardContent, CardHeader, CardTitle, formatearFecha } from "@gateflow/ui";
 
 export function PackagesChart({ data }: { data: VolumenDiario[] }) {
   const puntos = data.map((d) => ({
-    fecha: new Date(d.fecha).toLocaleDateString("es-MX", { day: "2-digit", month: "short" }),
+    fecha: formatearFecha(d.fecha, { day: "2-digit", month: "short" }),
     recibidos: d.recibidosTotal,
     entregados: d.entregados,
   }));

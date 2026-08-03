@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ESTADO_SERVICIO_LABEL, PLAN_LABEL, type ResidencialListItem } from "@gateflow/paquetes";
+import { formatearFecha } from "@gateflow/ui";
 
 const ESTADO_CLASE: Record<string, string> = {
   piloto: "bg-info/10 text-info",
@@ -72,8 +73,8 @@ export function ResidencialesTable({ residenciales, mostrarEmpresa = true }: { r
               <td className="px-4 py-2.5 text-muted-foreground">{r.totalViviendas}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{r.totalUsuarios}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{PLAN_LABEL[r.plan] ?? r.plan}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{new Date(r.creadoEn).toLocaleDateString("es-MX")}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{r.planFechaRenovacion ? new Date(r.planFechaRenovacion).toLocaleDateString("es-MX") : "—"}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.creadoEn)}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.planFechaRenovacion)}</td>
               <td className="px-4 py-2.5">
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${ESTADO_CLASE[r.estadoServicio]}`}>
                   {ESTADO_SERVICIO_LABEL[r.estadoServicio]}

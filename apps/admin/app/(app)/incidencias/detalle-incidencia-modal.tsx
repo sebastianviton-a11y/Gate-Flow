@@ -11,7 +11,7 @@ import {
   type DetalleIncidencia,
   type EstadoIncidencia,
 } from "@gateflow/paquetes";
-import { EstadoBadge } from "@gateflow/ui";
+import { EstadoBadge, formatearFechaHora } from "@gateflow/ui";
 
 const ESTADO_RESOLUCION_LABEL: Record<EstadoIncidencia, string> = {
   abierta: "Abierta",
@@ -106,7 +106,7 @@ export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: Det
 
                 <dt className="text-muted-foreground">Fecha y hora de recepción</dt>
                 <dd className="text-right font-medium">
-                  {new Date(detalle.paquete.fechaRecepcion).toLocaleString("es-MX")}
+                  {formatearFechaHora(detalle.paquete.fechaRecepcion)}
                 </dd>
 
                 <dt className="text-muted-foreground">Guardia que recibió</dt>
@@ -148,7 +148,7 @@ export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: Det
 
                 <dt className="text-muted-foreground">Fecha de resolución</dt>
                 <dd className="text-right font-medium">
-                  {detalle.incidencia.resueltaEn ? new Date(detalle.incidencia.resueltaEn).toLocaleString("es-MX") : "—"}
+                  {formatearFechaHora(detalle.incidencia.resueltaEn)}
                 </dd>
 
                 <dt className="col-span-2 text-muted-foreground">Observaciones de resolución</dt>
