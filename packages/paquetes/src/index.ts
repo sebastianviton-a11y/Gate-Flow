@@ -15,6 +15,7 @@ export {
   listarUnidades,
   obtenerFirmaEntrega,
   obtenerFotografiasPaquete,
+  obtenerFotoPrincipalPorPaquetes,
   buscarPaquetePorPickupToken,
   listarPendientesPorUnidad,
   type ListarPaquetesResultado,

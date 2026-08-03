@@ -4,8 +4,16 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { obtenerPaquetePorId, obtenerHistorial, obtenerFirmaEntrega, listarIncidenciasDePaquete, type FirmaEntrega, type IncidenciaConFotos } from "@gateflow/paquetes";
-import type { Paquete, PaqueteHistorialEvento } from "@gateflow/types";
+import {
+  obtenerPaquetePorId,
+  obtenerHistorial,
+  obtenerFirmaEntrega,
+  obtenerFotografiasPaquete,
+  listarIncidenciasDePaquete,
+  type FirmaEntrega,
+  type IncidenciaConFotos,
+} from "@gateflow/paquetes";
+import type { Paquete, PaqueteHistorialEvento, FotografiaPaquete } from "@gateflow/types";
 import { EstadoBadge, PackageQRCode, Button } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { useGuardSession } from "@/components/session-provider";
@@ -36,12 +44,16 @@ export default function GuardPackageDetailPage() {
   const [historial, setHistorial] = useState<PaqueteHistorialEvento[]>([]);
   const [firma, setFirma] = useState<FirmaEntrega | null>(null);
   const [incidencias, setIncidencias] = useState<IncidenciaConFotos[]>([]);
+  const [fotografiasPaquete, setFotografiasPaquete] = useState<FotografiaPaquete[]>([]);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   useEffect(() => {
     obtenerPaquetePorId(supabase, id).then(setPaquete);
     obtenerHistorial(supabase, id).then(setHistorial);
     obtenerFirmaEntrega(supabase, id).then(setFirma);
+    obtenerFotografiasPaquete(supabase, id)
+      .then(setFotografiasPaquete)
+      .catch((e) => console.error("[GateFlow] No se pudieron cargar las fotografías del paquete:", e));
     listarIncidenciasDePaquete(supabase, id)
       .then(setIncidencias)
       .catch((e) => console.error("[GateFlow] No se pudieron cargar las incidencias del paquete:", e));
@@ -135,6 +147,35 @@ export default function GuardPackageDetailPage() {
           )}
         </dl>
 
+        {fotografiasPaquete.length > 0 && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-muted-foreground">Fotografía del paquete</p>
+            {fotografiasPaquete.length === 1 ? (
+              <button onClick={() => setFotoAmpliada(fotografiasPaquete[0].url)} className="block w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={fotografiasPaquete[0].url}
+                  alt="Fotografía del paquete"
+                  className="w-full rounded-xl border border-border object-contain"
+                />
+              </button>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto">
+                {fotografiasPaquete.map((foto) => (
+                  <button key={foto.id} onClick={() => setFotoAmpliada(foto.url)} className="flex-none">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={foto.url}
+                      alt="Fotografía del paquete"
+                      className="h-64 w-auto rounded-xl border border-border object-contain"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {firma && (
           <div>
             <p className="mb-2 text-sm font-medium text-muted-foreground">Firma de entrega</p>
@@ -179,7 +220,7 @@ export default function GuardPackageDetailPage() {
                     <div className="mt-3">
                       <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground">
                         <Camera className="h-3.5 w-3.5" />
-                        Evidencia fotográfica
+                        Fotografías de la incidencia
                       </p>
                       <div className="flex gap-2 overflow-x-auto">
                         {inc.fotos.map((foto) => (

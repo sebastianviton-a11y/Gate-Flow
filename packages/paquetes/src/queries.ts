@@ -190,6 +190,52 @@ export async function obtenerFotografiasPaquete(supabase: SupabaseClient, paquet
 }
 
 /**
+ * Portada por paquete para vistas de LISTA (Buscar paquete, Resultado de
+ * búsqueda, Paquetes pendientes en apps/guard) — un solo storage_path por
+ * paquete (el más reciente de tipo "recepcion"), sin duplicar ninguna
+ * fila ni volver a subir nada: es la misma tabla y el mismo bucket
+ * privado que ya usa obtenerFotografiasPaquete/admin, solo que aquí se
+ * firma en LOTE (createSignedUrls, no createSignedUrl uno por uno) para
+ * no hacer N llamadas de Storage al renderizar una lista de N paquetes.
+ */
+export async function obtenerFotoPrincipalPorPaquetes(
+  supabase: SupabaseClient,
+  paqueteIds: string[],
+): Promise<Map<string, string>> {
+  if (paqueteIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("paquete_fotografias")
+    .select("paquete_id, storage_path, created_at")
+    .in("paquete_id", paqueteIds)
+    .eq("tipo", "recepcion")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!data || data.length === 0) return new Map();
+
+  // Ya viene ordenado por fecha descendente — al no sobreescribir una
+  // entrada ya presente, nos quedamos con la más reciente por paquete.
+  const rutaPorPaquete = new Map<string, string>();
+  for (const fila of data as Array<{ paquete_id: string; storage_path: string }>) {
+    if (!rutaPorPaquete.has(fila.paquete_id)) rutaPorPaquete.set(fila.paquete_id, fila.storage_path);
+  }
+
+  const rutas = [...rutaPorPaquete.values()];
+  const { data: firmadas, error: errorFirma } = await supabase.storage.from("evidencia").createSignedUrls(rutas, 600);
+  if (errorFirma) throw errorFirma;
+
+  const urlPorRuta = new Map((firmadas ?? []).filter((f) => !f.error).map((f) => [f.path ?? "", f.signedUrl]));
+
+  const resultado = new Map<string, string>();
+  for (const [paqueteId, ruta] of rutaPorPaquete) {
+    const url = urlPorRuta.get(ruta);
+    if (url) resultado.set(paqueteId, url);
+  }
+  return resultado;
+}
+
+/**
  * Busca un paquete por su pickup_token. Es una consulta autenticada
  * normal — RLS (paquetes_tenant_isolation) ya garantiza que devuelve
  * null si el paquete pertenece a otro tenant, sin necesitar ninguna

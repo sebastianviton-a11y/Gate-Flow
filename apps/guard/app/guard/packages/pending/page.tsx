@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PackageX, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { listarPendientes } from "@gateflow/paquetes";
+import { listarPendientes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
@@ -24,10 +24,18 @@ export default function PendingPackagesPage() {
 
   const [paquetes, setPaquetes] = useState<Paquete[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fotoPortadaPorPaquete, setFotoPortadaPorPaquete] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     listarPendientes(supabase, session.tenant.id)
-      .then(setPaquetes)
+      .then((data) => {
+        setPaquetes(data);
+        if (data.length > 0) {
+          obtenerFotoPrincipalPorPaquetes(supabase, data.map((p) => p.id))
+            .then(setFotoPortadaPorPaquete)
+            .catch((e) => console.error("[GateFlow] No se pudieron cargar las portadas de fotografía:", e));
+        }
+      })
       .catch((e) => setError(obtenerMensajeError(e, "No se pudo cargar el listado.")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -44,21 +52,28 @@ export default function PendingPackagesPage() {
         </div>
       ) : paquetes && paquetes.length > 0 ? (
         <div className="space-y-2 p-4">
-          {paquetes.map((p) => (
-            <Link
-              key={p.id}
-              href={`/guard/packages/${p.id}`}
-              className="flex min-h-touch items-center justify-between rounded-xl border border-border bg-card px-4 py-3 hover:bg-muted"
-            >
-              <div>
-                <p className="font-medium">{p.unidadIdentificador}</p>
-                <p className="text-xs text-muted-foreground">
-                  {p.ubicacionDescripcion ?? "Sin ubicación"} · {tiempoTranscurrido(p.fechaRecepcion)}
-                </p>
-              </div>
-              <EstadoBadge estado={p.estado} />
-            </Link>
-          ))}
+          {paquetes.map((p) => {
+            const foto = fotoPortadaPorPaquete.get(p.id);
+            return (
+              <Link
+                key={p.id}
+                href={`/guard/packages/${p.id}`}
+                className="flex min-h-touch items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:bg-muted"
+              >
+                {foto && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={foto} alt="" className="h-12 w-12 flex-none rounded-lg border border-border object-cover" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{p.unidadIdentificador}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.ubicacionDescripcion ?? "Sin ubicación"} · {tiempoTranscurrido(p.fechaRecepcion)}
+                  </p>
+                </div>
+                <EstadoBadge estado={p.estado} />
+              </Link>
+            );
+          })}
         </div>
       ) : (
         paquetes && (
