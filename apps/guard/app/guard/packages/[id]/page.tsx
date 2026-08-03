@@ -10,8 +10,11 @@ import {
   obtenerFirmaEntrega,
   obtenerFotografiasPaquete,
   listarIncidenciasDePaquete,
+  obtenerGrupoEntrega,
+  NIVEL_DANIO_LABEL,
   type FirmaEntrega,
   type IncidenciaConFotos,
+  type GrupoEntrega,
 } from "@gateflow/paquetes";
 import type { Paquete, PaqueteHistorialEvento, FotografiaPaquete } from "@gateflow/types";
 import { EstadoBadge, PackageQRCode, Button, formatearFechaHora } from "@gateflow/ui";
@@ -46,9 +49,20 @@ export default function GuardPackageDetailPage() {
   const [incidencias, setIncidencias] = useState<IncidenciaConFotos[]>([]);
   const [fotografiasPaquete, setFotografiasPaquete] = useState<FotografiaPaquete[]>([]);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+  const [grupo, setGrupo] = useState<GrupoEntrega | null>(null);
 
   useEffect(() => {
-    obtenerPaquetePorId(supabase, id).then(setPaquete);
+    obtenerPaquetePorId(supabase, id).then((p) => {
+      setPaquete(p);
+      // La cantidad de paquetes de un registro múltiple vive en
+      // paquete_grupos_entrega, no en el propio paquete — solo se
+      // consulta cuando el paquete realmente pertenece a un grupo.
+      if (p?.grupoEntregaId) {
+        obtenerGrupoEntrega(supabase, p.grupoEntregaId)
+          .then(setGrupo)
+          .catch((e) => console.error("[GateFlow] No se pudo cargar el grupo de entrega:", e));
+      }
+    });
     obtenerHistorial(supabase, id).then(setHistorial);
     obtenerFirmaEntrega(supabase, id).then(setFirma);
     obtenerFotografiasPaquete(supabase, id)
@@ -86,7 +100,7 @@ export default function GuardPackageDetailPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <OperationalHeader title={paquete.unidadIdentificador} />
+      <OperationalHeader title={paquete.unidadIdentificador} onBack={() => router.back()} />
 
       <div className="flex-1 space-y-5 p-4 pb-28">
         <div className="flex items-center justify-between">
@@ -101,6 +115,12 @@ export default function GuardPackageDetailPage() {
           </div>
           <span className="gf-code text-muted-foreground">{paquete.codigoGateflow}</span>
         </div>
+
+        {paquete.estado === "entregado" && (
+          <div className="rounded-lg bg-muted px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            Modo solo consulta — este paquete ya fue entregado y no se puede modificar.
+          </div>
+        )}
 
         <div className="flex justify-center">
           <PackageQRCode codigoGateflow={paquete.codigoGateflow} />
@@ -125,6 +145,18 @@ export default function GuardPackageDetailPage() {
               <dd className="text-right font-medium">{paquete.empresaPaqueteria}</dd>
             </>
           )}
+          {paquete.numeroGuia && (
+            <>
+              <dt className="text-muted-foreground">Guía</dt>
+              <dd className="gf-code text-right font-medium">{paquete.numeroGuia}</dd>
+            </>
+          )}
+          {grupo && grupo.cantidadTotal > 1 && (
+            <>
+              <dt className="text-muted-foreground">Paquetes en este registro</dt>
+              <dd className="text-right font-medium">{grupo.cantidadTotal}</dd>
+            </>
+          )}
           {paquete.ubicacionDescripcion && (
             <>
               <dt className="text-muted-foreground">Ubicación</dt>
@@ -133,10 +165,28 @@ export default function GuardPackageDetailPage() {
           )}
           <dt className="text-muted-foreground">Recibido</dt>
           <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
+          {paquete.recibidoPorNombre && (
+            <>
+              <dt className="text-muted-foreground">Registrado por</dt>
+              <dd className="text-right font-medium">{paquete.recibidoPorNombre}</dd>
+            </>
+          )}
           {paquete.fechaEntrega && (
             <>
               <dt className="text-muted-foreground">Entregado</dt>
               <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaEntrega)}</dd>
+              {paquete.entregadoANombre && (
+                <>
+                  <dt className="text-muted-foreground">Recibió</dt>
+                  <dd className="text-right font-medium">{paquete.entregadoANombre}</dd>
+                </>
+              )}
+              {paquete.entregadoPorNombre && (
+                <>
+                  <dt className="text-muted-foreground">Entregó</dt>
+                  <dd className="text-right font-medium">{paquete.entregadoPorNombre}</dd>
+                </>
+              )}
             </>
           )}
           {paquete.notas && (
@@ -202,6 +252,11 @@ export default function GuardPackageDetailPage() {
                     </span>
                   </div>
                   <p className="mt-1 text-sm">{inc.descripcion}</p>
+                  {inc.nivelDanio && (
+                    <p className="mt-1 text-xs font-medium text-destructive">
+                      Nivel de daño: {NIVEL_DANIO_LABEL[inc.nivelDanio as keyof typeof NIVEL_DANIO_LABEL] ?? inc.nivelDanio}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {inc.reportadaPorNombre ?? "Guardia"} · {formatearFechaHora(inc.createdAt)}
                   </p>

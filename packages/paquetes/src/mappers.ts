@@ -34,6 +34,7 @@ export interface PaqueteRow {
   fecha_recepcion: string;
   fecha_entrega: string | null;
   pickup_token: string | null;
+  grupo_entrega_id: string | null;
   unidades?: { identificador: string; contacto_telefono: string | null } | null;
   residente?: { nombre_completo: string; telefono: string | null } | null;
   recibido?: { nombre_completo: string } | null;
@@ -72,6 +73,7 @@ export function mapPaqueteRow(row: PaqueteRow): Paquete {
     fechaRecepcion: row.fecha_recepcion,
     fechaEntrega: row.fecha_entrega,
     pickupToken: row.pickup_token,
+    grupoEntregaId: row.grupo_entrega_id,
   };
 }
 

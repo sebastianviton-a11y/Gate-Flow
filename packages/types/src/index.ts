@@ -181,6 +181,7 @@ export interface Paquete {
   fechaRecepcion: string;
   fechaEntrega?: string | null;
   pickupToken?: string | null;
+  grupoEntregaId?: string | null;
 }
 
 /** Filtros aceptados por el listado de paquetes (apps/admin) y por las

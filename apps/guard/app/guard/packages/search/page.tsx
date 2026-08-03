@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Loader2, MapPin, AlertTriangle } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Search, Loader2, MapPin, AlertTriangle, ChevronRight } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { buscarPaquetes, contarIncidenciasPorPaquetes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
@@ -22,16 +23,39 @@ const ESTADOS_ENTREGADOS = ["entregado"];
 export default function SearchPackagePage() {
   const session = useGuardSession();
   const supabase = createBrowserSupabaseClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const [query, setQuery] = useState("");
+  // Se inicializan desde la URL (no desde "") para que, al volver desde
+  // el detalle de un paquete con router.back(), esta pantalla se
+  // reconstruya con el mismo texto y filtro que tenía el guardia — sin
+  // esto, cada regreso reiniciaría la búsqueda desde cero.
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [resultados, setResultados] = useState<Paquete[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [buscado, setBuscado] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<FiltroEstado>("todos");
+  const [filtro, setFiltro] = useState<FiltroEstado>(() => {
+    const desdeUrl = searchParams.get("filtro");
+    return desdeUrl === "recibidos" || desdeUrl === "entregados" ? desdeUrl : "todos";
+  });
   const [incidenciasPorPaquete, setIncidenciasPorPaquete] = useState<Map<string, number>>(new Map());
   const [fotoPortadaPorPaquete, setFotoPortadaPorPaquete] = useState<Map<string, string>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Mantiene la URL en sincronía con el texto/filtro actuales — con
+  // replace (no push) para no llenar el historial con una entrada por
+  // cada letra tecleada, y scroll:false para no saltar al tope de la
+  // página en cada actualización.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (filtro !== "todos") params.set("filtro", filtro);
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, filtro]);
 
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -172,26 +196,26 @@ export default function SearchPackagePage() {
                 </>
               );
 
-              // Para paquetes ya entregados: consulta histórica, sin
-              // ningún camino que permita volver a "entregarlos" — no
-              // se renderiza como enlace clicable en absoluto, para no
-              // depender de que la pantalla de destino también lo
-              // bloquee por su cuenta.
-              if (yaEntregado) {
-                return (
-                  <div key={p.id} className="flex min-h-touch items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 opacity-80">
-                    {contenido}
-                  </div>
-                );
-              }
-
+              // El guardia necesita poder consultar CUALQUIER paquete,
+              // incluidos los ya entregados (por ejemplo, cuando otro
+              // residente de la misma vivienda pregunta por uno sin
+              // traer el QR) — por eso ya no hay ningún estado que se
+              // renderice como no-clickeable. El detalle en sí es el
+              // que se encarga de que un paquete entregado se abra
+              // solo en modo consulta, nunca aquí en la lista.
               return (
                 <Link
                   key={p.id}
                   href={`/guard/packages/${p.id}`}
-                  className="flex min-h-touch items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:bg-muted"
+                  className={`flex min-h-touch items-center gap-3 rounded-xl border px-4 py-3 ${
+                    yaEntregado ? "border-dashed border-border bg-muted/20 hover:bg-muted/30" : "border-border bg-card hover:bg-muted"
+                  }`}
                 >
                   {contenido}
+                  <span className="flex flex-none items-center gap-0.5 text-xs font-medium text-primary">
+                    Ver detalle
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </span>
                 </Link>
               );
             })}
