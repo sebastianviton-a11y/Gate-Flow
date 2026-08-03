@@ -150,11 +150,11 @@ export default function GuardPackageDetailPage() {
         {fotografiasPaquete.length > 0 && (
           <div>
             <p className="mb-2 text-sm font-medium text-muted-foreground">Fotografía del paquete</p>
-            {fotografiasPaquete.length === 1 ? (
-              <button onClick={() => setFotoAmpliada(fotografiasPaquete[0].url)} className="block w-full">
+            {fotografiasPaquete.length === 1 && fotografiasPaquete[0] ? (
+              <button onClick={() => setFotoAmpliada(fotografiasPaquete[0]!.url)} className="block w-full">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={fotografiasPaquete[0].url}
+                  src={fotografiasPaquete[0]!.url}
                   alt="Fotografía del paquete"
                   className="w-full rounded-xl border border-border object-contain"
                 />
