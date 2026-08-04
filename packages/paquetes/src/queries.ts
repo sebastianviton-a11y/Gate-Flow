@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes, FotografiaPaquete } from "@gateflow/types";
-import { mapPaqueteRow, mapHistorialRow, type PaqueteRow, type HistorialRow } from "./mappers";
+import { mapPaqueteRow, mapPaqueteResumenRow, mapHistorialRow, type PaqueteRow, type PaqueteResumenRow, type HistorialRow } from "./mappers";
 import { listarUbicacionesActivas } from "./ubicaciones";
 
 /**
@@ -22,6 +22,22 @@ const PAQUETE_SELECT = `
   empresas_paqueteria ( nombre ),
   tamanos_paquete ( clave ),
   prioridades_paquete ( clave ),
+  ubicaciones ( nombre )
+`;
+
+/**
+ * Versión liviana de PAQUETE_SELECT — solo para las pantallas de LISTA
+ * de guard (buscarPaquetesResumen, listarPendientesResumen). Sin los
+ * 4 JOIN que esas pantallas no usan (empresa de paquetería, tamaño,
+ * prioridad, guardias que recibieron/entregaron) ni las columnas que
+ * tampoco muestran (remitente, guía, notas, fecha_entrega, etc.). El
+ * detalle completo (obtenerPaquetePorId) y el resto de las consultas
+ * existentes siguen usando PAQUETE_SELECT sin ningún cambio.
+ */
+const PAQUETE_RESUMEN_SELECT = `
+  id, codigo_gateflow, tenant_id, unidad_id, residente_id, estado_id, ubicacion_id, fecha_recepcion,
+  unidades ( identificador ),
+  residente:users!paquetes_residente_id_fkey ( nombre_completo ),
   ubicaciones ( nombre )
 `;
 
@@ -96,6 +112,33 @@ export async function buscarPaquetes(
   return ((data ?? []) as unknown as PaqueteRow[]).map(mapPaqueteRow);
 }
 
+/**
+ * Misma búsqueda que buscarPaquetes (mismo índice de texto completo,
+ * mismo orden, mismo límite de 20) pero con el SELECT liviano — para
+ * "Buscar paquete" en guard, que solo necesita mostrar unidad,
+ * residente, código, estado, ubicación y fecha de recepción en cada
+ * fila de resultado.
+ */
+export async function buscarPaquetesResumen(
+  supabase: SupabaseClient,
+  tenantId: string,
+  texto: string,
+): Promise<Paquete[]> {
+  const textoLimpio = texto.trim();
+  if (!textoLimpio) return [];
+
+  const { data, error } = await supabase
+    .from("paquetes")
+    .select(PAQUETE_RESUMEN_SELECT)
+    .eq("tenant_id", tenantId)
+    .textSearch("search_vector", textoLimpio, { type: "websearch", config: "spanish" })
+    .order("fecha_recepcion", { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return ((data ?? []) as unknown as PaqueteResumenRow[]).map(mapPaqueteResumenRow);
+}
+
 export async function obtenerPaquetePorId(supabase: SupabaseClient, id: string): Promise<Paquete | null> {
   const { data, error } = await supabase.from("paquetes").select(PAQUETE_SELECT).eq("id", id).maybeSingle();
   if (error) throw error;
@@ -126,6 +169,19 @@ export async function listarPendientes(supabase: SupabaseClient, tenantId: strin
     .order("fecha_recepcion", { ascending: true });
   if (error) throw error;
   return ((data ?? []) as unknown as PaqueteRow[]).map(mapPaqueteRow);
+}
+
+/** Misma consulta que listarPendientes, con el SELECT liviano — para
+ * la pantalla "Paquetes pendientes" de guard. */
+export async function listarPendientesResumen(supabase: SupabaseClient, tenantId: string): Promise<Paquete[]> {
+  const { data, error } = await supabase
+    .from("paquetes")
+    .select(PAQUETE_RESUMEN_SELECT)
+    .eq("tenant_id", tenantId)
+    .in("estado_id", ["recibido", "notificado"])
+    .order("fecha_recepcion", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as unknown as PaqueteResumenRow[]).map(mapPaqueteResumenRow);
 }
 
 export interface FirmaEntrega {

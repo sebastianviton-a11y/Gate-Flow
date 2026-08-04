@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, Loader2, MapPin, AlertTriangle, ChevronRight } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { buscarPaquetes, contarIncidenciasPorPaquetes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
+import { buscarPaquetesResumen, contarIncidenciasPorPaquetes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { Input, EstadoBadge, formatearFechaHora } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
@@ -69,7 +69,7 @@ export default function SearchPackagePage() {
       setBuscando(true);
       setError(null);
       try {
-        const data = await buscarPaquetes(supabase, session.tenant.id, query);
+        const data = await buscarPaquetesResumen(supabase, session.tenant.id, query);
         setResultados(data);
         if (data.length > 0) {
           contarIncidenciasPorPaquetes(supabase, data.map((p) => p.id))
@@ -93,7 +93,7 @@ export default function SearchPackagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  // El filtro se aplica sobre lo que YA devolvió buscarPaquetes — no
+  // El filtro se aplica sobre lo que YA devolvió buscarPaquetesResumen — no
   // se duplica ni se cambia esa consulta (que ya respeta RLS y el
   // aislamiento por residencial); esto solo decide qué mostrar de lo
   // que ya llegó, tal como pidió la especificación explícitamente.

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PackageX, Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { listarPendientes, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
+import { listarPendientesResumen, obtenerFotoPrincipalPorPaquetes } from "@gateflow/paquetes";
 import type { Paquete } from "@gateflow/types";
 import { EstadoBadge, obtenerMensajeError } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
@@ -27,7 +27,7 @@ export default function PendingPackagesPage() {
   const [fotoPortadaPorPaquete, setFotoPortadaPorPaquete] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
-    listarPendientes(supabase, session.tenant.id)
+    listarPendientesResumen(supabase, session.tenant.id)
       .then((data) => {
         setPaquetes(data);
         if (data.length > 0) {

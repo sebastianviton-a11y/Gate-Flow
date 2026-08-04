@@ -77,6 +77,45 @@ export function mapPaqueteRow(row: PaqueteRow): Paquete {
   };
 }
 
+export interface PaqueteResumenRow {
+  id: string;
+  codigo_gateflow: string;
+  tenant_id: string;
+  unidad_id: string;
+  residente_id: string | null;
+  estado_id: string;
+  ubicacion_id: string | null;
+  fecha_recepcion: string;
+  unidades?: { identificador: string } | null;
+  residente?: { nombre_completo: string } | null;
+  ubicaciones?: { nombre: string } | null;
+}
+
+/**
+ * Versión liviana de Paquete — solo para las pantallas de LISTA de
+ * guard (Buscar paquete, Pendientes), que ya se confirmó no muestran
+ * remitente, número de guía, notas, empresa de paquetería, ni los
+ * nombres de quién recibió/entregó. El resto de los campos de Paquete
+ * quedan sin valor a propósito (undefined/null) — el detalle completo
+ * (obtenerPaquetePorId, usado por la pantalla de detalle en guard y
+ * admin) sigue trayendo absolutamente todo, sin ningún cambio.
+ */
+export function mapPaqueteResumenRow(row: PaqueteResumenRow): Paquete {
+  return {
+    id: row.id,
+    codigoGateflow: row.codigo_gateflow,
+    tenantId: row.tenant_id,
+    unidadId: row.unidad_id,
+    unidadIdentificador: row.unidades?.identificador ?? "",
+    residenteId: row.residente_id,
+    residenteNombre: row.residente?.nombre_completo ?? null,
+    estado: row.estado_id as EstadoPaquete,
+    ubicacionId: row.ubicacion_id,
+    ubicacionDescripcion: row.ubicaciones?.nombre ?? null,
+    fechaRecepcion: row.fecha_recepcion,
+  };
+}
+
 export interface HistorialRow {
   id: string;
   paquete_id: string;

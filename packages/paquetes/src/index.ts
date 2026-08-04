@@ -1,9 +1,11 @@
 export {
   listarPaquetes,
   buscarPaquetes,
+  buscarPaquetesResumen,
   obtenerPaquetePorId,
   obtenerPaquetePorCodigo,
   listarPendientes,
+  listarPendientesResumen,
   obtenerHistorial,
   buscarUnidades,
   obtenerResumenDashboard,
