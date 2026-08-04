@@ -1,10 +1,54 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, X } from "lucide-react";
+import { Camera, X, Loader2 } from "lucide-react";
 
 interface PhotoCaptureProps {
   onChange: (archivo: File | null) => void;
+}
+
+const DIMENSION_MAXIMA = 1600;
+const CALIDAD_JPEG = 0.8;
+
+/**
+ * Redimensiona y recomprime la foto en el navegador antes de subirla —
+ * una foto de cámara de iPhone puede pesar 3-8MB; esto la deja
+ * típicamente en unos cientos de KB sin pérdida de calidad perceptible
+ * (1600px en el lado mayor es de sobra para verla en el detalle del
+ * paquete o en el panel de admin).
+ *
+ * Nunca bloquea la captura: si algo falla (formato no soportado por
+ * canvas, etc.) o si el resultado comprimido termina pesando MÁS que
+ * el original (pasa con imágenes ya chicas), se devuelve el archivo
+ * original tal cual — la compresión es una optimización, nunca un
+ * requisito para poder subir la foto.
+ */
+async function comprimirImagen(archivo: File): Promise<File> {
+  if (!archivo.type.startsWith("image/")) return archivo;
+
+  try {
+    const bitmap = await createImageBitmap(archivo);
+    const escala = Math.min(1, DIMENSION_MAXIMA / Math.max(bitmap.width, bitmap.height));
+    const ancho = Math.round(bitmap.width * escala);
+    const alto = Math.round(bitmap.height * escala);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = ancho;
+    canvas.height = alto;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return archivo;
+    ctx.drawImage(bitmap, 0, 0, ancho, alto);
+    bitmap.close?.();
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", CALIDAD_JPEG));
+    if (!blob || blob.size >= archivo.size) return archivo;
+
+    const nombreComprimido = archivo.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], nombreComprimido, { type: "image/jpeg" });
+  } catch (e) {
+    console.error("[GateFlow] No se pudo comprimir la imagen, se sube el original:", e);
+    return archivo;
+  }
 }
 
 /**
@@ -18,12 +62,19 @@ interface PhotoCaptureProps {
 export function PhotoCapture({ onChange }: PhotoCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [comprimiendo, setComprimiendo] = useState(false);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0];
     if (!archivo) return;
-    setPreview(URL.createObjectURL(archivo));
-    onChange(archivo);
+    setComprimiendo(true);
+    try {
+      const comprimida = await comprimirImagen(archivo);
+      setPreview(URL.createObjectURL(comprimida));
+      onChange(comprimida);
+    } finally {
+      setComprimiendo(false);
+    }
   }
 
   function limpiar() {
@@ -54,10 +105,20 @@ export function PhotoCapture({ onChange }: PhotoCaptureProps) {
     <button
       type="button"
       onClick={() => inputRef.current?.click()}
-      className="flex h-32 w-32 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-card text-muted-foreground"
+      disabled={comprimiendo}
+      className="flex h-32 w-32 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-card text-muted-foreground disabled:opacity-60"
     >
-      <Camera className="h-6 w-6" />
-      <span className="text-xs">Tomar foto</span>
+      {comprimiendo ? (
+        <>
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="text-xs">Procesando…</span>
+        </>
+      ) : (
+        <>
+          <Camera className="h-6 w-6" />
+          <span className="text-xs">Tomar foto</span>
+        </>
+      )}
       <input
         ref={inputRef}
         type="file"
