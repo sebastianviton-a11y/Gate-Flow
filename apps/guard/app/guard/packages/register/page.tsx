@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp, Users, TriangleAlert } from "lucide-react";
+import { Search, Loader2, Check, RotateCcw, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import {
   registrarPaquete,
-  registrarPaqueteConIncidencia,
   buscarUnidades,
-  obtenerCatalogos,
-  obtenerPaquetePorId,
   subirFotografiaPaquete,
-  subirFotografiaIncidencia,
+  construirEnlaceWhatsApp,
+  construirMensajeNotificacion,
   construirUrlEscaneo,
   construirUrlVerQr,
   buscarGrupoAbiertoDeUnidad,
@@ -21,27 +19,19 @@ import {
   marcarWhatsappGrupoEnviado,
   construirMensajeNotificacionGrupo,
   construirEnlaceWhatsAppGrupo,
-  TIPO_INCIDENCIA_LABEL,
-  NIVEL_DANIO_LABEL,
   type Catalogos,
   type UbicacionItem,
   type ResultadoRegistro,
   type GrupoEntrega,
-  type TipoIncidencia,
-  type NivelDanio,
 } from "@gateflow/paquetes";
 import type { UnidadConResidentes } from "@gateflow/types";
 import { Button, Input, PickupShareCard, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
 import { PhotoCapture } from "@/components/photo-capture";
-import { PhotoCaptureMultiple } from "@/components/photo-capture-multiple";
 import { useGuardSession } from "@/components/session-provider";
+import { obtenerCatalogosCacheados } from "@/components/catalogos-cache";
 
 type DecisionAgrupacion = "existente" | "separado";
-type EstadoPaquete = "bueno" | "incidencia";
-
-const TIPOS_INCIDENCIA_REGISTRO: TipoIncidencia[] = ["golpeado", "abierto", "roto", "mojado", "empaque_deteriorado", "contenido_incompleto", "otro"];
-const NIVELES: NivelDanio[] = ["leve", "moderado", "grave"];
 
 export default function RegisterPackagePage() {
   const session = useGuardSession();
@@ -65,18 +55,12 @@ export default function RegisterPackagePage() {
   const [notas, setNotas] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
 
-  // ── Estado del paquete / incidencia al recibir ───────────────────
-  const [estadoPaquete, setEstadoPaquete] = useState<EstadoPaquete>("bueno");
-  const [tipoIncidencia, setTipoIncidencia] = useState<TipoIncidencia | "">("");
-  const [descripcionIncidencia, setDescripcionIncidencia] = useState("");
-  const [nivelDanio, setNivelDanio] = useState<NivelDanio | "">("");
-  const [fotosIncidencia, setFotosIncidencia] = useState<File[]>([]);
-
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmacion, setConfirmacion] = useState<ResultadoRegistro | null>(null);
   const [masDetalles, setMasDetalles] = useState(false);
 
+  // ── Agrupación de paquetes por unidad ────────────────────────
   const [grupoAbierto, setGrupoAbierto] = useState<GrupoEntrega | null>(null);
   const [mostrarPromptAgrupacion, setMostrarPromptAgrupacion] = useState(false);
   const [decisionAgrupacion, setDecisionAgrupacion] = useState<DecisionAgrupacion | null>(null);
@@ -87,15 +71,8 @@ export default function RegisterPackagePage() {
   const [flujoTerminado, setFlujoTerminado] = useState(false);
   const [enviandoNotificacion, setEnviandoNotificacion] = useState(false);
 
-  // Se pone en true en cuanto CUALQUIER paquete de esta sesión de
-  // registro se guardó con incidencia — no se resetea al agregar otro
-  // paquete al mismo grupo, porque el aviso final debe reflejar si
-  // alguno de los paquetes del grupo tuvo un problema, no solo el
-  // último registrado.
-  const [sesionTieneIncidencia, setSesionTieneIncidencia] = useState(false);
-
   useEffect(() => {
-    obtenerCatalogos(supabase, session.tenant.id)
+    obtenerCatalogosCacheados(supabase, session.tenant.id)
       .then(setCatalogos)
       .catch((e) => setError(e.message ?? "No se pudieron cargar los catálogos del residencial."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,6 +99,8 @@ export default function RegisterPackagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, unidadSeleccionada]);
 
+  // Al elegir una unidad, revisar si ya tiene un grupo de entrega
+  // abierto — con datos reales, no solo suponiendo que puede haberlo.
   useEffect(() => {
     if (!unidadSeleccionada) {
       setGrupoAbierto(null);
@@ -146,11 +125,6 @@ export default function RegisterPackagePage() {
     setUbicacionId("");
     setNotas("");
     setFoto(null);
-    setEstadoPaquete("bueno");
-    setTipoIncidencia("");
-    setDescripcionIncidencia("");
-    setNivelDanio("");
-    setFotosIncidencia([]);
     setError(null);
     setConfirmacion(null);
     setGrupoAbierto(null);
@@ -161,9 +135,11 @@ export default function RegisterPackagePage() {
     setPaquetesEnSesion(0);
     setPasoPostGuardado(false);
     setFlujoTerminado(false);
-    setSesionTieneIncidencia(false);
   }
 
+  /** Limpia solo los campos del PAQUETE — conserva unidad, residente y
+   * la decisión de agrupación (BR §10: "conservar residente y
+   * domicilio seleccionados"). */
   function limpiarCamposPaquete() {
     setEmpresaId("");
     setRemitente("");
@@ -173,17 +149,14 @@ export default function RegisterPackagePage() {
     setUbicacionId("");
     setNotas("");
     setFoto(null);
-    setEstadoPaquete("bueno");
-    setTipoIncidencia("");
-    setDescripcionIncidencia("");
-    setNivelDanio("");
-    setFotosIncidencia([]);
     setError(null);
   }
 
   function handleClickConfirmar() {
-    if (!unidadSeleccionada || !ubicacionId) return;
-    if (estadoPaquete === "incidencia" && (!tipoIncidencia || !nivelDanio)) return;
+    if (!unidadSeleccionada || !ubicacionId) return; // BR-17: ubicación obligatoria
+    // Solo se pregunta la PRIMERA vez en esta sesión de registro — ya
+    // decidido, los siguientes paquetes de la misma unidad usan la
+    // misma decisión sin volver a interrumpir al guardia.
     if (grupoAbierto && !decisionAgrupacion) {
       setMostrarPromptAgrupacion(true);
       return;
@@ -193,100 +166,33 @@ export default function RegisterPackagePage() {
 
   async function registrarYAgrupar() {
     if (!unidadSeleccionada || !ubicacionId) return;
-    if (estadoPaquete === "incidencia" && (!tipoIncidencia || !nivelDanio)) return;
     setEnviando(true);
     setError(null);
     try {
-      let paqueteId: string;
-      let resultado: ResultadoRegistro;
-
-      if (estadoPaquete === "incidencia" && tipoIncidencia && nivelDanio) {
-        setSesionTieneIncidencia(true);
-
-        // ── Registro con incidencia: transacción atómica vía RPC ──
-        const { paqueteId: idCreado, incidenciaId } = await ejecutarConTimeout(() =>
-          registrarPaqueteConIncidencia(supabase, {
-            tenantId: session.tenant.id,
-            unidadId: unidadSeleccionada.id,
-            residenteId,
-            remitente: remitente || null,
-            empresaPaqueteriaId: empresaId || null,
-            numeroGuia: numeroGuia || null,
-            tamanoId: tamanoId || null,
-            prioridadId: prioridadId || null,
-            ubicacionId,
-            notas: notas || null,
-            recibidoPor: session.user.id,
-            tipoIncidencia,
-            descripcionIncidencia: descripcionIncidencia || null,
-            nivelDanio,
-          }),
-        );
-        paqueteId = idCreado;
-
-        for (const archivoEvidencia of fotosIncidencia) {
-          try {
-            await subirFotografiaIncidencia(supabase, {
-              tenantId: session.tenant.id,
-              incidenciaId,
-              archivo: archivoEvidencia,
-              tomadaPor: session.user.id,
-            });
-          } catch (fotoError) {
-            console.error("[GateFlow] No se pudo subir una fotografía de evidencia:", fotoError);
-          }
-        }
-
-        const paquete = await obtenerPaquetePorId(supabase, paqueteId);
-        if (!paquete) throw new Error("El paquete se creó pero no se pudo releer — revisar RLS de SELECT.");
-
-        let notificacion: ResultadoRegistro["notificacion"] = null;
-        const destinatarioNombre = paquete.residenteNombre ?? (residenteId ? null : unidadSeleccionada.contactoNombre);
-        if (destinatarioNombre) {
-          const { error: errorNotif } = await supabase.from("notificaciones").insert({
-            tenant_id: session.tenant.id,
-            paquete_id: paquete.id,
-            destinatario_user_id: residenteId ?? null,
-            destinatario_nombre: residenteId ? null : destinatarioNombre,
-            destinatario_telefono: residenteId ? null : (unidadSeleccionada.contactoTelefono ?? null),
-            canal: "whatsapp",
-            plantilla: "paquete_recibido",
-            contenido: `Hola ${destinatarioNombre}, tu paquete con código ${paquete.codigoGateflow} llegó a portería.`,
-            estado_envio: "pendiente",
-          });
-          if (!errorNotif) notificacion = { destinatario: destinatarioNombre, canal: "whatsapp" };
-        }
-
-        resultado = { paquete, notificacion };
-      } else {
-        // ── Registro normal, sin incidencia (flujo existente intacto) ──
-        resultado = await ejecutarConTimeout(() =>
-          registrarPaquete(supabase, {
-            tenantId: session.tenant.id,
-            unidadId: unidadSeleccionada.id,
-            residenteId,
-            remitente: remitente || null,
-            empresaPaqueteriaId: empresaId || null,
-            numeroGuia: numeroGuia || null,
-            tamanoId: tamanoId || null,
-            prioridadId: prioridadId || null,
-            ubicacionId,
-            notas: notas || null,
-            recibidoPor: session.user.id,
-            destinatarioNombre: residenteId ? null : unidadSeleccionada.contactoNombre,
-            destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
-          }),
-        );
-        paqueteId = resultado.paquete.id;
-      }
-
+      const resultado = await ejecutarConTimeout(() =>
+        registrarPaquete(supabase, {
+          tenantId: session.tenant.id,
+          unidadId: unidadSeleccionada.id,
+          residenteId,
+          remitente: remitente || null,
+          empresaPaqueteriaId: empresaId || null,
+          numeroGuia: numeroGuia || null,
+          tamanoId: tamanoId || null,
+          prioridadId: prioridadId || null,
+          ubicacionId,
+          notas: notas || null,
+          recibidoPor: session.user.id,
+          destinatarioNombre: residenteId ? null : unidadSeleccionada.contactoNombre,
+          destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
+        }),
+      );
       setConfirmacion(resultado);
 
       if (foto) {
         try {
           await subirFotografiaPaquete(supabase, {
             tenantId: session.tenant.id,
-            paqueteId,
+            paqueteId: resultado.paquete.id,
             tipo: "recepcion",
             archivo: foto,
             tomadaPor: session.user.id,
@@ -296,6 +202,7 @@ export default function RegisterPackagePage() {
         }
       }
 
+      // ── Ligar el paquete al grupo correspondiente ──────────────
       let idGrupo = grupoActivoId;
       if (!idGrupo) {
         const decision: DecisionAgrupacion = decisionAgrupacion ?? "existente";
@@ -305,7 +212,7 @@ export default function RegisterPackagePage() {
             : await obtenerOCrearGrupoEntrega(supabase, session.tenant.id, unidadSeleccionada.id, residenteId);
         setGrupoActivoId(idGrupo);
       }
-      await ligarPaqueteAGrupo(supabase, paqueteId, idGrupo);
+      await ligarPaqueteAGrupo(supabase, resultado.paquete.id, idGrupo);
       const grupoActualizado = await obtenerGrupoEntrega(supabase, idGrupo);
       setGrupoActivo(grupoActualizado);
 
@@ -345,7 +252,6 @@ export default function RegisterPackagePage() {
         nombreDestinatarioActual(),
         grupoActivo.codigoGrupo ?? grupoActivo.token,
         urlVerQr,
-        sesionTieneIncidencia,
       );
       const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje);
       if (enlace) window.open(enlace.url, "_blank");
@@ -365,6 +271,7 @@ export default function RegisterPackagePage() {
     setFlujoTerminado(true);
   }
 
+  // ── Pantalla final: confirmación con QR del GRUPO ──────────────
   if (grupoActivo && flujoTerminado) {
     const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
     const scanUrl = construirUrlEscaneo(grupoActivo.token, baseUrl);
@@ -376,7 +283,6 @@ export default function RegisterPackagePage() {
       nombreDestinatario,
       grupoActivo.codigoGrupo ?? grupoActivo.token,
       urlVerQr,
-      sesionTieneIncidencia,
     );
     const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje);
 
@@ -395,6 +301,7 @@ export default function RegisterPackagePage() {
               {grupoActivo.whatsappEnviado ? `Notificación enviada a ${nombreDestinatario}.` : "Sin notificación enviada."}
             </p>
           </div>
+
           <div className="animate-in fade-in zoom-in-95 duration-300">
             <PickupShareCard
               scanUrl={scanUrl}
@@ -403,6 +310,7 @@ export default function RegisterPackagePage() {
               whatsappUrl={enlaceWhatsApp?.url ?? null}
             />
           </div>
+
           <Button onClick={reiniciar} className="min-h-touch w-full max-w-xs text-base">
             <RotateCcw className="h-4 w-4" />
             Registrar otro paquete
@@ -412,6 +320,7 @@ export default function RegisterPackagePage() {
     );
   }
 
+  // ── Paso intermedio: 3 botones tras guardar cada paquete ────────
   if (pasoPostGuardado && grupoActivo) {
     return (
       <div className="flex h-full flex-col">
@@ -426,6 +335,7 @@ export default function RegisterPackagePage() {
             </h2>
             <p className="text-sm text-muted-foreground">Paquetes registrados en esta sesión: {paquetesEnSesion}</p>
           </div>
+
           <div className="flex w-full max-w-xs flex-col gap-2">
             <Button variant="outline" onClick={handleAgregarOtroPaquete} className="min-h-touch w-full text-base">
               Guardar y agregar otro paquete
@@ -443,8 +353,6 @@ export default function RegisterPackagePage() {
     );
   }
 
-  const puedeConfirmar = !!ubicacionId && !enviando && (estadoPaquete === "bueno" || (!!tipoIncidencia && !!nivelDanio));
-
   return (
     <div className="flex h-full flex-col">
       <OperationalHeader title="Registrar paquete" />
@@ -459,7 +367,9 @@ export default function RegisterPackagePage() {
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-14 pl-11 text-lg"
               />
-              {buscando && <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />}
+              {buscando && (
+                <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
             </div>
 
             {unidades.length > 0 && (
@@ -472,7 +382,9 @@ export default function RegisterPackagePage() {
                   >
                     <span className="font-medium">{u.identificador}</span>
                     <span className="text-sm text-muted-foreground">
-                      {u.residentes.length > 0 ? u.residentes[0]!.nombreCompleto : (u.contactoNombre ?? "Sin residente registrado")}
+                      {u.residentes.length > 0
+                        ? u.residentes[0]!.nombreCompleto
+                        : (u.contactoNombre ?? "Sin residente registrado")}
                     </span>
                   </button>
                 ))}
@@ -559,7 +471,8 @@ export default function RegisterPackagePage() {
                 ))}
                 {catalogos && catalogos.ubicaciones.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    No hay ubicaciones de bodega configuradas. Solicita al administrador crear al menos una en Configuración → Bodega.
+                    No hay ubicaciones de bodega configuradas. Solicita al administrador crear al menos una en
+                    Configuración → Bodega.
                   </p>
                 )}
               </div>
@@ -568,91 +481,6 @@ export default function RegisterPackagePage() {
             <div>
               <p className="mb-1.5 text-sm font-medium text-muted-foreground">Fotografía (opcional)</p>
               <PhotoCapture onChange={setFoto} />
-            </div>
-
-            {/* ── Estado del paquete ── */}
-            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-semibold">Estado del paquete</p>
-              <div className="flex flex-col gap-2">
-                <label className="flex min-h-touch items-center gap-2 rounded-lg border border-border px-3 py-2">
-                  <input
-                    type="radio"
-                    name="estado-paquete"
-                    checked={estadoPaquete === "bueno"}
-                    onChange={() => setEstadoPaquete("bueno")}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm">El paquete se encuentra en buen estado</span>
-                </label>
-                <label className="flex min-h-touch items-center gap-2 rounded-lg border border-border px-3 py-2">
-                  <input
-                    type="radio"
-                    name="estado-paquete"
-                    checked={estadoPaquete === "incidencia"}
-                    onChange={() => setEstadoPaquete("incidencia")}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm">El paquete presenta una incidencia</span>
-                </label>
-              </div>
-
-              {estadoPaquete === "incidencia" && (
-                <div className="animate-in fade-in slide-in-from-top-1 space-y-4 border-t border-border pt-4 duration-200">
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">
-                      Tipo de incidencia <span className="text-destructive">*</span>
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {TIPOS_INCIDENCIA_REGISTRO.map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => setTipoIncidencia(t)}
-                          className={`min-h-touch rounded-full border px-3 text-sm ${
-                            tipoIncidencia === t ? "border-destructive bg-destructive text-destructive-foreground" : "border-border bg-background"
-                          }`}
-                        >
-                          {TIPO_INCIDENCIA_LABEL[t]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">Descripción de la incidencia</p>
-                    <textarea
-                      rows={3}
-                      placeholder="Detalles adicionales…"
-                      value={descripcionIncidencia}
-                      onChange={(e) => setDescripcionIncidencia(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background p-3 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">
-                      Nivel de daño <span className="text-destructive">*</span>
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {NIVELES.map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => setNivelDanio(n)}
-                          className={`min-h-touch rounded-full border px-4 text-sm ${
-                            nivelDanio === n ? "border-warn bg-warn/20 text-warn-foreground" : "border-border bg-background"
-                          }`}
-                        >
-                          {NIVEL_DANIO_LABEL[n]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">Fotografías de evidencia</p>
-                    <PhotoCaptureMultiple onChange={setFotosIncidencia} />
-                  </div>
-                </div>
-              )}
             </div>
 
             <button
@@ -666,8 +494,18 @@ export default function RegisterPackagePage() {
 
             {masDetalles && (
               <div className="animate-in fade-in slide-in-from-top-1 space-y-4 duration-200">
-                <Input placeholder="Remitente (opcional, si es una persona)" value={remitente} onChange={(e) => setRemitente(e.target.value)} className="h-12" />
-                <Input placeholder="Número de guía (opcional)" value={numeroGuia} onChange={(e) => setNumeroGuia(e.target.value)} className="h-12" />
+                <Input
+                  placeholder="Remitente (opcional, si es una persona)"
+                  value={remitente}
+                  onChange={(e) => setRemitente(e.target.value)}
+                  className="h-12"
+                />
+                <Input
+                  placeholder="Número de guía (opcional)"
+                  value={numeroGuia}
+                  onChange={(e) => setNumeroGuia(e.target.value)}
+                  className="h-12"
+                />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="mb-1.5 text-sm font-medium text-muted-foreground">Tamaño</p>
@@ -708,6 +546,10 @@ export default function RegisterPackagePage() {
 
             {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
+            {/* Aviso de agrupación — solo aparece la primera vez que se
+                detecta un grupo abierto para esta unidad, antes de
+                registrar el paquete. BR §2: opción predeterminada es
+                agregar al grupo existente. */}
             {mostrarPromptAgrupacion && grupoAbierto && (
               <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
                 <p className="text-sm font-medium">
@@ -747,9 +589,8 @@ export default function RegisterPackagePage() {
 
       {unidadSeleccionada && !mostrarPromptAgrupacion && (
         <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background p-4">
-          <Button onClick={handleClickConfirmar} disabled={!puedeConfirmar} className="min-h-touch w-full text-base">
+          <Button onClick={handleClickConfirmar} disabled={!ubicacionId || enviando} className="min-h-touch w-full text-base">
             {enviando && <Loader2 className="h-5 w-5 animate-spin" />}
-            {!enviando && estadoPaquete === "incidencia" && <TriangleAlert className="h-5 w-5" />}
             {enviando ? "Registrando…" : "Confirmar recepción"}
           </Button>
         </div>
