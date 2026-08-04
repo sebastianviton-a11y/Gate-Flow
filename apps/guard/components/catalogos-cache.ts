@@ -1,5 +1,16 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { obtenerCatalogos, type Catalogos } from "@gateflow/paquetes";
+
+/**
+ * `SupabaseClient` no se importa directo de `@supabase/supabase-js`
+ * porque esa librería no es una dependencia directa de `apps/guard`
+ * (viaja como transitiva a través de `@gateflow/supabase`) — pnpm no
+ * permite importar paquetes que no están declarados como dependencia
+ * directa. Ningún archivo de guard hace esa importación; todos dejan
+ * que TypeScript infiera el tipo desde `createBrowserSupabaseClient()`,
+ * y este archivo sigue la misma convención con `ReturnType<...>`.
+ */
+type SupabaseClient = ReturnType<typeof createBrowserSupabaseClient>;
 
 /**
  * Caché en memoria de los catálogos del residencial (empresas de
