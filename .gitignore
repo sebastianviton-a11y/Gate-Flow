@@ -9,4 +9,5 @@ dist/
 .turbo/
 
 # gateflow brand (generado por scripts/sync-brand-assets.cjs, no editar a mano)
-public/brand/
+apps/*/public/brand/
+
