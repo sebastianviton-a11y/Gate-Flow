@@ -10,4 +10,3 @@ dist/
 
 # gateflow brand (generado por scripts/sync-brand-assets.cjs, no editar a mano)
 apps/*/public/brand/
-
