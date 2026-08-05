@@ -1,1 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+.env
+.env.local
+.DS_Store
+*.log
+.turbo/
+
+# gateflow brand (generado por scripts/sync-brand-assets.cjs, no editar a mano)
+public/brand/
 
