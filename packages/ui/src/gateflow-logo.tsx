@@ -12,16 +12,18 @@ interface GateFlowLogoProps {
   className?: string;
 }
 
-// Fuente única de verdad: los 5 SVG oficiales entregados por Sebastián
-// (gateflow-brand-assets.zip), servidos sin modificación desde
-// /public/brand/ en cada app (admin y guard). Este componente NO dibuja
-// el logo — solo selecciona qué archivo oficial mostrar y lo escala
-// proporcionalmente. Prohibido reintroducir SVG inline aquí.
+// Fuente única de verdad: los 6 SVG oficiales del paquete "A1 final"
+// entregado por Sebastián (gateflow-logo-final-a1.zip), servidos sin
+// modificación desde /public/brand/ en cada app (admin y guard). Este
+// componente NO dibuja el logo — solo selecciona qué archivo oficial
+// mostrar y lo escala proporcionalmente. Prohibido reintroducir SVG
+// inline aquí.
 const ASSET_BASE = "/brand";
 
-// Proporción real del lockup horizontal (viewBox 720x220 en los 3
-// archivos con wordmark). El isotipo solo es cuadrado (viewBox 200x200).
-const WORDMARK_ASPECT_RATIO = 720 / 220;
+// Proporción real del lockup horizontal (viewBox 760x220 en los 3
+// archivos con wordmark — paquete "A1 final"). El isotipo es cuadrado
+// (viewBox 220x220).
+const WORDMARK_ASPECT_RATIO = 760 / 220;
 
 export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, className }: GateFlowLogoProps) {
   const src = withWordmark
