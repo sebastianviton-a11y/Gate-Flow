@@ -31,13 +31,13 @@ export const metadata: Metadata = {
   title: "GateFlow",
   description: "Plataforma de operaciones de portería — GateFlow",
   manifest: "/manifest.json",
-  icons: {
+    icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/brand/icons/favicon.ico", sizes: "any" },
+      { url: "/brand/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/brand/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/brand/icons/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
