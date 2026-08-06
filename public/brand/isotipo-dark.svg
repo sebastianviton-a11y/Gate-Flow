@@ -1,28 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-labelledby="title desc">
-  <title id="title">Gate Flow isotipo</title>
-  <desc id="desc">Paquete isométrico con las iniciales G y F integradas.</desc>
-  <defs>
-    <linearGradient id="gfGradient" x1="20" y1="20" x2="200" y2="210" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#34D399"/>
-      <stop offset="0.55" stop-color="#10B981"/>
-      <stop offset="1" stop-color="#059669"/>
-    </linearGradient>
-  </defs>
-  <rect width="220" height="220" rx="34" fill="#0F172A"/>
-  <g transform="translate(10,10)">
-    
-  <g fill="none" stroke="url(#gfGradient)" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
-    <!-- Tapa del paquete con apertura frontal sutil -->
-    <path d="M30 70 L110 22 L190 70 L132 105"/>
-    <path d="M103 121 L30 78"/>
-    <!-- Aristas exteriores del paquete -->
-    <path d="M30 70 V150 L110 198 V112"/>
-    <path d="M190 70 V150 L110 198"/>
-    <!-- G integrada en la cara izquierda -->
-    <path d="M86 111 L49 133 V153 L85 175 V146 L67 135"/>
-    <!-- F integrada en la cara derecha -->
-    <path d="M134 111 L172 133"/>
-    <path d="M134 143 L164 160"/>
-  </g>
-  </g>
+<svg viewBox="92.280 33.280 361.440 424.440" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M273 49L110.812 142.449L159.797 154.159L273 87.41L387.141 154.159L284.016 193.272L301.359 203.811L260.109 229.34L152.766 167.041L110.812 157.438L108 350.191L260.109 442V312.249L176.438 260.489V306.628L227.531 337.778V383.682L137.531 329.112V193.272L260.109 266.344L269.016 254.4L277.219 246.203L324.797 219.035L327.375 224.187L381.75 191.867L438 162.356V148.304L273 49Z" fill="#10B981"/>
+<path d="M290.812 440.126L329.484 416.94L329.016 382.511L438 320.446V273.136L329.484 334.733V300.539L438 238.942V189.29L287.531 274.776V442L290.812 440.126Z" fill="#10B981"/>
 </svg>

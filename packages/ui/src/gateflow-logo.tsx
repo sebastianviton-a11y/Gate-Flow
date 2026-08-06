@@ -7,23 +7,27 @@ interface GateFlowLogoProps {
   /** Muestra el lockup completo (isotipo + wordmark "Gate Flow"). */
   withWordmark?: boolean;
   /** Variante para fondos oscuros (sidebar, login, superadmin) — usa
-   *  los archivos oficiales de fondo oscuro (wordmark en blanco). */
+   *  los archivos oficiales de fondo oscuro. */
   onDark?: boolean;
   className?: string;
 }
 
-// Fuente única de verdad: los 6 SVG oficiales del paquete "A1 final"
-// entregado por Sebastián (gateflow-logo-final-a1.zip), servidos sin
-// modificación desde /public/brand/ en cada app (admin y guard). Este
-// componente NO dibuja el logo — solo selecciona qué archivo oficial
-// mostrar y lo escala proporcionalmente. Prohibido reintroducir SVG
-// inline aquí.
+// Fuente única de verdad: los SVG oficiales entregados por Sebastián,
+// servidos sin modificación desde /public/brand/ en cada app (admin y
+// guard). Este componente NO dibuja el logo — solo selecciona qué
+// archivo oficial mostrar y lo escala proporcionalmente. Prohibido
+// reintroducir SVG inline aquí.
 const ASSET_BASE = "/brand";
 
-// Proporción real del lockup horizontal (viewBox 760x220 en los 3
-// archivos con wordmark — paquete "A1 final"). El isotipo es cuadrado
-// (viewBox 220x220).
-const WORDMARK_ASPECT_RATIO = 760 / 220;
+// Proporciones reales de los archivos oficiales. Los cinco comparten el
+// mismo alto de viewBox (424.44) y el mismo margen, así que el arte
+// ocupa idéntico porcentaje de la caja en todas las variantes.
+//
+// IMPORTANTE: el isotipo NO es cuadrado (es vertical, 361.44 x 424.44).
+// Por eso hay dos constantes y no una sola: usar la del lockup para el
+// isotipo lo dejaría con la caja mal dimensionada.
+const WORDMARK_ASPECT_RATIO = 1257.39 / 424.44; // ≈ 2.9625
+const ISOTIPO_ASPECT_RATIO = 361.44 / 424.44; //  ≈ 0.8516
 
 export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, className }: GateFlowLogoProps) {
   const src = withWordmark
@@ -35,7 +39,7 @@ export function GateFlowLogo({ size = 40, withWordmark = false, onDark = false, 
       : `${ASSET_BASE}/isotipo.svg`;
 
   const height = size;
-  const width = withWordmark ? Math.round(size * WORDMARK_ASPECT_RATIO) : size;
+  const width = Math.round(size * (withWordmark ? WORDMARK_ASPECT_RATIO : ISOTIPO_ASPECT_RATIO));
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
