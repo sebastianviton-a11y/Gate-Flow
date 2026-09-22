@@ -1,0 +1,25 @@
+## netlify.toml — sitio "gateflow-web" (landing comercial pública)
+##
+## PREPARADO, SIN CONECTAR: este archivo sigue el mismo patrón que
+## apps/admin/netlify.toml y apps/guard/netlify.toml (ver DEPLOY_STAGING.md
+## §3) pero el sitio Netlify correspondiente todavía NO ha sido creado ni
+## conectado a ningún dominio. Nada de este archivo dispara un deploy por
+## sí solo — requiere que alguien cree el sitio en Netlify (Package
+## directory: apps/web, Base directory: vacío) y lo conecte a este repo.
+##
+## Todas las rutas de este archivo son relativas a la RAÍZ del repo,
+## no a esta carpeta, porque "Base directory" queda sin definir.
+
+[build]
+  command = "pnpm install && pnpm --filter @gateflow/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Esta app no usa Supabase ni autenticación — no requiere variables de
+# entorno de backend. Si en el futuro se agrega analítica o un formulario
+# de contacto, sus variables se configuran en la UI de Netlify, nunca aquí.

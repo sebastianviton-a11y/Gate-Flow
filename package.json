@@ -7,12 +7,15 @@
     "dev": "concurrently -n admin,guard -c blue,magenta \"pnpm dev:admin\" \"pnpm dev:guard\"",
     "dev:admin": "pnpm --filter @gateflow/admin dev",
     "dev:guard": "pnpm --filter @gateflow/guard dev",
+    "dev:web": "pnpm --filter @gateflow/web dev",
     "build": "pnpm build:admin && pnpm build:guard",
     "build:admin": "pnpm --filter @gateflow/admin build",
     "build:guard": "pnpm --filter @gateflow/guard build",
+    "build:web": "pnpm --filter @gateflow/web build",
     "lint": "pnpm lint:admin && pnpm lint:guard",
     "lint:admin": "pnpm --filter @gateflow/admin lint",
     "lint:guard": "pnpm --filter @gateflow/guard lint",
+    "lint:web": "pnpm --filter @gateflow/web lint",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

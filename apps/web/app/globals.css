@@ -1,0 +1,476 @@
+/* Motion system portado 1:1 desde Landing.dc.html / Mobile-1.dc.html /
+   Mobile-2.dc.html / Motion.dc.html del canvas "Gate Flow — Landing"
+   aprobado en Claude Design. No reinterpretar valores. */
+
+body {
+  margin: 0;
+  font-family: "Manrope", system-ui, sans-serif;
+  background: #ffffff;
+  color: #0d1b2a;
+}
+a {
+  color: #0d1b2a;
+}
+a:hover {
+  color: #00755c;
+}
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --gf-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes gf-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gf-rise-lg {
+  from {
+    opacity: 0;
+    transform: translateY(96px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gf-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes gf-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes gf-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gf-wipe {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes gf-dim {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gf-toteal {
+  from {
+    color: #ffffff;
+  }
+  to {
+    color: #00c49a;
+  }
+}
+@keyframes gf-untint {
+  from {
+    box-shadow: inset 0 0 0 400px #ffffff;
+  }
+  to {
+    box-shadow: inset 0 0 0 400px rgba(255, 255, 255, 0);
+  }
+}
+@keyframes gf-flash {
+  from {
+    box-shadow: inset 0 0 0 400px #a6ecd8;
+  }
+  to {
+    box-shadow: inset 0 0 0 400px rgba(166, 236, 216, 0);
+  }
+}
+@keyframes gf-drift {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 40px;
+  }
+}
+@keyframes gf-menu {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ===== DESKTOP (durations del Landing.dc.html) ===== */
+.gf-desktop .h-up {
+  animation: gf-up 420ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .h-rise {
+  animation: gf-rise 640ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .h-wipe {
+  animation: gf-wipe 420ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .h-fill {
+  transform-origin: left center;
+  animation: gf-fill 240ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .h-dim {
+  animation: gf-dim 240ms ease-out var(--d, 0ms) both;
+}
+.gf-desktop .h-teal {
+  animation: gf-toteal 240ms ease-out var(--d, 0ms) both;
+}
+.gf-desktop .h-drift {
+  animation-name: gf-rise;
+  animation-duration: 640ms;
+  animation-timing-function: var(--gf-ease);
+  animation-delay: var(--d, 0ms);
+  animation-fill-mode: both;
+}
+@supports (animation-timeline: scroll()) {
+  .gf-desktop .h-drift {
+    animation:
+      gf-rise 640ms var(--gf-ease) var(--d, 0ms) both,
+      gf-drift linear both;
+    animation-timeline: auto, scroll(root);
+    animation-range: normal, 0px 700px;
+  }
+}
+.gf-desktop .gf-armed .s-up,
+.gf-desktop .gf-armed .s-rise,
+.gf-desktop .gf-armed .s-rise-lg,
+.gf-desktop .gf-armed .s-pop,
+.gf-desktop .gf-armed .s-flash {
+  opacity: 0;
+}
+.gf-desktop .gf-armed .s-fill {
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.gf-desktop .gf-armed .s-grow {
+  transform: scaleY(0);
+  transform-origin: center top;
+}
+.gf-desktop .gf-armed .s-wipe {
+  clip-path: inset(0 0 100% 0);
+}
+.gf-desktop .gf-armed .s-dim {
+  opacity: 0.3;
+}
+.gf-desktop .gf-armed .s-untint {
+  box-shadow: inset 0 0 0 400px #ffffff;
+}
+.gf-desktop .gf-in .s-up {
+  animation: gf-up 420ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-rise {
+  animation: gf-rise 600ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-rise-lg {
+  animation: gf-rise-lg 700ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-pop {
+  animation: gf-pop 220ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-fill {
+  animation: gf-fill var(--t, 240ms) var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-grow {
+  animation: gf-grow 300ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-wipe {
+  animation: gf-wipe 420ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-dim {
+  animation: gf-dim 240ms ease-out var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-untint {
+  animation: gf-untint 400ms ease-out var(--d, 0ms) both;
+}
+.gf-desktop .gf-in .s-flash {
+  animation:
+    gf-up 360ms var(--gf-ease) var(--d, 0ms) both,
+    gf-flash 1200ms ease-out var(--d, 0ms) both;
+}
+
+/* ===== MOBILE (durations ~20% más cortas, Mobile-1/2.dc.html) ===== */
+.gf-mobile .h-up {
+  animation: gf-up 340ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .h-rise {
+  animation: gf-rise 520ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-armed .s-up,
+.gf-mobile .gf-armed .s-rise,
+.gf-mobile .gf-armed .s-rise-lg,
+.gf-mobile .gf-armed .s-pop,
+.gf-mobile .gf-armed .s-flash {
+  opacity: 0;
+}
+.gf-mobile .gf-armed .s-fill {
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.gf-mobile .gf-armed .s-grow {
+  transform: scaleY(0);
+  transform-origin: center top;
+}
+.gf-mobile .gf-armed .s-wipe {
+  clip-path: inset(0 0 100% 0);
+}
+.gf-mobile .gf-armed .s-dim {
+  opacity: 0.3;
+}
+.gf-mobile .gf-armed .s-teal {
+  color: #ffffff;
+}
+.gf-mobile .gf-armed .s-untint {
+  box-shadow: inset 0 0 0 400px #ffffff;
+}
+.gf-mobile .gf-in .s-up {
+  animation: gf-up 340ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-rise {
+  animation: gf-rise 480ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-rise-lg {
+  animation: gf-rise-lg 560ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-pop {
+  animation: gf-pop 200ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-fill {
+  animation: gf-fill var(--t, 200ms) var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-grow {
+  animation: gf-grow var(--t, 240ms) var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-wipe {
+  animation: gf-wipe 340ms var(--gf-ease) var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-dim {
+  animation: gf-dim 200ms ease-out var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-teal {
+  animation: gf-toteal 200ms ease-out var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-untint {
+  animation: gf-untint 340ms ease-out var(--d, 0ms) both;
+}
+.gf-mobile .gf-in .s-flash {
+  animation:
+    gf-up 300ms var(--gf-ease) var(--d, 0ms) both,
+    gf-flash 1000ms ease-out var(--d, 0ms) both;
+}
+.gf-mobile .gf-menu {
+  animation: gf-menu 180ms var(--gf-ease) both;
+}
+
+/* ===== Microinteracciones (comunes, ver Motion.dc.html) ===== */
+.gf-btn {
+  transition:
+    transform 160ms var(--gf-ease),
+    filter 160ms ease,
+    box-shadow 160ms ease;
+}
+.gf-desktop .gf-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 8px 18px -10px rgba(0, 196, 154, 0.8);
+}
+.gf-desktop .gf-btn:active {
+  transform: translateY(0);
+  filter: brightness(0.97);
+  box-shadow: none;
+}
+.gf-mobile .gf-btn {
+  transition:
+    transform 120ms var(--gf-ease),
+    filter 120ms ease;
+}
+.gf-mobile .gf-btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+@media (hover: hover) {
+  .gf-mobile .gf-btn:hover {
+    filter: brightness(1.05);
+  }
+}
+.gf-play {
+  transition: transform 160ms var(--gf-ease);
+}
+.gf-play:hover {
+  transform: scale(1.04);
+}
+.gf-link {
+  transition: border-color 160ms ease;
+}
+.gf-desktop .gf-link:hover {
+  border-bottom-color: currentColor !important;
+}
+.gf-mobile .gf-link:active {
+  opacity: 0.7;
+}
+.gf-arr {
+  display: inline-block;
+  margin-left: 8px;
+  transition: transform 160ms var(--gf-ease);
+}
+.gf-desktop .gf-link:hover .gf-arr {
+  transform: translateX(3px);
+}
+.gf-nav a {
+  transition: color 150ms ease;
+}
+.gf-foot a {
+  transition: color 150ms ease;
+}
+.gf-desktop .gf-foot a:hover {
+  color: #ffffff !important;
+}
+.gf-tile {
+  transition:
+    background-color 150ms ease,
+    transform 150ms var(--gf-ease);
+}
+.gf-desktop .gf-tile:hover {
+  background-color: #e8edf1 !important;
+  transform: translateY(-1px);
+}
+.gf-tap {
+  transition: background-color 120ms ease;
+}
+.gf-mobile .gf-tap:active {
+  background-color: rgba(13, 27, 42, 0.06);
+}
+.gf-q {
+  transition: color 150ms ease;
+}
+.gf-desktop .gf-q:hover {
+  color: #00755c;
+}
+.gf-ico {
+  display: inline-block;
+  transition: transform 200ms var(--gf-ease);
+}
+.is-open .gf-ico {
+  transform: rotate(45deg);
+}
+.gf-ans {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 240ms var(--gf-ease),
+    opacity 200ms ease;
+}
+.gf-mobile .gf-ans {
+  transition:
+    grid-template-rows 220ms var(--gf-ease),
+    opacity 180ms ease;
+}
+.is-open .gf-ans {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid #00c49a;
+  outline-offset: 3px;
+}
+
+/* ===== Kill-switch: preferencia del sistema o tweak explícito ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .gf-armed .s-up,
+  .gf-armed .s-rise,
+  .gf-armed .s-rise-lg,
+  .gf-armed .s-pop,
+  .gf-armed .s-flash,
+  .gf-armed .s-dim {
+    opacity: 1 !important;
+  }
+  .gf-armed .s-fill,
+  .gf-armed .s-grow {
+    transform: none !important;
+  }
+  .gf-armed .s-wipe {
+    clip-path: none !important;
+  }
+  .gf-armed .s-untint {
+    box-shadow: none !important;
+  }
+}
+.gf-still * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ===== Corte único entre el árbol desktop y el árbol mobile ===== */
+.gf-mobile {
+  display: block;
+}
+.gf-desktop {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .gf-mobile {
+    display: none;
+  }
+  .gf-desktop {
+    display: block;
+  }
+}
+
+.gf-pending-note {
+  border: 1px dashed #ff8a00;
+  border-radius: 4px;
+  color: #8a4300;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  display: inline-block;
+}
