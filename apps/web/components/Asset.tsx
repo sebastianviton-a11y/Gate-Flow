@@ -19,6 +19,12 @@ type AssetImageProps = {
 
 export function AssetImage({ src, alt, width, height, style, className }: AssetImageProps) {
   return (
+    // width/height quedan como atributos HTML (dan la relación de aspecto
+    // real vía UA stylesheet e info a AVIF/priorización); el tamaño
+    // RENDERIZADO es siempre fluido (100% del contenedor, alto automático
+    // según esa relación) salvo que `style` lo sobreescriba explícitamente
+    // — así cada imagen se adapta al ancho real de su contenedor en
+    // cualquier viewport sin tocar este componente.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
@@ -26,7 +32,7 @@ export function AssetImage({ src, alt, width, height, style, className }: AssetI
       width={width}
       height={height}
       className={className}
-      style={{ display: "block", objectFit: "cover", background: "#E8EDF1", ...style }}
+      style={{ display: "block", width: "100%", height: "auto", objectFit: "cover", background: "#E8EDF1", ...style }}
       data-pending-asset={src}
     />
   );
@@ -52,7 +58,7 @@ export function AssetVideo({ src, poster, ariaLabel, width, height, style }: Ass
       aria-label={ariaLabel}
       width={width}
       height={height}
-      style={{ display: "block", objectFit: "cover", background: "#0D1B2A", ...style }}
+      style={{ display: "block", width: "100%", height: "auto", objectFit: "cover", background: "#0D1B2A", ...style }}
       data-pending-asset={src}
     />
   );

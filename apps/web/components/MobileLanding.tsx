@@ -18,9 +18,16 @@ export default function MobileLanding() {
 
   return (
     <div ref={containerRef} className="gf-mobile">
-      <div style={{ position: "relative", width: 390, overflow: "hidden", display: "flex", flexDirection: "column", background: "#FFFFFF", color: "#0D1B2A", margin: "0 auto" }}>
-        {/* 00 HERO */}
-        <section id="inicio" style={{ position: "relative", flexShrink: 0, width: 390, height: 1090, overflow: "hidden", background: "#FFFFFF" }}>
+      <div style={{ position: "relative", width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", background: "#FFFFFF", color: "#0D1B2A" }}>
+        {/* 00 HERO — mini-lienzo de diseño fijo (390×1090) escalado con el
+           ancho disponible; tope de 640px para que en tablet no se agrande
+           de forma desproporcionada (ver globals.css .gf-scale). */}
+        <section
+          id="m-inicio"
+          className="gf-scale"
+          style={{ ["--gf-w" as string]: 390, flexShrink: 0, maxWidth: 640, aspectRatio: "390 / 1090", margin: "0 auto" }}
+        >
+        <div className="gf-scale-inner" style={{ position: "relative", width: 390, height: 1090, overflow: "hidden", background: "#FFFFFF" }}>
           <header
             style={{
               position: "absolute",
@@ -43,7 +50,7 @@ export default function MobileLanding() {
               <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em" }}>Gate Flow</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <a href="#precios" className="gf-btn" style={navCta}>Probar gratis</a>
+              <a href="#m-precios" className="gf-btn" style={navCta}>Probar gratis</a>
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
@@ -66,9 +73,9 @@ export default function MobileLanding() {
 
           {menuOpen && (
             <div className="gf-menu" style={{ position: "absolute", left: 0, top: 64, width: 390, padding: "6px 20px 20px", background: "#FFFFFF", borderBottom: "1px solid #DDE3E8", boxShadow: "0 24px 32px -24px rgba(13,27,42,0.35)", zIndex: 9, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
-              <MenuLink onClick={() => setMenuOpen(false)} href="#como" n="02" label="Cómo funciona" />
-              <MenuLink onClick={() => setMenuOpen(false)} href="#precios" n="06" label="Precios" />
-              <MenuLink onClick={() => setMenuOpen(false)} href="#faq" n="07" label="Preguntas" />
+              <MenuLink onClick={() => setMenuOpen(false)} href="#m-como" n="02" label="Cómo funciona" />
+              <MenuLink onClick={() => setMenuOpen(false)} href="#m-precios" n="06" label="Precios" />
+              <MenuLink onClick={() => setMenuOpen(false)} href="#m-faq" n="07" label="Preguntas" />
               <a href="#ingresar" onClick={() => setMenuOpen(false)} className="gf-tap" style={{ height: 56, display: "flex", alignItems: "center", textDecoration: "none", fontSize: 16, fontWeight: 600, color: "#3A4A5A" }}>Ingresar</a>
             </div>
           )}
@@ -86,10 +93,10 @@ export default function MobileLanding() {
               <p style={{ margin: "18px 0 0", fontSize: 16, lineHeight: 1.55, color: "#3A4A5A" }}>
                 Gate Flow simplifica la recepción y entrega de paquetes en residenciales, conectando a guardias, residentes y administración en un mismo flujo.
               </p>
-              <a href="#precios" className="gf-btn" style={{ marginTop: 24, height: 56, display: "flex", alignItems: "center", justifyContent: "center", background: "#00C49A", color: "#0D1B2A", fontWeight: 800, borderRadius: 10, textDecoration: "none", fontSize: 16 }}>
+              <a href="#m-precios" className="gf-btn" style={{ marginTop: 24, height: 56, display: "flex", alignItems: "center", justifyContent: "center", background: "#00C49A", color: "#0D1B2A", fontWeight: 800, borderRadius: 10, textDecoration: "none", fontSize: 16 }}>
                 Probar gratis 7 días
               </a>
-              <a href="#como" className="gf-link" style={{ marginTop: 6, height: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
+              <a href="#m-como" className="gf-link" style={{ marginTop: 6, height: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
                 <span style={{ borderBottom: "2px solid #00C49A", paddingBottom: 2 }}>Ver cómo funciona</span>
                 <span aria-hidden="true">→</span>
               </a>
@@ -127,14 +134,15 @@ export default function MobileLanding() {
               <MiniStep d1="620ms" d2="680ms" label="Se entrega" value="Con QR" teal tealDelay="780ms" />
             </div>
           </div>
+        </div>
         </section>
 
         {/* 01 PROBLEMA */}
-        <section id="problema" data-motion="problema" className={sectionClass("problema")} style={{ position: "relative", flexShrink: 0, width: 390, height: 700, overflow: "hidden", background: "#FFFFFF" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-problema" data-motion="problema" className={sectionClass("problema")} style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#FFFFFF" }}>
+          <div style={{ padding: "56px var(--gf-gap) 0", display: "flex", flexDirection: "column" }}>
             <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
               <MobileEyebrow>01 / EL PROBLEMA</MobileEyebrow>
-              <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em" }}>
+              <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em" }}>
                 Recibir un paquete es fácil. <span style={{ color: "#56677A" }}>Llevar el control de cientos, no tanto.</span>
               </h2>
             </div>
@@ -142,31 +150,34 @@ export default function MobileLanding() {
             <MobileProblemRow d="100ms" n="01" q="¿Llegó mi paquete?" right={<StatePill bg="#E8EDF1" fg="#0D1B2A" dot="#0D1B2A" label="Recibido" note="Fecha de recepción" />} />
             <MobileProblemRow d="180ms" n="02" q="¿Quién lo recibió?" right={<MonoPair a="RECIBIDO POR" b="Guardia" />} />
             <MobileProblemRow last d="260ms" n="03" q="¿Ya fue entregado y a quién?" right={<StatePill bg="#DDF7EF" fg="#00664F" dot="#00C49A" label="Entregado" note="¿Quién recibe? · Firma" boldNote />} />
-            <p style={{ margin: "24px 0 0", fontSize: 16, lineHeight: 1.55, color: "#3A4A5A" }}>
+            <p style={{ margin: "24px 0 0", fontSize: "var(--gf-m-body)", lineHeight: 1.55, color: "#3A4A5A", maxWidth: 640 }}>
               Gate Flow deja cada movimiento registrado para que guardias y administración tengan la misma información.
             </p>
           </div>
         </section>
 
         {/* 02 CÓMO FUNCIONA */}
-        <section id="como" data-motion="como" className={sectionClass("como")} style={{ position: "relative", flexShrink: 0, width: 390, height: 1230, overflow: "hidden", background: "#F4F6F8" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-como" data-motion="como" className={sectionClass("como")} style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#F4F6F8" }}>
+          <div style={{ padding: "56px var(--gf-gap) 64px", display: "flex", flexDirection: "column" }}>
             <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
               <MobileEyebrow>02 / CÓMO FUNCIONA</MobileEyebrow>
-              <h2 style={{ margin: 0, fontSize: 34, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em" }}>Del repartidor al residente, sin perder el rastro.</h2>
+              <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em", maxWidth: 640 }}>Del repartidor al residente, sin perder el rastro.</h2>
             </div>
-            <div style={{ marginTop: 32, display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)" }}>
+            <div style={{ marginTop: 32, maxWidth: 640, display: "grid", gridTemplateColumns: "28px minmax(0, 1fr)" }}>
               <MobileStage d="120ms" grow="200ms" growColor="#0D1B2A" dotColor="#0D1B2A" n="01" label="Recibido" labelD="160ms" />
               <MobileStage d="320ms" grow="400ms" growColor="#1E88E5" dotColor="#0D1B2A" n="02" label="Registrado" labelD="360ms" />
               <MobileStage d="520ms" grow="600ms" growColor="#00C49A" dotColor="#1E88E5" n="03" label="Notificado" labelD="560ms" />
               <MobileStage d="720ms" n="04" label="Entregado" labelD="760ms" dotColor="#00C49A" labelColor="#00755C" last />
             </div>
             <div className="s-up" style={{ ["--d" as string]: "200ms", marginTop: 28, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#55636F" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 350, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#55636F" }}>
                 <span><span style={{ color: "#0D1B2A", fontWeight: 600 }}>VIDEO</span> · 0:48</span>
                 <span>GATE FLOW EN USO</span>
               </div>
-              <div style={{ width: 350, height: 622, borderRadius: 16, overflow: "hidden", background: "#0D1B2A", boxShadow: "0 40px 70px -40px rgba(13,27,42,0.6)" }}>
+              {/* Video vertical real: no se agranda como el resto (un
+                 teléfono no debería verse gigante en tablet), tope 350px
+                 igual que en el diseño aprobado. */}
+              <div style={{ width: "100%", maxWidth: 350, aspectRatio: "350 / 622", borderRadius: 16, overflow: "hidden", background: "#0D1B2A", boxShadow: "0 40px 70px -40px rgba(13,27,42,0.6)" }}>
                 <AssetVideo src="/video/hero-vertical.mp4" poster="/video/hero-vertical-poster.jpg" ariaLabel="Video de Gate Flow en uso, 48 segundos" width={350} height={622} />
               </div>
             </div>
@@ -174,11 +185,11 @@ export default function MobileLanding() {
         </section>
 
         {/* 03 GUARDIA + ADMIN */}
-        <section id="producto" data-motion="producto" className={sectionClass("producto")} style={{ position: "relative", flexShrink: 0, width: 390, height: 1760, overflow: "hidden", background: "#0D1B2A", color: "#FFFFFF" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-producto" data-motion="producto" className={sectionClass("producto")} style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#0D1B2A", color: "#FFFFFF" }}>
+          <div style={{ padding: "56px var(--gf-gap) 64px", display: "flex", flexDirection: "column" }}>
             <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#8FA3B5" }}>03 / GUARDIA + ADMINISTRACIÓN</div>
-              <h2 style={{ margin: 0, fontSize: 34, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em" }}>
+              <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em", maxWidth: 640 }}>
                 Simple para quien recibe.
                 <br />
                 <span style={{ color: "#00C49A" }}>Claro para quien administra.</span>
@@ -186,16 +197,22 @@ export default function MobileLanding() {
             </div>
 
             <div style={{ marginTop: 32, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#8FA3B5" }}>GUARDIA · APP EN CASETA</div>
-            <div style={{ position: "relative", marginTop: 12, marginLeft: 10, width: 330, height: 640, overflow: "hidden", borderRadius: "44px 44px 0 0" }}>
+            {/* Mock del teléfono con su badge: mini-lienzo (330×640) que se
+               escala como unidad para que el recuadro verde no se desalinee
+               del recorte de la captura — tope 380px: un "teléfono" no debe
+               agrandarse más que eso aunque el resto de la sección crezca. */}
+            <div className="gf-scale" style={{ ["--gf-w" as string]: 330, marginTop: 12, marginLeft: 10, maxWidth: 380, aspectRatio: "330 / 640" }}>
+            <div className="gf-scale-inner" style={{ position: "relative", width: 330, height: 640, overflow: "hidden", borderRadius: "44px 44px 0 0" }}>
               <div style={{ width: 330, height: 660, padding: "10px 10px 0", background: "#16283B", border: "1px solid #2B3F55", borderBottom: 0, borderRadius: "44px 44px 0 0", boxSizing: "border-box" }}>
                 <div style={{ width: 308, height: 650, borderRadius: "36px 36px 0 0", overflow: "hidden", background: "#F4F6F8" }}>
-                  <AssetImage src="/img/guardia-porteria-mobile.png" alt="App real del guardia: Portería con Registrar paquete, Escanear QR, Entregar paquete, Buscar paquete y Paquetes pendientes" width={308} height={650} style={{ height: "auto" }} />
+                  <AssetImage src="/img/guardia-porteria-mobile.png" alt="App real del guardia: Portería con Registrar paquete, Escanear QR, Entregar paquete, Buscar paquete y Paquetes pendientes" width={308} height={650} />
                 </div>
               </div>
               <div className="s-pop" style={{ ["--d" as string]: "150ms", position: "absolute", left: 21, top: 561, width: 286, height: 74, border: "2px solid #00C49A", borderRadius: 10, boxShadow: "0 0 0 5px rgba(0,196,154,0.18)", boxSizing: "border-box" }} />
             </div>
+            </div>
 
-            <div style={{ position: "relative", height: 92 }}>
+            <div style={{ position: "relative", height: 92, maxWidth: 380 }}>
               <div className="s-grow" style={{ ["--d" as string]: "420ms", ["--t" as string]: "420ms", position: "absolute", left: 164, top: 0, width: 2, height: 92, background: "#00C49A" }} />
               <div className="s-up" style={{ ["--d" as string]: "620ms", position: "absolute", left: 180, top: 34, display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "#00C49A" }}>
                 <span>PAQUETES PENDIENTES</span>
@@ -204,40 +221,44 @@ export default function MobileLanding() {
             </div>
 
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#8FA3B5" }}>ADMINISTRACIÓN · PANEL WEB</div>
-            <div className="s-up" style={{ ["--d" as string]: "800ms", position: "relative", marginTop: 12, width: 350, height: 278, borderRadius: 12, overflow: "hidden", background: "#F4F6F8" }}>
-              <AssetImage src="/img/admin-dashboard-mobile-1.png" alt="Dashboard real: 15 paquetes requieren atención y 15 pendientes" width={350} height={278} style={{ height: "auto" }} />
+            {/* Dashboard con badge: mismo mecanismo, tope 560px (una captura
+               de panel sí puede crecer más que un mock de teléfono). */}
+            <div className="s-up gf-scale" style={{ ["--d" as string]: "800ms", ["--gf-w" as string]: 350, position: "relative", marginTop: 12, maxWidth: 560, aspectRatio: "350 / 278" }}>
+            <div className="gf-scale-inner" style={{ width: 350, height: 278, borderRadius: 12, overflow: "hidden", background: "#F4F6F8" }}>
+              <AssetImage src="/img/admin-dashboard-mobile-1.png" alt="Dashboard real: 15 paquetes requieren atención y 15 pendientes" width={350} height={278} />
               <div className="s-pop" style={{ ["--d" as string]: "1000ms", position: "absolute", left: 1, top: 162, width: 236, height: 112, border: "2px solid #00C49A", borderRadius: 10, boxShadow: "0 0 0 5px rgba(0,196,154,0.18)", boxSizing: "border-box" }} />
             </div>
-            <div className="s-up" style={{ ["--d" as string]: "900ms", marginTop: 12, width: 350, height: 300, borderRadius: 12, overflow: "hidden", background: "#FFFFFF" }}>
-              <AssetImage src="/img/admin-dashboard-mobile-2.png" alt="Dashboard real: actividad reciente con paquetes recibidos y entregados" width={350} height={300} style={{ height: "auto" }} />
+            </div>
+            <div className="s-up" style={{ ["--d" as string]: "900ms", marginTop: 12, width: "100%", maxWidth: 560, borderRadius: 12, overflow: "hidden", background: "#FFFFFF" }}>
+              <AssetImage src="/img/admin-dashboard-mobile-2.png" alt="Dashboard real: actividad reciente con paquetes recibidos y entregados" width={350} height={300} />
             </div>
           </div>
         </section>
 
         {/* Header estático de continuidad para el resto del scroll (Mobile-2) */}
-        <header style={{ position: "relative", flexShrink: 0, width: 390, height: 64, padding: "0 10px 0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderBottom: "1px solid #E3E8EC", boxShadow: "0 8px 20px -14px rgba(13,27,42,0.35)", zIndex: 10, boxSizing: "border-box" }}>
+        <header style={{ position: "relative", flexShrink: 0, width: "100%", height: 64, padding: "0 10px 0 var(--gf-gap)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderBottom: "1px solid #E3E8EC", boxShadow: "0 8px 20px -14px rgba(13,27,42,0.35)", zIndex: 10, boxSizing: "border-box" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Logo dark />
             <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em" }}>Gate Flow</span>
           </div>
-          <a href="#precios" className="gf-btn" style={navCta}>Probar gratis</a>
+          <a href="#m-precios" className="gf-btn" style={navCta}>Probar gratis</a>
         </header>
 
         {/* 04 TRAZABILIDAD */}
-        <section id="trazabilidad" style={{ position: "relative", flexShrink: 0, width: 390, height: 1580, overflow: "hidden", background: "#FFFFFF" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-trazabilidad" style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#FFFFFF" }}>
+          <div style={{ padding: "56px var(--gf-gap) 64px", display: "flex", flexDirection: "column" }}>
             <div data-motion="trzh" className={sectionClass("trzh")}>
               <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
                 <MobileEyebrow>04 / TRAZABILIDAD</MobileEyebrow>
-                <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em" }}>
+                <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em", maxWidth: 640 }}>
                   Cuando alguien pregunta qué pasó con un paquete, <span style={{ color: "#00755C" }}>la respuesta está ahí.</span>
                 </h2>
               </div>
             </div>
-            <div data-motion="trzu" className={sectionClass("trzu")} style={{ marginTop: 32 }}>
+            <div data-motion="trzu" className={sectionClass("trzu")} style={{ marginTop: 32, maxWidth: 480 }}>
               <div className="s-up" style={{ ["--d" as string]: "60ms", display: "flex", flexDirection: "column" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#0D1B2A", fontWeight: 600 }}>UNIDAD</div>
-                <div style={{ fontSize: 104, lineHeight: 0.86, fontWeight: 800, letterSpacing: "-0.065em", marginTop: 14, marginLeft: -4, whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: "var(--gf-m-record)", lineHeight: 0.86, fontWeight: 800, letterSpacing: "-0.065em", marginTop: 14, marginLeft: -4, whiteSpace: "nowrap" }}>
                   MZA 1
                   <br />
                   LTE 8
@@ -247,20 +268,20 @@ export default function MobileLanding() {
               </div>
             </div>
 
-            <div style={{ marginTop: 36, display: "flex", flexDirection: "column" }}>
+            <div style={{ marginTop: 36, maxWidth: 640, display: "flex", flexDirection: "column" }}>
               <div data-motion="t1" className={sectionClass("t1")} style={{ display: "grid", gridTemplateColumns: "32px minmax(0, 1fr)" }}>
                 <MobileTimelineDot bg="#0D1B2A" grow="260ms" />
                 <div style={{ paddingLeft: 8, paddingBottom: 36, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em" }}>Recibido</div>
+                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: "var(--gf-m-q)", fontWeight: 800, letterSpacing: "-0.03em" }}>Recibido</div>
                   <div className="s-up" style={{ ["--d" as string]: "100ms", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, color: "#55636F" }}>
                     Recibido en portería
                     <br />
                     Oscar Reyes · 16/8/2026, 5:28:39 p.m.
                   </div>
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, maxWidth: 340 }}>
                     <div className="s-wipe" style={{ ["--d" as string]: "160ms", display: "flex", gap: 10 }}>
-                      <AssetImage src="/img/trazabilidad-foto-mobile.jpg" alt="Fotografía real del paquete" width={150} height={151} style={{ borderRadius: 10 }} />
-                      <AssetImage src="/img/trazabilidad-qr-mobile.png" alt="QR real del paquete GF-2026-0000079" width={140} height={154} style={{ borderRadius: 10, border: "1px solid #E3E8EC" }} />
+                      <AssetImage src="/img/trazabilidad-foto-mobile.jpg" alt="Fotografía real del paquete" width={150} height={151} style={{ flex: "150 1 0%", width: "auto", borderRadius: 10 }} />
+                      <AssetImage src="/img/trazabilidad-qr-mobile.png" alt="QR real del paquete GF-2026-0000079" width={140} height={154} style={{ flex: "140 1 0%", width: "auto", borderRadius: 10, border: "1px solid #E3E8EC" }} />
                     </div>
                   </div>
                 </div>
@@ -269,9 +290,9 @@ export default function MobileLanding() {
               <div data-motion="t2" className={sectionClass("t2")} style={{ display: "grid", gridTemplateColumns: "32px minmax(0, 1fr)" }}>
                 <MobileTimelineDot bg="#1E88E5" grow="260ms" />
                 <div style={{ paddingLeft: 8, paddingBottom: 36, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", color: "#0D5BA8" }}>Notificado</div>
+                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: "var(--gf-m-q)", fontWeight: 800, letterSpacing: "-0.03em", color: "#0D5BA8" }}>Notificado</div>
                   <div className="s-up" style={{ ["--d" as string]: "100ms", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, color: "#55636F" }}>Desde la app del guardia</div>
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, maxWidth: 300 }}>
                     <div className="s-wipe" style={{ ["--d" as string]: "160ms" }}>
                       <AssetImage src="/img/trazabilidad-notificado-mobile.png" alt="App real del guardia: Guardar y enviar notificación" width={300} height={140} style={{ borderRadius: 10, border: "1px solid #E3E8EC" }} />
                     </div>
@@ -288,9 +309,9 @@ export default function MobileLanding() {
                   </span>
                 </div>
                 <div style={{ paddingLeft: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", color: "#00755C" }}>Entregado</div>
+                  <div className="s-up" style={{ ["--d" as string]: "60ms", fontSize: "var(--gf-m-q)", fontWeight: 800, letterSpacing: "-0.03em", color: "#00755C" }}>Entregado</div>
                   <div className="s-up" style={{ ["--d" as string]: "100ms", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, color: "#55636F" }}>Con firma y evidencia</div>
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, maxWidth: 250 }}>
                     <div className="s-wipe" style={{ ["--d" as string]: "160ms" }}>
                       <AssetImage src="/img/trazabilidad-entregado-mobile.png" alt="App real del guardia: firma de quien recibe y Entregar 1 paquete" width={250} height={230} style={{ borderRadius: 10, border: "1px solid #E3E8EC" }} />
                     </div>
@@ -302,11 +323,11 @@ export default function MobileLanding() {
         </section>
 
         {/* 05 SEGURIDAD */}
-        <section id="seguridad" data-motion="seguridad" className={sectionClass("seguridad")} style={{ position: "relative", flexShrink: 0, width: 390, height: 440, overflow: "hidden", background: "#F4F6F8" }}>
-          <div style={{ padding: "48px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-seguridad" data-motion="seguridad" className={sectionClass("seguridad")} style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#F4F6F8" }}>
+          <div style={{ padding: "48px var(--gf-gap) 56px", display: "flex", flexDirection: "column" }}>
             <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 12 }}>
               <MobileEyebrow>05 / SEGURIDAD</MobileEyebrow>
-              <h2 style={{ margin: 0, fontSize: 24, lineHeight: 1.12, fontWeight: 800, letterSpacing: "-0.03em" }}>La información de cada residencial permanece separada.</h2>
+              <h2 style={{ margin: 0, fontSize: "var(--gf-m-stat)", lineHeight: 1.12, fontWeight: 800, letterSpacing: "-0.03em", maxWidth: 560 }}>La información de cada residencial permanece separada.</h2>
             </div>
             <div style={{ marginTop: 22, display: "flex", flexDirection: "column" }}>
               <MobileSecurityCell borderTop="#0D1B2A">ACCESO SEGÚN ROL</MobileSecurityCell>
@@ -321,20 +342,20 @@ export default function MobileLanding() {
         </section>
 
         {/* 06 PRECIOS */}
-        <section id="precios" style={{ position: "relative", flexShrink: 0, width: 390, height: 1400, overflow: "hidden", background: "#FFFFFF" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-precios" style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#FFFFFF" }}>
+          <div style={{ padding: "56px var(--gf-gap) 0", display: "flex", flexDirection: "column" }}>
             <div data-motion="preh" className={sectionClass("preh")}>
-              <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14, maxWidth: 640 }}>
                 <MobileEyebrow>06 / PRECIOS</MobileEyebrow>
-                <h2 style={{ margin: 0, fontSize: 34, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em" }}>Todo Gate Flow incluido.</h2>
-                <p style={{ margin: 0, fontSize: 17, lineHeight: 1.45, color: "#3A4A5A" }}>Elige según el tamaño de tu residencial.</p>
+                <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.04em" }}>Todo Gate Flow incluido.</h2>
+                <p style={{ margin: 0, fontSize: "var(--gf-m-body)", lineHeight: 1.45, color: "#3A4A5A" }}>Elige según el tamaño de tu residencial.</p>
               </div>
             </div>
-            <div style={{ marginTop: 28, display: "flex", flexDirection: "column" }}>
+            <div style={{ marginTop: 28, maxWidth: 560, display: "flex", flexDirection: "column" }}>
               <MobilePricingBlock id="p1" sectionClass={sectionClass("p1")} n="50" price="29" features={["Todas las funciones", "Guardias ilimitados", "Administradores ilimitados", "Paquetes ilimitados", "Soporte"]} />
               <MobilePricingBlock id="p2" sectionClass={sectionClass("p2")} n="150" price="49" note="Exactamente las mismas funciones." />
               <div style={{ height: 2, background: "#0D1B2A" }} />
-              <div style={{ marginTop: 18, fontSize: 22, lineHeight: 1.2, fontWeight: 800, letterSpacing: "-0.02em" }}>
+              <div style={{ marginTop: 18, fontSize: "var(--gf-m-stat)", lineHeight: 1.2, fontWeight: 800, letterSpacing: "-0.02em" }}>
                 ¿Más de 150 viviendas? <span style={{ color: "#00755C" }}>Hablemos.</span>
               </div>
               <a href="#contacto" className="gf-link" style={{ marginTop: 6, height: 44, display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
@@ -346,21 +367,31 @@ export default function MobileLanding() {
         </section>
 
         {/* 07 FAQ */}
-        <section id="faq" data-motion="faq" className={sectionClass("faq")} style={{ position: "relative", flexShrink: 0, width: 390, height: 860, overflow: "hidden", background: "#F4F6F8" }}>
-          <div style={{ padding: "56px 20px 0", display: "flex", flexDirection: "column" }}>
+        <section id="m-faq" data-motion="faq" className={sectionClass("faq")} style={{ position: "relative", flexShrink: 0, width: "100%", overflow: "hidden", background: "#F4F6F8" }}>
+          <div style={{ padding: "56px var(--gf-gap) 64px", display: "flex", flexDirection: "column" }}>
             <div className="s-up" style={{ ["--d" as string]: "0ms", display: "flex", flexDirection: "column", gap: 14 }}>
               <MobileEyebrow>07 / PREGUNTAS</MobileEyebrow>
-              <h2 style={{ margin: 0, fontSize: 30, lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em" }}>Preguntas frecuentes</h2>
+              <h2 style={{ margin: 0, fontSize: "var(--gf-m-h2)", lineHeight: 1.06, fontWeight: 800, letterSpacing: "-0.035em" }}>Preguntas frecuentes</h2>
             </div>
-            <div style={{ marginTop: 22, height: 2, background: "#0D1B2A" }} />
-            {FAQ_ITEMS.map((item, i) => (
-              <MobileFaqRow key={item.question} item={item} isOpen={open === i} onToggle={() => toggle(i)} />
-            ))}
+            <div style={{ marginTop: 22, maxWidth: 680, height: 2, background: "#0D1B2A" }} />
+            <div style={{ maxWidth: 680 }}>
+              {FAQ_ITEMS.map((item, i) => (
+                <MobileFaqRow key={item.question} item={item} isOpen={open === i} onToggle={() => toggle(i)} />
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* CTA FINAL */}
-        <section id="probar" data-motion="probar" className={sectionClass("probar")} style={{ position: "relative", flexShrink: 0, width: 390, height: 690, overflow: "hidden", background: "#FFFFFF" }}>
+        {/* CTA FINAL — mismo mecanismo de mini-lienzo que el hero: el "7"
+           gigante se superpone al titular y a la franja navy exactamente
+           como en el diseño, a cualquier tamaño (tope 640px). */}
+        <section
+          id="m-probar"
+          data-motion="probar"
+          className={`${sectionClass("probar")} gf-scale`}
+          style={{ ["--gf-w" as string]: 390, flexShrink: 0, maxWidth: 640, aspectRatio: "390 / 690", margin: "0 auto" }}
+        >
+        <div className="gf-scale-inner" style={{ position: "relative", width: 390, height: 690, overflow: "hidden", background: "#FFFFFF" }}>
           <h2 className="s-up" style={{ ["--d" as string]: "0ms", position: "absolute", left: 20, top: 56, width: 350, margin: 0, fontSize: 40, lineHeight: 0.98, fontWeight: 800, letterSpacing: "-0.05em", zIndex: 2 }}>
             Una semana es suficiente para verlo funcionando.
           </h2>
@@ -379,10 +410,11 @@ export default function MobileLanding() {
               Comenzar prueba gratis
             </a>
           </div>
+        </div>
         </section>
 
         {/* FOOTER */}
-        <footer style={{ position: "relative", flexShrink: 0, width: 390, height: 190, padding: "28px 20px", background: "#0D1B2A", borderTop: "1px solid #22364B", color: "#FFFFFF", display: "flex", flexDirection: "column", gap: 16, boxSizing: "border-box" }}>
+        <footer style={{ position: "relative", flexShrink: 0, width: "100%", padding: "28px var(--gf-gap)", background: "#0D1B2A", borderTop: "1px solid #22364B", color: "#FFFFFF", display: "flex", flexDirection: "column", gap: 16, boxSizing: "border-box" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Logo />
             <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em" }}>Gate Flow</span>
@@ -439,7 +471,7 @@ function MobileProblemRow({ d, n, q, right, last }: { d: string; n: string; q: s
   return (
     <div className="s-up" style={{ ["--d" as string]: d, padding: "18px 0", borderBottom: last ? undefined : "1px solid #DDE3E8", display: "grid", gridTemplateColumns: "34px minmax(0, 1fr)", rowGap: 10 }}>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#55636F", paddingTop: 6 }}>{n}</div>
-      <div style={{ fontSize: 22, lineHeight: 1.2, fontWeight: 800, letterSpacing: "-0.025em" }}>{q}</div>
+      <div style={{ fontSize: "var(--gf-m-q)", lineHeight: 1.2, fontWeight: 800, letterSpacing: "-0.025em" }}>{q}</div>
       <div />
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{right}</div>
     </div>
@@ -476,7 +508,7 @@ function MobileStage({ d, grow, growColor, dotColor, n, label, labelD, labelColo
       </div>
       <div style={{ height: 64, display: "flex", alignItems: "baseline", gap: 12, paddingLeft: 8 }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#55636F" }}>{n}</span>
-        <span className="s-dim" style={{ ["--d" as string]: labelD, fontSize: 30, fontWeight: 800, letterSpacing: "-0.035em", color: labelColor }}>{label}</span>
+        <span className="s-dim" style={{ ["--d" as string]: labelD, fontSize: "var(--gf-m-q)", fontWeight: 800, letterSpacing: "-0.035em", color: labelColor }}>{label}</span>
       </div>
     </>
   );
@@ -524,11 +556,11 @@ function MobilePricingBlock({ sectionClass, n, price, features, note }: { id: st
     <div data-motion={n === "50" ? "p1" : "p2"} className={sectionClass} style={{ display: "flex", flexDirection: "column", paddingBottom: 36 }}>
       <div style={{ height: 2, background: "#0D1B2A" }} />
       <div style={{ marginTop: 18, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "#55636F" }}>HASTA</div>
-      <div className="s-rise" style={{ ["--d" as string]: "0ms", marginTop: 4, marginLeft: -6, fontSize: 156, lineHeight: 0.8, fontWeight: 800, letterSpacing: "-0.07em" }}>{n}</div>
+      <div className="s-rise" style={{ ["--d" as string]: "0ms", marginTop: 4, marginLeft: -6, fontSize: "var(--gf-m-price)", lineHeight: 0.8, fontWeight: 800, letterSpacing: "-0.07em" }}>{n}</div>
       <div style={{ marginTop: 10, fontSize: 20, fontWeight: 700 }}>viviendas</div>
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #DDE3E8", display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "#55636F" }}>USD</span>
-        <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>{price}</span>
+        <span style={{ fontSize: "var(--gf-m-pricefig)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>{price}</span>
         <span style={{ fontSize: 16, color: "#3A4A5A" }}>/ mes</span>
       </div>
       {features ? (
@@ -541,7 +573,7 @@ function MobilePricingBlock({ sectionClass, n, price, features, note }: { id: st
         <div style={{ marginTop: 16, fontSize: 20, lineHeight: 1.25, fontWeight: 800, letterSpacing: "-0.02em" }}>{note}</div>
       )}
       <div style={{ marginTop: 14, fontFamily: "var(--font-mono)", fontSize: 12, color: "#55636F" }}>7 días gratis · SIN TARJETA</div>
-      <a href="#precios" className="gf-btn" style={{ marginTop: 14, height: 52, display: "flex", alignItems: "center", justifyContent: "center", background: "#00C49A", color: "#0D1B2A", fontWeight: 800, borderRadius: 10, textDecoration: "none", fontSize: 16 }}>
+      <a href="#m-precios" className="gf-btn" style={{ marginTop: 14, height: 52, display: "flex", alignItems: "center", justifyContent: "center", background: "#00C49A", color: "#0D1B2A", fontWeight: 800, borderRadius: 10, textDecoration: "none", fontSize: 16 }}>
         Probar gratis
       </a>
     </div>

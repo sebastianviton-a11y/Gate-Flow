@@ -443,6 +443,13 @@ button:focus-visible {
   .gf-armed .s-untint {
     box-shadow: none !important;
   }
+  .gf-armed .s-teal {
+    color: #00c49a !important;
+  }
+  /* .gf-scale-inner NO se desactiva aquí: su transform:scale no es una
+     animación decorativa, es el mecanismo estructural que mantiene el
+     layout responsive sin overflow — debe seguir activo igual con
+     prefers-reduced-motion. */
 }
 .gf-still * {
   animation: none !important;
@@ -474,3 +481,59 @@ button:focus-visible {
   padding: 2px 8px;
   display: inline-block;
 }
+
+/* ===== Responsive fluido (320–1920+) =====
+   Los dos árboles (Desktop 1440, Mobile 390) siguen siendo las dos
+   únicas composiciones — no se crea una tercera. Cada uno se vuelve
+   fluido con dos técnicas combinadas:
+   1. ".gf-scale": para bloques con posicionamiento absoluto/superpuesto
+      (el hero, el mock del teléfono, capturas con badge) — se tratan
+      como un mini-lienzo de diseño fijo que se escala uniformemente
+      con el ancho disponible (CSS puro, container query units +
+      transform: scale + aspect-ratio, sin JS). Preserva composición y
+      proporciones EXACTAS a cualquier tamaño, con un max-width propio
+      por instancia para que no se agranden de forma absurda en tablet.
+   2. Para el resto (texto y contenido en flujo normal) se usa
+      tipografía fluida (clamp) y anchos porcentuales/flex reales. */
+
+.gf-scale {
+  container-type: inline-size;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+.gf-scale-inner {
+  transform-origin: top left;
+  transform: scale(calc(100cqw / (var(--gf-w) * 1px)));
+}
+
+/* Fallback sin soporte de container queries: se muestra a tamaño 1:1
+   (no fluido, pero funcional y sin overflow porque el propio elemento
+   ya es 100% de su contenedor y el contenido cabe a su ancho nativo
+   en las franjas donde ese árbol está activo). */
+@supports not (container-type: inline-size) {
+  .gf-scale-inner {
+    transform: none;
+    width: 100% !important;
+    max-width: calc(var(--gf-w) * 1px);
+  }
+}
+
+/* Tokens tipográficos fluidos del árbol mobile — anclados para que a
+   390px de viewport el valor mínimo coincida (o esté muy cerca) del
+   valor original del diseño aprobado, y crezcan moderadamente hasta
+   ~1023px sin llegar a verse "agrandados". */
+.gf-mobile {
+  --gf-gap: clamp(1.25rem, 0.7rem + 2.2vw, 3rem);
+  --gf-m-h1: clamp(2.4375rem, 1.55rem + 4vw, 3.375rem);
+  --gf-m-h1sub: clamp(1.375rem, 1rem + 1.6vw, 1.75rem);
+  --gf-m-h2: clamp(1.875rem, 1.3rem + 2.4vw, 2.5rem);
+  --gf-m-body: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+  --gf-m-q: clamp(1.375rem, 1.1rem + 1.1vw, 1.625rem);
+  --gf-m-stat: clamp(1.5rem, 1.15rem + 1.5vw, 1.875rem);
+  --gf-m-record: clamp(6.5rem, 4.6rem + 8.2vw, 8.5rem);
+  --gf-m-price: clamp(9.75rem, 7.3rem + 10.5vw, 11.75rem);
+  --gf-m-pricefig: clamp(2.5rem, 2.1rem + 1.8vw, 3rem);
+  --gf-m-cta7: clamp(17.5rem, 12rem + 24vw, 22rem);
+}
+

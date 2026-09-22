@@ -16,16 +16,20 @@ export default function DesktopLanding() {
   return (
     <div ref={containerRef} className="gf-desktop">
       <div
-        style={{
-          width: 1440,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          background: "#FFFFFF",
-          color: "#0D1B2A",
-          margin: "0 auto",
-        }}
+        className="gf-scale"
+        style={{ ["--gf-w" as string]: 1440, maxWidth: 1440, aspectRatio: "1440 / 8000", margin: "0 auto" }}
       >
+        <div
+          className="gf-scale-inner"
+          style={{
+            width: 1440,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            background: "#FFFFFF",
+            color: "#0D1B2A",
+          }}
+        >
         {/* 00 HERO */}
         <section
           id="inicio"
@@ -605,6 +609,7 @@ export default function DesktopLanding() {
             <a href="#terminos" style={{ textDecoration: "none", color: "#C9D4DE" }}>Términos</a>
           </div>
         </footer>
+        </div>
       </div>
     </div>
   );
