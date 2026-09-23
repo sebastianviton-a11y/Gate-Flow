@@ -1,0 +1,954 @@
+/* Gate Flow — Landing V2. Puerto 1:1 del bloque <style> de
+   reference/index.html (handoff V2 aprobado). Se importa SOLO desde los
+   componentes de apps/web/components/v2/ — Next.js la carga únicamente en
+   las rutas que los usan, así que no toca ni colisiona con el CSS de V1
+   (apps/web/app/globals.css), aunque varios nombres de clase coincidan
+   (gf-btn, gf-nav, gf-link, gf-q, gf-ans, gf-ico, gf-faq, gf-play, gf-arr,
+   gf-foot) — son dos hojas de estilo completamente separadas.
+   Se omiten deliberadamente los estilos de la barra de preview
+   (.pv-bar, #pv-rm, #pv-reload, etc.) — el propio handoff dice que no son
+   parte del diseño de producción. */
+
+:root {
+  --e: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.gfv2 a {
+  color: #0d1b2a;
+}
+.gfv2 a:hover {
+  color: #00755c;
+}
+.gfv2 {
+  background: #ffffff;
+  color: #0d1b2a;
+  font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ===== Corte único 960px: mismo mecanismo de escala que V1 (.gf-scale),
+   autorizado explícitamente por 03-layout-y-responsive.md como
+   equivalente al zoom que usa la preview. ===== */
+.gfv2-mobile {
+  display: block;
+}
+.gfv2-desktop {
+  display: none;
+}
+@media (min-width: 960px) {
+  .gfv2-mobile {
+    display: none;
+  }
+  .gfv2-desktop {
+    display: block;
+  }
+}
+.gfv2-mobile-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  background: #ffffff;
+}
+.gfv2-mobile-shell img {
+  max-width: 100%;
+}
+.gfv2-mobile-shell section {
+  scroll-margin-top: 64px;
+}
+
+.gfv2-scale {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+}
+.gfv2-scale-inner {
+  transform-origin: top left;
+  transform: scale(calc(100cqw / 1440px));
+}
+
+@keyframes v-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes v-card {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes v-row {
+  from {
+    opacity: 0.38;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes v-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes v-bar {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.gfv2 .a-up {
+  animation: v-up 480ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .a-card {
+  animation: v-card 620ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .a-row {
+  animation: v-row 260ms ease-out var(--d, 0ms) both;
+}
+.gfv2 .a-pop {
+  animation: v-pop 240ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .a-bar {
+  transform-origin: top center;
+  animation: v-bar 360ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .gf-btn {
+  transition:
+    transform 160ms var(--e),
+    filter 160ms ease,
+    box-shadow 160ms ease;
+}
+.gfv2 .gf-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 8px 18px -10px rgba(0, 196, 154, 0.7);
+}
+.gfv2 .gf-ghost {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.gfv2 .gf-ghost:hover {
+  border-color: #0d1b2a !important;
+}
+.gfv2 .gf-nav a {
+  transition: color 150ms ease;
+}
+.gfv2 .gf-step {
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.gfv2 .gf-step:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+.gfv2 .gf-step.is-active {
+  background: #ffffff;
+  border-color: #dde3e8;
+  box-shadow: 0 10px 24px -18px rgba(13, 27, 42, 0.45);
+}
+.gfv2 .gf-step .gf-dot {
+  background: #c9d2da;
+  transition: background-color 180ms ease;
+}
+.gfv2 .gf-step.is-active .gf-dot {
+  background: #00c49a;
+}
+.gfv2 .gf-chap {
+  background: rgba(255, 255, 255, 0.06);
+  color: #8fa3b5;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+.gfv2 .gf-chap.is-active {
+  background: #00c49a;
+  color: #0d1b2a;
+}
+.gfv2 a:focus-visible,
+.gfv2 button:focus-visible {
+  outline: 2px solid #00c49a;
+  outline-offset: 3px;
+}
+
+.gfv2 .m-up {
+  transition:
+    opacity 600ms var(--e) var(--d, 0ms),
+    transform 600ms var(--e) var(--d, 0ms);
+}
+.gfv2 .m-card {
+  transition:
+    opacity 780ms var(--e) var(--d, 0ms),
+    transform 780ms var(--e) var(--d, 0ms),
+    filter 280ms ease;
+}
+.gfv2 .m-ring {
+  transition:
+    opacity 450ms var(--e) var(--d, 0ms),
+    transform 450ms var(--e) var(--d, 0ms);
+}
+.gfv2 .m-pop {
+  transition:
+    opacity 300ms var(--e) var(--d, 0ms),
+    transform 300ms var(--e) var(--d, 0ms);
+}
+.gfv2 .m-bar {
+  transform-origin: top center;
+  transition: transform 450ms var(--e) var(--d, 0ms);
+}
+.gfv2 .gf-armed .m-up,
+.gfv2 .gf-armed .m-card,
+.gfv2 .gf-armed .m-ring,
+.gfv2 .gf-armed .m-pop {
+  opacity: 0;
+}
+.gfv2 .gf-armed .m-up {
+  transform: translateY(12px);
+}
+.gfv2 .gf-armed .m-card {
+  transform: translateY(18px) scale(0.985);
+}
+.gfv2 .gf-armed .m-ring {
+  transform: scale(1.06);
+}
+.gfv2 .gf-armed .m-pop {
+  transform: scale(0.4);
+}
+.gfv2 .gf-armed .m-bar {
+  transform: scaleY(0);
+}
+.gfv2 .gf-armed.gf-in .m-up,
+.gfv2 .gf-armed.gf-in .m-card,
+.gfv2 .gf-armed.gf-in .m-ring,
+.gfv2 .gf-armed.gf-in .m-pop {
+  opacity: 1;
+  transform: none;
+}
+.gfv2 .gf-armed.gf-in .m-bar {
+  transform: none;
+}
+.gfv2 .gf-frame.is-dim {
+  opacity: 0.4 !important;
+  filter: saturate(0.5);
+}
+.gfv2 .gf-seg {
+  background: transparent;
+  color: #3a4a5a;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.gfv2 .gf-seg.is-on {
+  background: #0d1b2a;
+  color: #ffffff;
+}
+.gfv2 .gf-ghost2 {
+  transition: border-color 160ms ease;
+}
+.gfv2 .gf-ghost2:hover {
+  border-color: #0d1b2a !important;
+}
+.gfv2 .gf-arr {
+  display: inline-block;
+  margin-left: 2px;
+  transition: transform 160ms var(--e);
+}
+.gfv2 .gf-ghost2:hover .gf-arr,
+.gfv2 .gf-link:hover .gf-arr {
+  transform: translateX(3px);
+}
+.gfv2 .gf-link {
+  transition: border-color 160ms ease;
+}
+.gfv2 .gf-link:hover {
+  border-bottom-color: currentColor !important;
+}
+.gfv2 .gf-foot a {
+  transition: color 150ms ease;
+}
+.gfv2 .gf-foot a:hover {
+  color: #ffffff !important;
+}
+.gfv2 .gf-q {
+  transition: color 150ms ease;
+}
+.gfv2 .gf-q:hover {
+  color: #00755c;
+}
+.gfv2 .gf-ico {
+  display: inline-block;
+  transition: transform 200ms var(--e);
+}
+.gfv2 .is-open .gf-ico {
+  transform: rotate(45deg);
+}
+.gfv2 .gf-ans {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 240ms var(--e),
+    opacity 200ms ease;
+}
+.gfv2 .is-open .gf-ans {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* ===== HERO — secuencia del sistema (una vez al cargar; "Ver de nuevo"
+   alterna run-a/run-b para reiniciarla con el mismo truco que la
+   referencia: dos animaciones idénticas con nombre distinto). ===== */
+@keyframes h-up-a {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-up-b {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-up {
+  animation: h-up-a 600ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-up {
+  animation-name: h-up-b;
+}
+@keyframes h-card-a {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-card-b {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-card {
+  animation: h-card-a 780ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-card {
+  animation-name: h-card-b;
+}
+@keyframes h-rise-a {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-rise-b {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-rise {
+  animation: h-rise-a 880ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-rise {
+  animation-name: h-rise-b;
+}
+@keyframes h-pop-a {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-pop-b {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-pop {
+  animation: h-pop-a 300ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-pop {
+  animation-name: h-pop-b;
+}
+@keyframes h-row-a {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes h-row-b {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.gfv2 .h-row {
+  animation: h-row-a 320ms ease-out var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-row {
+  animation-name: h-row-b;
+}
+@keyframes h-bar-a {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes h-bar-b {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.gfv2 .h-bar {
+  transform-origin: top center;
+  animation: h-bar-a 450ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-bar {
+  animation-name: h-bar-b;
+}
+@keyframes h-toast-a {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-toast-b {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-toast {
+  animation: h-toast-a 480ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-toast {
+  animation-name: h-toast-b;
+}
+@keyframes h-ring-a {
+  0% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-ring-b {
+  0% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-ring {
+  animation: h-ring-a 700ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-ring {
+  animation-name: h-ring-b;
+}
+@keyframes h-out-a {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes h-out-b {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+.gfv2 .h-out {
+  animation: h-out-a 250ms ease var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-out {
+  animation-name: h-out-b;
+}
+@keyframes h-in-a {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes h-in-b {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .h-in {
+  animation: h-in-a 350ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-in {
+  animation-name: h-in-b;
+}
+@keyframes h-glow-a {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes h-glow-b {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.gfv2 .h-glow {
+  animation: h-glow-a 1500ms ease var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-glow {
+  animation-name: h-glow-b;
+}
+
+/* ===== CÓMO FUNCIONA — pasos + demo sincronizada ===== */
+.gfv2 .gf-rail {
+  transform-origin: top center;
+  transition: transform 650ms var(--e);
+}
+.gfv2 .gf-fr {
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity 400ms ease,
+    transform 580ms var(--e);
+}
+.gfv2 .gf-fr.is-active {
+  opacity: 1;
+  transform: none;
+}
+.gfv2 .gf-chx {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 280ms ease,
+    transform 400ms var(--e);
+  pointer-events: none;
+}
+.gfv2 .gf-chx.is-active {
+  opacity: 1;
+  transform: none;
+}
+.gfv2 .gf-prog {
+  transition: transform 750ms var(--e);
+}
+.gfv2 .gf-tick {
+  background: #dde3e8;
+  box-shadow: 0 0 0 3px #ffffff;
+  transition:
+    background-color 200ms ease,
+    transform 200ms var(--e);
+}
+.gfv2 .gf-tick.is-done {
+  background: #00c49a;
+}
+.gfv2 .gf-play {
+  transition:
+    border-color 160ms ease,
+    transform 120ms ease;
+}
+.gfv2 .gf-play .gf-play-i {
+  transition: transform 180ms var(--e);
+}
+.gfv2 .gf-play:hover {
+  border-color: #0d1b2a;
+}
+.gfv2 .gf-play:hover .gf-play-i {
+  transform: scale(1.08);
+}
+.gfv2 .gf-play:active {
+  transform: scale(0.98);
+}
+.gfv2 .gf-step .gf-dot {
+  transition:
+    background-color 180ms ease,
+    box-shadow 220ms ease;
+}
+.gfv2 .gf-step.is-active .gf-dot {
+  box-shadow: 0 0 0 4px rgba(0, 196, 154, 0.2);
+}
+.gfv2 .gf-step:active {
+  transform: scale(0.99);
+}
+
+/* ===== GUARDIA + ADMIN — tap en portería → aviso que viaja al panel ===== */
+.gfv2 .g-tap,
+.gfv2 .g-fly {
+  opacity: 0;
+}
+.gfv2 section:not(.gf-armed) .g-fly {
+  opacity: 1;
+}
+.gfv2 .gf-armed.gf-in .g-tap {
+  animation: g-tap 1120ms ease var(--d, 0ms) both;
+}
+.gfv2 .gf-armed.gf-in .g-fly {
+  animation: g-fly 1020ms var(--e) var(--d, 0ms) both;
+}
+@keyframes g-tap {
+  0% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes g-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-760px, 80px) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ===== Microinteracciones ===== */
+.gfv2 .gf-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 80ms;
+}
+.gfv2 .gf-ghost:active,
+.gfv2 .gf-ghost2:active {
+  transform: scale(0.98);
+}
+.gfv2 .gf-nl {
+  background: linear-gradient(#00c49a, #00c49a) no-repeat 0 100% / 0 2px;
+  padding-bottom: 3px;
+  transition:
+    background-size 220ms var(--e),
+    color 150ms ease;
+}
+.gfv2 .gf-nl:hover {
+  background-size: 100% 2px;
+  color: #0d1b2a !important;
+}
+.gfv2 .gf-seg:active {
+  transform: scale(0.97);
+}
+.gfv2 .gf-col {
+  transition: background-color 180ms ease;
+}
+.gfv2 .gf-col:hover {
+  background: #fbfcfd;
+}
+.gfv2 .gf-faq {
+  transition: background-color 160ms ease;
+}
+.gfv2 .gf-replay {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+.gfv2 .gf-replay:hover {
+  color: #0d1b2a;
+  background: #f1f4f7;
+}
+.gfv2 .gf-replay-i {
+  transition: transform 360ms var(--e);
+}
+.gfv2 .gf-replay:hover .gf-replay-i {
+  transform: rotate(-200deg);
+}
+
+/* ===== MOBILE ===== */
+.gfv2 .gf-menu {
+  display: none;
+}
+.gfv2 .gf-menu.is-open {
+  display: block;
+  animation: menu-in 180ms var(--e) both;
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.gfv2 .gf-mi {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  border-bottom: 1px solid #eef1f4;
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #0d1b2a;
+}
+.gfv2 .gf-mi:active {
+  background: #f6f8fa;
+}
+.gfv2 .gf-menu-b .i-x {
+  display: none;
+}
+.gfv2 .gf-menu-b.is-open .i-x {
+  display: block;
+}
+.gfv2 .gf-menu-b.is-open .i-m {
+  display: none;
+}
+.gfv2 .gf-menu-b:active {
+  transform: scale(0.96);
+}
+.gfv2 .gf-tabind {
+  transition: transform 400ms var(--e);
+}
+.gfv2 .gf-tab {
+  color: #3a4a5a;
+  transition: color 200ms ease;
+}
+.gfv2 .gf-tab.is-on {
+  color: #ffffff;
+}
+.gfv2 .gf-tab:active {
+  transform: scale(0.97);
+}
+.gfv2 .gv,
+.gfv2 .gv-cap {
+  opacity: 0;
+  transform: translateX(14px);
+  transition:
+    opacity 350ms ease,
+    transform 480ms var(--e);
+  pointer-events: none;
+}
+.gfv2 .gv.is-on,
+.gfv2 .gv-cap.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.gfv2 .ga-ring {
+  opacity: 0;
+  transform: scale(1.06);
+  transition:
+    opacity 400ms ease 480ms,
+    transform 450ms var(--e) 480ms;
+}
+.gfv2 .gv.is-on .ga-ring {
+  opacity: 1;
+  transform: none;
+}
+.gfv2 .gv.is-on .ga-new {
+  transition-delay: 780ms;
+}
+.gfv2 .gf-step:active,
+.gfv2 .gf-q:active {
+  transform: scale(0.99);
+}
+.gfv2 .gf-q:active {
+  color: #00755c;
+}
+.gfv2 .gf-prow:active {
+  background: #fbfcfd;
+}
+.gfv2 .gf-play:active {
+  transform: scale(0.96);
+}
+.gfv2 .gf-replay:active {
+  color: #0d1b2a;
+  background: #f1f4f7;
+}
+.gfv2 .gf-foot a:active {
+  color: #ffffff !important;
+}
+
+/* ===== Video modal (igual que la referencia) ===== */
+.gfv2-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: rgba(8, 15, 24, 0.82);
+}
+.gfv2-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-height: 100%;
+}
+.gfv2-dialog video {
+  display: block;
+  height: min(78vh, 760px);
+  max-height: calc(100vh - 120px);
+  width: auto;
+  max-width: calc(100vw - 32px);
+  aspect-ratio: 9 / 16;
+  border-radius: 18px;
+  background: #0d1b2a;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.7);
+}
+.gfv2-vbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #c9d4de;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.gfv2-close {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font: 700 14px "Manrope", system-ui, sans-serif;
+  cursor: pointer;
+}
+.gfv2-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.gfv2-close:focus-visible {
+  outline: 2px solid #00c49a;
+  outline-offset: 3px;
+}
+
+/* ===== prefers-reduced-motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .gfv2 *,
+  .gfv2 *::before,
+  .gfv2 *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .gfv2 .h-out,
+  .gfv2 .h-glow,
+  .gfv2 .g-tap {
+    opacity: 0 !important;
+  }
+}
