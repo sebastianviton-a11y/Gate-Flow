@@ -582,6 +582,40 @@
 .gfv2 .run-b .h-in {
   animation-name: h-in-b;
 }
+/* Hero V2 simplificada — tarjeta única del paquete (barra de 3 tramos y
+   estado intermedio "Notificado"). No reemplazan nada: h-pop/h-row/h-bar/
+   h-toast/h-ring siguen intactas para el hero mobile (sin adaptar todavía). */
+@keyframes h-barx-a {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes h-barx-b {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.gfv2 .h-barx {
+  transform-origin: left center;
+  animation: h-barx-a 450ms var(--e) var(--d, 0ms) both;
+}
+.gfv2 .run-b .h-barx {
+  animation-name: h-barx-b;
+}
+.gfv2 .h-mid {
+  animation:
+    h-in-a 350ms var(--e) var(--d, 0ms) both,
+    h-out-a 250ms ease var(--d2, 0ms) forwards;
+}
+.gfv2 .run-b .h-mid {
+  animation-name: h-in-b, h-out-b;
+}
 @keyframes h-glow-a {
   0% {
     opacity: 0;
@@ -947,6 +981,7 @@
     transition: none !important;
   }
   .gfv2 .h-out,
+  .gfv2 .h-mid,
   .gfv2 .h-glow,
   .gfv2 .g-tap {
     opacity: 0 !important;
