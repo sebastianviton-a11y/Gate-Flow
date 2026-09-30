@@ -1,51 +1,74 @@
 -- ============================================================
 -- supabase/seed-staging.sql
--- Datos demo para STAGING — nunca ejecutar contra un proyecto de
--- producción con datos reales. No incluye usuarios: las cuentas de
--- Supabase Auth se crean por separado (DEPLOY_STAGING.md §5) porque
--- requieren el sistema de Auth, no solo INSERT en una tabla. Este
--- script se ejecuta DESPUÉS de las migraciones y de seed.sql
--- (catálogos globales), y ANTES de vincular los usuarios demo.
+-- Datos FICTICIOS para el proyecto Supabase de STAGING.
+--
+-- Nunca contra producción: el bloque de guarda de abajo aborta si la
+-- base ya contiene tenants, empresas o usuarios que no sean los de
+-- este seed. Se ejecuta DESPUÉS de las migraciones y de seed.sql
+-- (catálogos globales). Es idempotente (UUIDs fijos + ON CONFLICT).
+--
+-- No crea usuarios: las cuentas se crean por Auth (invitaciones desde
+-- Admin, o el super admin inicial desde el dashboard) — ver
+-- docs/operations/STAGING_SETUP.md.
+--
+--   Empresa E   "Empresa Demo GateFlow (ficticia)"
+--   Tenant  P   "Plataforma GateFlow (staging)"  — membresía del super admin
+--   Tenant  A   "Residencial Demo A (ficticio)"
+--   Tenant  B   "Residencial Demo B (ficticio)"  — pruebas entre tenants
+-- Nombres y teléfonos son inventados (prefijo 555, no asignado).
 -- ============================================================
 
 do $$
-declare
-  v_tenant_id uuid;
-  v_ubicacion_a uuid;
-  v_ubicacion_b uuid;
-  v_unidad_1 uuid;
-  v_unidad_2 uuid;
-  v_unidad_3 uuid;
-  v_empresa_dhl uuid;
-  v_tamano_mediano uuid;
-  v_prioridad_normal uuid;
 begin
-  insert into public.tenants (nombre, tipo, ciudad, pais, plan, activo)
-  values ('Residencial Demo GateFlow', 'residencial', 'Puerto Morelos', 'MX', 'trial', true)
-  returning id into v_tenant_id;
+  if exists (select 1 from public.tenants
+             where id not in ('5a000000-0000-4000-8000-000000000000',
+                              '5a000000-0000-4000-8000-00000000000a',
+                              '5a000000-0000-4000-8000-00000000000b'))
+     or exists (select 1 from public.empresas
+                where id <> 'e5000000-0000-4000-8000-000000000001')
+  then
+    raise exception 'seed-staging.sql abortado: la base ya tiene datos que no son de este seed. '
+      'Solo se ejecuta sobre un proyecto de staging recién migrado.';
+  end if;
+end $$;
 
-  insert into public.ubicaciones (tenant_id, nombre, tipo_nodo) values
-    (v_tenant_id, 'Estante A', 'estante') returning id into v_ubicacion_a;
-  insert into public.ubicaciones (tenant_id, nombre, tipo_nodo) values
-    (v_tenant_id, 'Locker 1', 'locker') returning id into v_ubicacion_b;
+insert into public.empresas (id, nombre, ciudad, estado_geografico, pais, observaciones) values
+  ('e5000000-0000-4000-8000-000000000001', 'Empresa Demo GateFlow (ficticia)', 'Puerto Morelos', 'Quintana Roo', 'MX',
+   'Datos ficticios de staging')
+on conflict (id) do nothing;
 
-  insert into public.unidades (tenant_id, tipo, identificador, contacto_nombre, contacto_telefono) values
-    (v_tenant_id, 'casa', 'Casa 12', 'María López (demo)', '9980000001') returning id into v_unidad_1;
-  insert into public.unidades (tenant_id, tipo, identificador, contacto_nombre, contacto_telefono) values
-    (v_tenant_id, 'departamento', 'Depto 302', 'Sofía Ramírez (demo)', '9980000002') returning id into v_unidad_2;
-  insert into public.unidades (tenant_id, tipo, identificador, contacto_nombre, contacto_telefono) values
-    (v_tenant_id, 'casa', 'Casa 45', 'Juan Pérez (demo)', '9980000003') returning id into v_unidad_3;
+insert into public.tenants (id, nombre, tipo, ciudad, estado_geografico, pais, plan, estado_servicio,
+                            empresa_id, onboarding_completado, observaciones) values
+  ('5a000000-0000-4000-8000-000000000000', 'Plataforma GateFlow (staging)', 'residencial', 'Puerto Morelos',
+   'Quintana Roo', 'MX', 'piloto', 'piloto', 'e5000000-0000-4000-8000-000000000001', true,
+   'Tenant técnico del super admin de staging'),
+  ('5a000000-0000-4000-8000-00000000000a', 'Residencial Demo A (ficticio)', 'residencial', 'Puerto Morelos',
+   'Quintana Roo', 'MX', 'piloto', 'piloto', 'e5000000-0000-4000-8000-000000000001', true,
+   'Datos ficticios de staging'),
+  ('5a000000-0000-4000-8000-00000000000b', 'Residencial Demo B (ficticio)', 'condominio', 'Cancún',
+   'Quintana Roo', 'MX', 'piloto', 'piloto', 'e5000000-0000-4000-8000-000000000001', true,
+   'Datos ficticios de staging')
+on conflict (id) do nothing;
 
-  select id into v_empresa_dhl from public.empresas_paqueteria where nombre = 'DHL' and tenant_id is null limit 1;
-  select id into v_tamano_mediano from public.tamanos_paquete where clave = 'mediano' and tenant_id is null limit 1;
-  select id into v_prioridad_normal from public.prioridades_paquete where clave = 'normal' and tenant_id is null limit 1;
+insert into public.ubicaciones (id, tenant_id, nombre, tipo_nodo) values
+  ('5a100000-0000-4000-8000-00000000000a', '5a000000-0000-4000-8000-00000000000a', 'Estante A', 'estante'),
+  ('5a100000-0000-4000-8000-0000000000a2', '5a000000-0000-4000-8000-00000000000a', 'Locker 1', 'locker'),
+  ('5a100000-0000-4000-8000-00000000000b', '5a000000-0000-4000-8000-00000000000b', 'Estante B', 'estante')
+on conflict (id) do nothing;
 
-  -- Los paquetes demo NO se insertan aquí a propósito: `recibido_por`
-  -- exige un usuario real (FK a public.users), y todavía no existe
-  -- ninguno en este punto de la secuencia — las cuentas de Auth se crean
-  -- después (DEPLOY_STAGING.md §5), que es también donde se inserta el
-  -- paquete demo, ya con un guardia real al que atribuirlo.
+insert into public.unidades (id, tenant_id, tipo, identificador, contacto_nombre, contacto_telefono) values
+  ('5a200000-0000-4000-8000-0000000000a1', '5a000000-0000-4000-8000-00000000000a', 'casa', 'Casa 12',
+   'Residente Demo Uno', '5550000001'),
+  ('5a200000-0000-4000-8000-0000000000a2', '5a000000-0000-4000-8000-00000000000a', 'departamento', 'Depto 302',
+   'Residente Demo Dos', '5550000002'),
+  ('5a200000-0000-4000-8000-0000000000a3', '5a000000-0000-4000-8000-00000000000a', 'casa', 'Casa 45',
+   'Residente Demo Tres', '5550000003'),
+  ('5a200000-0000-4000-8000-0000000000b1', '5a000000-0000-4000-8000-00000000000b', 'departamento', 'Torre 1 - 101',
+   'Residente Demo Cuatro', '5550000004')
+on conflict (id) do nothing;
 
-  raise notice 'Tenant demo creado: %', v_tenant_id;
-  raise notice 'Guarda este ID (%) — lo necesitas en DEPLOY_STAGING.md §5 para vincular a los usuarios demo y crear el paquete de ejemplo.', v_tenant_id;
+do $$
+begin
+  raise notice 'Staging: empresa E, tenants P/A/B, % ubicaciones y % unidades ficticias.',
+    (select count(*) from public.ubicaciones), (select count(*) from public.unidades);
 end $$;
