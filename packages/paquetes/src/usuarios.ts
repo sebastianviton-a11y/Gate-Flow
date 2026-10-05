@@ -2,14 +2,31 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RoleKey } from "@gateflow/types";
 
 /** Única fuente de verdad para qué roles puede invitar un
- * admin_residencial desde cualquier pantalla — antes vivía duplicada
- * como constante local dentro del asistente de onboarding. */
+ * admin_residencial desde cualquier pantalla (onboarding y /usuarios):
+ * solo guardia. admin_residencial lo otorga únicamente Super Admin
+ * desde su propio flujo; supervisor y recepcion no tienen una app a la
+ * cual entrar, y nadie invita super_admin. */
 export const ROLES_INVITABLES: { clave: RoleKey; etiqueta: string }[] = [
-  { clave: "admin_residencial", etiqueta: "Administrador adicional" },
   { clave: "guardia", etiqueta: "Guardia" },
-  { clave: "recepcion", etiqueta: "Recepción" },
-  { clave: "supervisor", etiqueta: "Supervisor" },
 ];
+
+/**
+ * Quién puede invitar a quién. Misma regla que otorgar_membresia() a
+ * partir de la fase C:
+ *   guardia           ← admin_residencial o super_admin
+ *   admin_residencial ← solo super_admin (flujo de Super Admin)
+ * Cualquier otro rol, vacío o desconocido, no se puede invitar.
+ */
+export function puedeInvitar(rolQuienInvita: string | null | undefined, rolInvitado: string | null | undefined): boolean {
+  switch (rolInvitado) {
+    case "guardia":
+      return rolQuienInvita === "admin_residencial" || rolQuienInvita === "super_admin";
+    case "admin_residencial":
+      return rolQuienInvita === "super_admin";
+    default:
+      return false;
+  }
+}
 
 export interface UsuarioTenant {
   id: string;

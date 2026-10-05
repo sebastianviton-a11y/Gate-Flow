@@ -126,7 +126,7 @@ export {
   type EmpresaInput,
 } from "./empresas";
 
-export { listarUsuariosTenant, ROLES_INVITABLES, type UsuarioTenant } from "./usuarios";
+export { listarUsuariosTenant, ROLES_INVITABLES, puedeInvitar, type UsuarioTenant } from "./usuarios";
 
 export {
   buscarGrupoAbiertoDeUnidad,

@@ -15,4 +15,4 @@
  * Ningún Client Component debe importar desde "@gateflow/auth" a secas
  * — siempre desde "@gateflow/auth/client".
  */
-export { ROLE_LABELS, canAccessConfiguracion, canAccessUsuarios } from "./roles";
+export { ROLE_LABELS, ROLES_PANEL_ADMIN, puedeUsarPanelAdmin, canAccessConfiguracion, canAccessUsuarios } from "./roles";

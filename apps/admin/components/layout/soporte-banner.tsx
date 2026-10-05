@@ -3,7 +3,7 @@ import type { SessionContext } from "@gateflow/types";
 import { salirModoSoporte } from "@/app/superadmin/soporte-actions";
 
 /**
- * Nunca se oculta silenciosamente — mismo principio que DemoSessionBanner:
+ * Nunca se oculta silenciosamente:
  * si un super_admin está viendo los datos de un residencial ajeno, eso
  * debe ser obvio en todo momento, no solo quedar en el audit_log.
  */

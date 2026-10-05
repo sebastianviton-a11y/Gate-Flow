@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@gateflow/supabase";
+import { destinoPanelAdmin } from "@/lib/acceso-panel";
 
 // "Solo para invitados": si ya hay sesión, no tiene sentido seguir
 // viéndolas — se redirige al dashboard.
@@ -10,7 +11,17 @@ const RUTAS_SOLO_INVITADOS = ["/login"];
 // la regla de "solo invitados" ahí sacaría a la persona a mitad del
 // proceso), y /terminos porque es contenido informativo que cualquiera
 // — con sesión o sin ella — debe poder leer sin ser redirigido.
-const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos", "/residencial-suspendido", "/recuperar-password", "/restablecer-password"];
+// /sin-acceso también: es a donde se envía a quien tiene sesión pero no
+// un residencial activo (o cuando no se pudo validar), y no consulta la
+// sesión, así que no puede entrar en bucle.
+const RUTAS_SIEMPRE_PUBLICAS = [
+  "/aceptar-invitacion",
+  "/terminos",
+  "/residencial-suspendido",
+  "/recuperar-password",
+  "/restablecer-password",
+  "/sin-acceso",
+];
 
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);
@@ -38,41 +49,28 @@ export async function middleware(request: NextRequest) {
   }
 
   // Onboarding obligatorio y bloqueo de tenant suspendido: una sola
-  // consulta liviana trae ambos datos — solo cuando aplica, nunca en
-  // rutas públicas ni dentro del propio /onboarding.
+  // consulta liviana trae ambos datos y el rol — solo cuando aplica,
+  // nunca en rutas públicas ni dentro del propio /onboarding.
+  // Falla cerrado: si la consulta falla o la membresía no se puede leer
+  // completa, no se deja pasar a la ruta protegida.
   if (user && !esPublica && !esRutaOnboarding && !esRutaSuperadmin) {
-    const { data: membership } = await supabase
+    const { data: membership, error } = await supabase
       .from("user_tenants")
-      .select("tenants(onboarding_completado, estado_servicio)")
+      .select("roles(clave), tenants(onboarding_completado, estado_servicio)")
       .eq("user_id", user.id)
       .eq("activo", true)
       .limit(1)
       .maybeSingle();
 
-    const tenantData = membership?.tenants as unknown as { onboarding_completado: boolean; estado_servicio: string } | null;
-
-    // RIESGO 3 (PERMISSIONS.md): antes, "suspendido" era solo
-    // informativo — un residencial suspendido seguía operando con
-    // normalidad. Ahora se bloquea de verdad, salvo para super_admin
-    // (que necesita poder entrar como soporte a un tenant suspendido
-    // para resolver el motivo de la suspensión).
-    if (tenantData?.estado_servicio === "suspendido") {
-      const { data: rolReal } = await supabase
-        .from("user_tenants")
-        .select("roles(clave)")
-        .eq("user_id", user.id)
-        .eq("activo", true)
-        .limit(1)
-        .maybeSingle();
-      const claveRol = (rolReal?.roles as unknown as { clave: string } | null)?.clave;
-
-      if (claveRol !== "super_admin") {
-        return NextResponse.redirect(new URL("/residencial-suspendido", request.url));
-      }
+    if (error) {
+      console.error("[GateFlow] middleware: no se pudo leer user_tenants:", { code: error.code, message: error.message });
     }
 
-    if (tenantData && tenantData.onboarding_completado === false) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
+    // Solo super_admin y admin_residencial usan este panel; cualquier
+    // otro caso va a /sin-acceso (ver lib/acceso-panel.ts).
+    const destino = destinoPanelAdmin(error, membership);
+    if (destino) {
+      return NextResponse.redirect(new URL(destino, request.url));
     }
   }
 

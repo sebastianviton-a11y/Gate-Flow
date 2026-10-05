@@ -87,14 +87,6 @@ export interface SessionContext {
   /** Tenants adicionales a los que el usuario pertenece, para el selector de tenant. */
   availableTenants: Tenant[];
   /**
-   * true si esta sesión es un fallback de demostración (Sprint 01), no una
-   * resolución real contra `user_tenants`. Debe ser visible en la UI —
-   * nunca ocultarse — hasta que se elimine en Sprint 02.
-   */
-  isDemo: boolean;
-  /** Motivo del fallback, solo presente cuando isDemo === true. */
-  demoReason?: "schema_not_migrated" | "no_membership_row" | "unexpected_error";
-  /**
    * "Entrar como soporte": true cuando un super_admin está viendo el
    * panel de OTRO residencial bajo su propia identidad — nunca se crea
    * una sesión falsa de otro usuario real (exigiría la clave de

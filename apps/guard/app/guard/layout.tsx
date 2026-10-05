@@ -3,7 +3,6 @@ import { ShieldAlert } from "lucide-react";
 import { getSessionContext } from "@gateflow/auth";
 import type { RoleKey } from "@gateflow/types";
 import { GuardShell } from "@/components/guard-shell";
-import { GuardDemoBanner } from "@/components/guard-demo-banner";
 import { GuardSessionProvider } from "@/components/session-provider";
 
 // Roles que pueden operar esta app. `residente` queda explícitamente
@@ -40,7 +39,6 @@ export default async function GuardLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen flex-col">
       <GuardShell session={session} />
-      <GuardDemoBanner session={session} />
       <GuardSessionProvider session={session}>
         <main className="flex-1 overflow-y-auto">{children}</main>
       </GuardSessionProvider>

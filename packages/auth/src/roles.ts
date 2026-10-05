@@ -16,6 +16,18 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   residente: "Residente",
 };
 
+/**
+ * Únicos roles que entran al panel de administración (apps/admin).
+ * Cualquier otro rol (guardia, supervisor, recepcion, residente,
+ * admin_empresa), uno vacío o uno desconocido va a /sin-acceso. Lo
+ * aplican el middleware de Admin y el layout de (app).
+ */
+export const ROLES_PANEL_ADMIN: readonly RoleKey[] = ["super_admin", "admin_residencial"];
+
+export function puedeUsarPanelAdmin(role: string | null | undefined): boolean {
+  return typeof role === "string" && (ROLES_PANEL_ADMIN as readonly string[]).includes(role);
+}
+
 export function canAccessConfiguracion(role: RoleKey): boolean {
   return role === "admin_residencial" || role === "super_admin";
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { getSessionContext } from "@gateflow/auth";
+import { puedeInvitar } from "@gateflow/paquetes";
 import { createServerSupabaseClient, createServiceRoleClient } from "@gateflow/supabase";
 
 export interface InvitarAdministradorInput {
@@ -27,10 +28,15 @@ export interface ResultadoInvitacion {
  * elimina también, para que "Enviar invitación" sea una operación
  * atómica desde la perspectiva de quien la usa (o funciona completa, o
  * no deja nada a medias).
+ *
+ * La membresía de administrador NO viaja en la metadata de la
+ * invitación (cualquiera que haga un signUp público controla esa
+ * metadata): se otorga después con otorgar_membresia(), que valida en
+ * la base de datos que quien invita es super_admin.
  */
 export async function invitarAdministrador(input: InvitarAdministradorInput): Promise<ResultadoInvitacion> {
   const session = await getSessionContext();
-  if (!session || session.role !== "super_admin") {
+  if (!session || !puedeInvitar(session.role, "admin_residencial")) {
     return { ok: false, mensaje: "Solo Super Admin puede enviar esta invitación." };
   }
 
@@ -72,12 +78,11 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
   const redirectTo = `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/aceptar-invitacion`;
   console.error("=== DIAGNOSTICO ENTORNO ===");
   console.error("SUPABASE_URL presente:", Boolean(urlBase), "| valor:", urlBase);
-  console.error("SERVICE_ROLE_KEY presente:", Boolean(serviceKey), "| longitud:", serviceKey.length, "| inicia con:", serviceKey.slice(0, 8));
+  console.error("SERVICE_ROLE_KEY presente:", Boolean(serviceKey));
   console.error("NEXT_PUBLIC_ADMIN_APP_URL:", process.env.NEXT_PUBLIC_ADMIN_APP_URL);
   console.error("redirectTo calculado:", redirectTo);
 
   const { data: dataInvite, error: errorInvite } = await servicioClient.auth.admin.inviteUserByEmail(input.correoAdministrador.trim(), {
-    data: { tenant_id: tenant.id, rol_clave: "admin_residencial" },
     redirectTo,
   });
 
@@ -144,6 +149,21 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
     return { ok: false, mensaje: `No se pudo enviar la invitación: ${detalle}` };
   }
 
+  const { error: errorMembresia } = await servicioClient.rpc("otorgar_membresia", {
+    p_user_id: dataInvite.user.id,
+    p_tenant_id: tenant.id,
+    p_rol_clave: "admin_residencial",
+    p_otorgado_por: session.user.id,
+  });
+
+  if (errorMembresia) {
+    // Misma regla de atomicidad: sin membresía, ni la cuenta invitada
+    // ni el residencial deben quedar a medias.
+    await revertirInvitacion(servicioClient, dataInvite.user);
+    await supabase.from("tenants").delete().eq("id", tenant.id);
+    return { ok: false, mensaje: `No se pudo asignar el residencial al administrador invitado: ${errorMembresia.message}` };
+  }
+
   await supabase.rpc("registrar_auditoria", {
     p_tenant_id: tenant.id,
     p_accion: "superadmin.invitacion_administrador_enviada",
@@ -154,4 +174,26 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
   });
 
   return { ok: true, tenantId: tenant.id, mensaje: "Invitación enviada correctamente." };
+}
+
+/**
+ * Si la membresía no se pudo otorgar, la cuenta recién invitada queda
+ * sin residencial: se borra para que el enlace del correo deje de
+ * servir. Solo si nunca inició sesión y no pertenece a ningún otro
+ * residencial — una cuenta existente nunca se borra.
+ */
+async function revertirInvitacion(
+  servicioClient: ReturnType<typeof createServiceRoleClient>,
+  usuario: { id: string; last_sign_in_at?: string },
+) {
+  if (usuario.last_sign_in_at) return;
+
+  const { count, error } = await servicioClient
+    .from("user_tenants")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", usuario.id);
+
+  if (!error && count === 0) {
+    await servicioClient.auth.admin.deleteUser(usuario.id);
+  }
 }
