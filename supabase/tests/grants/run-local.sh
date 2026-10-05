@@ -19,7 +19,7 @@
 #        rollback A = GR
 #   GRA' has_role_in_tenant "de producción" ya existente + migración A
 #                                           → aplica sin error, mismo estado que GRA
-#   GRAC + fase C (pending)                 → 0 FAIL
+#   GRAC + fase C                           → 0 FAIL
 #        rollback C = GRA
 #   Contrato: los select(...) del código contra el esquema GRA.
 # Los casos PENDIENTE son fallos conocidos con corrección por aprobar:
@@ -38,7 +38,8 @@ MIG_A="20260930000000_privilegios_fase_a.sql"
 DOWN_G="$SUPA/rollback/20260729100000_grants_minimo_privilegio.down.sql"
 DOWN_R="$SUPA/rollback/20260729200000_reconciliacion_paridad_produccion.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
-FASE_C="$SUPA/pending/privilegios_fase_c.sql"
+MIG_C="20261005180000_privilegios_fase_c.sql"
+FASE_C="$SUPA/migrations/$MIG_C"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -121,7 +122,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"

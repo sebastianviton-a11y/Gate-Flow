@@ -6,7 +6,7 @@ CLI de Supabase no los ejecuta.
 | Script | Deshace |
 |---|---|
 | `20260930000000_privilegios_fase_a.down.sql` | `migrations/20260930000000_privilegios_fase_a.sql` |
-| `privilegios_fase_c.down.sql` | `pending/privilegios_fase_c.sql` (una vez movida a `migrations/`) |
+| `privilegios_fase_c.down.sql` | `migrations/20261005180000_privilegios_fase_c.sql` |
 
 ## Orden (privilegios E1/E2/E4)
 

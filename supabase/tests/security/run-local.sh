@@ -11,7 +11,7 @@
 # Recorrido:
 #   0  esquema actual (sin la fase A)   → informativo: muestra los riesgos
 #   A  + migración A                    → 0 FAIL esperado
-#   C  + fase C (supabase/pending/)     → 0 FAIL esperado
+#   C  + fase C                         → 0 FAIL esperado
 #   rollback C → catálogo idéntico a A  → 0 FAIL en fase A
 #   rollback A → catálogo idéntico a 0
 #   A de nuevo sobre el rollback        → 0 FAIL esperado
@@ -23,7 +23,8 @@ SUPA="$(cd "$DIR/../.." && pwd)"
 DB="${GF_TEST_DB:-gf_security_test}"
 MIG_A="20260930000000_privilegios_fase_a.sql"
 MIG_G="20260729100000_grants_minimo_privilegio.sql"
-FASE_C="$SUPA/pending/privilegios_fase_c.sql"
+MIG_C="20261005180000_privilegios_fase_c.sql"
+FASE_C="$SUPA/migrations/$MIG_C"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -90,7 +91,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.

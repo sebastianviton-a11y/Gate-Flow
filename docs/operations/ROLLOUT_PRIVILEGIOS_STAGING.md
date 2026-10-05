@@ -17,8 +17,7 @@ verificada en SA: 44 checks, único pendiente E1-03).
    - sesión fail-closed: `get-session.ts`, `middleware.ts` de Admin y Guard,
      `/sin-acceso`, panel Admin solo para `super_admin` y `admin_residencial`
      (cualquier otro rol, vacío o desconocido → `/sin-acceso`).
-3. **C** — `supabase/pending/privilegios_fase_c.sql` (se mueve a
-   `migrations/` con timestamp nuevo al aplicarse). Además de quitar el
+3. **C** — `supabase/migrations/20261005180000_privilegios_fase_c.sql`. Además de quitar el
    vínculo por metadata y `has_role`, limita `otorgar_membresia` a los
    flujos actuales: guardia (admin del residencial o super_admin) y
    admin_residencial (solo super_admin).

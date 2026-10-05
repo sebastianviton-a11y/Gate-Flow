@@ -76,8 +76,8 @@ Se aplican con el CLI para que `supabase_migrations.schema_migrations` quede con
 23 20260729000000_incidencias_historial.sql
 --- después, en E4 ---
 24 20260930000000_privilegios_fase_a.sql
---- después, en E7 (movida desde supabase/pending/ con timestamp nuevo) ---
-25 <timestamp>_privilegios_fase_c.sql
+--- después, en E7 ---
+25 20261005180000_privilegios_fase_c.sql
 ```
 
 - [ ] El repo no tiene `supabase/config.toml`. Correr `supabase init` en una copia de trabajo, sin commitear el archivo generado (o decidir versionarlo aparte).

@@ -1,18 +1,12 @@
 -- ============================================================
--- privilegios_fase_c.sql — PENDIENTE (fase C de 3)
+-- 20261005180000_privilegios_fase_c.sql — fase C de 3
 --
--- NO está en supabase/migrations/ a propósito: `supabase db push`
--- la aplicaría antes de tiempo. Se mueve a migrations/ con un
--- timestamp nuevo (p. ej. 2026MMDDhhmmss_privilegios_fase_c.sql)
--- solo cuando se cumpla TODO lo siguiente:
---   1. La fase A está aplicada.
+-- Requisitos (verificados en staging antes de aplicarla):
+--   1. La fase A está aplicada (20260930000000).
 --   2. La fase B (server actions con otorgar_membresia y sin
 --      tenant_id/rol_clave en la metadata) está desplegada en Admin.
---   3. Ya no quedan invitaciones pendientes emitidas por el código
---      anterior (sus usuarios ya aceptaron, o se re-invitaron con B):
---      una invitación vieja aún no aceptada ya tiene su fila en
---      auth.users, así que no depende de este trigger; el riesgo es
---      solo reenviar una invitación vieja desde el código anterior.
+--   3. No quedan invitaciones pendientes emitidas por el código
+--      anterior a B.
 --
 -- Efecto: la metadata de auth.users deja de crear membresías (E1
 -- cerrado por completo, incluido el residuo de fase A: signUp con un

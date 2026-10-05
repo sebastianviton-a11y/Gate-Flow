@@ -1,5 +1,5 @@
 -- ============================================================
--- ROLLBACK de la fase C (privilegios_fase_c.sql)
+-- ROLLBACK de la fase C (20261005180000_privilegios_fase_c.sql)
 --
 -- Recrea has_role() y el trigger transitorio de la fase A, y devuelve
 -- otorgar_membresia() a su versión de la fase A, todo idéntico a como
