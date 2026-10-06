@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@gateflow/supabase";
-import { destinoPanelAdmin } from "@/lib/acceso-panel";
+import { SELECT_MEMBRESIA_PANEL, destinoPanelAdmin } from "@/lib/acceso-panel";
 import { RUTAS_SIEMPRE_PUBLICAS, RUTAS_SOLO_INVITADOS } from "@/lib/rutas-publicas";
 
 // Qué rutas no exigen sesión y por qué: lib/rutas-publicas.ts.
@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
   if (user && !esPublica && !esRutaOnboarding && !esRutaSuperadmin) {
     const { data: membership, error } = await supabase
       .from("user_tenants")
-      .select("roles(clave), tenants(onboarding_completado, estado_servicio)")
+      .select(SELECT_MEMBRESIA_PANEL)
       .eq("user_id", user.id)
       .eq("activo", true)
       .limit(1)
@@ -48,8 +48,9 @@ export async function middleware(request: NextRequest) {
       console.error("[GateFlow] middleware: no se pudo leer user_tenants:", { code: error.code, message: error.message });
     }
 
-    // Solo super_admin y admin_residencial usan este panel; cualquier
-    // otro caso va a /sin-acceso (ver lib/acceso-panel.ts).
+    // Solo super_admin y admin_residencial usan este panel. Un guardia
+    // activo va a la app Guard (URL absoluta); cualquier otro caso va a
+    // /sin-acceso (ver lib/acceso-panel.ts).
     const destino = destinoPanelAdmin(error, membership);
     if (destino) {
       return NextResponse.redirect(new URL(destino, request.url));

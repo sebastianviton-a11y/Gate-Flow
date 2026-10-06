@@ -3,6 +3,8 @@ import { getSessionContext, puedeUsarPanelAdmin } from "@gateflow/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { SoporteBanner } from "@/components/layout/soporte-banner";
+import { createServerSupabaseClient } from "@gateflow/supabase";
+import { SELECT_MEMBRESIA_PANEL, destinoPanelAdmin } from "@/lib/acceso-panel";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSessionContext();
@@ -15,9 +17,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Mismo criterio que el middleware: solo super_admin y
   // admin_residencial usan este panel. Redundante a propósito: el
-  // layout no asume que el middleware corrió.
+  // layout no asume que el middleware corrió (/onboarding, por ejemplo,
+  // no pasa por su consulta). El destino se decide con la misma
+  // membresía y el mismo orden que el middleware: la suspensión antes
+  // que el rol; solo un guardia habilitado va a Guard.
   if (!puedeUsarPanelAdmin(session.role)) {
-    redirect("/sin-acceso?motivo=rol");
+    const supabase = createServerSupabaseClient();
+    const { data: membership, error } = await supabase
+      .from("user_tenants")
+      .select(SELECT_MEMBRESIA_PANEL)
+      .eq("user_id", session.user.id)
+      .eq("activo", true)
+      .limit(1)
+      .maybeSingle();
+    redirect(destinoPanelAdmin(error, membership) ?? "/sin-acceso?motivo=rol");
   }
 
   return (

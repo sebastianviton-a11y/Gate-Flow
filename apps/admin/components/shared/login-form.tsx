@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
 
 export function LoginForm() {
   const router = useRouter();
@@ -61,6 +62,27 @@ export function LoginForm() {
     }
 
     const next = searchParams.get("next") ?? "/dashboard";
+
+    // Un guardia no usa este panel: termina en la app Guard. La sesión
+    // de Admin no viaja a otro dominio, así que se cierra solo aquí
+    // (scope local: no afecta su sesión en Guard) y allí inicia sesión.
+    // Cualquier otro caso sigue igual: el middleware decide.
+    if (dataSignIn.user) {
+      const { data: membership, error: errorMembresia } = await supabase
+        .from("user_tenants")
+        .select(SELECT_MEMBRESIA_PANEL)
+        .eq("user_id", dataSignIn.user.id)
+        .eq("activo", true)
+        .limit(1)
+        .maybeSingle();
+      const destino = destinoTrasAutenticar(errorMembresia, membership, { admin: next, guard: "/login" });
+      if (destino.enGuard) {
+        await supabase.auth.signOut({ scope: "local" });
+        window.location.assign(destino.url);
+        return;
+      }
+    }
+
     router.replace(next);
     router.refresh();
   }

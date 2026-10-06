@@ -1,13 +1,38 @@
 import { ShieldAlert } from "lucide-react";
 import { GateFlowLogo } from "@gateflow/ui";
+import { createServerSupabaseClient } from "@gateflow/supabase";
+import { SELECT_MEMBRESIA_PANEL, mostrarCtaGuard, urlAppGuard } from "@/lib/acceso-panel";
 import { CerrarSesionButton } from "./cerrar-sesion-button";
 
 /**
  * Destino de quien tiene sesión pero no puede usar el panel: sin
  * residencial activo, con un rol que no es de administración (guardia)
  * o cuando no se pudo validar la membresía. Pública y sin
- * getSessionContext a propósito: nunca puede entrar en bucle.
+ * getSessionContext a propósito: nunca redirige, así que no puede
+ * entrar en bucle. Con motivo=rol solo lee la membresía para ofrecer
+ * "Ir a la app de Guardia" a un guardia real; ante cualquier error, no
+ * lo ofrece.
  */
+async function esGuardiaConAccesoAGuard(motivo: string | undefined): Promise<boolean> {
+  if (motivo !== "rol") return false;
+  try {
+    const supabase = createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data: membership, error } = await supabase
+      .from("user_tenants")
+      .select(SELECT_MEMBRESIA_PANEL)
+      .eq("user_id", user.id)
+      .eq("activo", true)
+      .limit(1)
+      .maybeSingle();
+    return mostrarCtaGuard(motivo, error, membership);
+  } catch {
+    return false;
+  }
+}
 const SIN_RESIDENCIAL = {
   titulo: "Tu cuenta no tiene un residencial activo",
   detalle: "Pide al administrador de tu residencial que te invite o reactive tu acceso.",
@@ -24,8 +49,10 @@ const MENSAJES: Record<string, { titulo: string; detalle: string }> = {
   },
 };
 
-export default function SinAccesoPage({ searchParams }: { searchParams: { motivo?: string } }) {
+export default async function SinAccesoPage({ searchParams }: { searchParams: { motivo?: string } }) {
   const mensaje = MENSAJES[searchParams.motivo ?? ""] ?? SIN_RESIDENCIAL;
+  const urlGuard = urlAppGuard();
+  const ctaGuard = urlGuard !== null && (await esGuardiaConAccesoAGuard(searchParams.motivo));
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ink-950 px-4">
@@ -37,6 +64,14 @@ export default function SinAccesoPage({ searchParams }: { searchParams: { motivo
         {searchParams.motivo === "error" && (
           <a href="/dashboard" className="text-sm text-primary/80 underline hover:text-primary">
             Reintentar
+          </a>
+        )}
+        {ctaGuard && (
+          <a
+            href={`${urlGuard}/guard`}
+            className="mt-2 inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            Ir a la app de Guardia
           </a>
         )}
         <CerrarSesionButton />

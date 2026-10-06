@@ -71,7 +71,8 @@ seccion("Suspendido y onboarding (sin cambios de comportamiento)", () => {
   const suspendido = { onboarding_completado: true, estado_servicio: "suspendido" };
   assert(destinoPanelAdmin(null, membresia("admin_residencial", suspendido)) === "/residencial-suspendido", "admin de un residencial suspendido → /residencial-suspendido");
   assert(destinoPanelAdmin(null, membresia("super_admin", suspendido)) === null, "super_admin entra a un residencial suspendido (soporte)");
-  assert(destinoPanelAdmin(null, membresia("guardia", suspendido)) === "/sin-acceso?motivo=rol", "el rol se valida antes que la suspensión");
+  assert(destinoPanelAdmin(null, membresia("guardia", suspendido)) === "/residencial-suspendido", "la suspensión se valida antes que el rol");
+  assert(destinoPanelAdmin(null, membresia("rol_desconocido", suspendido)) === "/residencial-suspendido", "rol sin panel de un residencial suspendido → /residencial-suspendido");
   const sinOnboarding = { onboarding_completado: false, estado_servicio: "piloto" };
   assert(destinoPanelAdmin(null, membresia("admin_residencial", sinOnboarding)) === "/onboarding", "onboarding pendiente → /onboarding");
   assert(destinoPanelAdmin(null, membresia("recepcion", sinOnboarding)) === "/sin-acceso?motivo=rol", "un rol sin panel no llega a /onboarding");
