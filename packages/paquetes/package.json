@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@gateflow/auth": "workspace:*",
     "@gateflow/types": "workspace:*",
     "@supabase/supabase-js": "^2.45.4"
   },

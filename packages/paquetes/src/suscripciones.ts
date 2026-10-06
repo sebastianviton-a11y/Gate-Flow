@@ -1,35 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { estadoEfectivoSuscripcion, type EstadoEfectivoSuscripcion } from "@gateflow/auth/client";
 import type { Suscripcion } from "@gateflow/types";
 
 /**
  * Lectura del estado de suscripción de un residencial (tabla
- * suscripciones, migración 20261006000000). Todavía no bloquea nada:
- * solo informa. El bloqueo al vencer el trial es la siguiente fase.
+ * suscripciones, migración 20261006000000). La lógica del estado
+ * efectivo vive en @gateflow/auth (acceso.ts), la misma que decide el
+ * acceso de Admin y Guard; esto solo adapta la fila camelCase.
  */
 
-export type SituacionSuscripcion = "trial_activo" | "activa" | "vencida" | "sin_suscripcion";
+export type SituacionSuscripcion = EstadoEfectivoSuscripcion;
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
 /**
- * Pura. `past_due` cuenta como activa (periodo de gracia; el bloqueo se
- * decide en la fase de pagos). `sin_suscripcion` debería ser
- * excepcional: el backfill de la migración dio active + alta_manual a
- * todos los residenciales existentes.
+ * Pura. past_due/canceled → inactiva (no operan); sin fila →
+ * sin_suscripcion (falla cerrado).
  */
 export function situacionSuscripcion(suscripcion: Suscripcion | null, ahora: Date = new Date()): SituacionSuscripcion {
-  if (!suscripcion) return "sin_suscripcion";
-  switch (suscripcion.estado) {
-    case "active":
-    case "past_due":
-      return "activa";
-    case "trialing": {
-      const fin = suscripcion.trialEndsAt ? Date.parse(suscripcion.trialEndsAt) : Number.NaN;
-      return Number.isFinite(fin) && fin > ahora.getTime() ? "trial_activo" : "vencida";
-    }
-    default:
-      return "vencida";
-  }
+  return estadoEfectivoSuscripcion(suscripcion ? { estado: suscripcion.estado, trial_ends_at: suscripcion.trialEndsAt } : null, ahora);
 }
 
 /** Días completos que faltan para que termine el trial; null si no está en trial. */

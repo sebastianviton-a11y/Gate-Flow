@@ -4,6 +4,7 @@ import { getSessionContext } from "@gateflow/auth";
 import { ROLES_INVITABLES, puedeInvitar } from "@gateflow/paquetes";
 import { createServiceRoleClient } from "@gateflow/supabase";
 import type { RoleKey } from "@gateflow/types";
+import { MENSAJE_SERVICIO_INACTIVO, residencialPuedeOperar } from "@/lib/operacion";
 
 export interface InvitarUsuarioResidencialInput {
   correo: string;
@@ -33,6 +34,12 @@ export async function invitarUsuarioResidencial(input: InvitarUsuarioResidencial
   // (ROLES_INVITABLES), y solo si quien invita puede otorgarlo.
   if (!ROLES_INVITABLES.some((r) => r.clave === input.rolClave) || !puedeInvitar(session.role, input.rolClave)) {
     return { ok: false, mensaje: "Ese rol no se puede asignar por invitación." };
+  }
+
+  // Escribe con la clave de servicio (sin RLS): el bloqueo por trial
+  // vencido / suscripción inactiva se verifica aquí.
+  if (!(await residencialPuedeOperar())) {
+    return { ok: false, mensaje: MENSAJE_SERVICIO_INACTIVO };
   }
 
   let servicioClient;

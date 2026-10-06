@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronsUpDown, Check, Building } from "lucide-react";
+import Link from "next/link";
+import { ChevronsUpDown, Check, Building, ArrowLeftRight } from "lucide-react";
 import type { Tenant } from "@gateflow/types";
 import {
   DropdownMenu,
@@ -10,19 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@gateflow/ui";
-import { cn } from "@gateflow/ui";
 
 /**
- * Selector de tenant activo.
- *
- * Sprint 01 solo tiene, en la práctica, un tenant disponible por sesión
- * (real o demo) — no existe todavía la resolución multi-tenant real contra
- * `user_tenants` con más de una fila. En vez de simular un cambio de tenant
- * que no hace nada (bug detectado en la revisión: los items no tenían
- * onClick), los tenants que no son el activo se muestran deshabilitados
- * con una etiqueta explícita, para no presentar un control que parece
- * funcional pero no hace nada. Sprint 02 reemplaza esto por el cambio real
- * de tenant activo (y su reflejo en el JWT vía Auth Hook).
+ * Residencial activo y, si hay más de uno, "Cambiar residencial": la
+ * elección se hace en /seleccionar-residencial, que valida la membresía
+ * en el servidor y reemplaza la cookie gf_tenant. Aquí no se cambia
+ * nada en el cliente.
  */
 export function TenantSwitcher({
   currentTenant,
@@ -43,27 +37,21 @@ export function TenantSwitcher({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuLabel>Residenciales</DropdownMenuLabel>
+        <DropdownMenuLabel>Residencial</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {availableTenants.map((tenant) => {
-          const isCurrent = tenant.id === currentTenant.id;
-          return (
-            <DropdownMenuItem
-              key={tenant.id}
-              disabled={!isCurrent}
-              className={cn("justify-between", !isCurrent && "opacity-50")}
-            >
-              <span className="truncate">{tenant.nombre}</span>
-              {isCurrent && <Check className="h-4 w-4 text-primary" />}
-            </DropdownMenuItem>
-          );
-        })}
-        {!hasMultipleTenants && (
+        <DropdownMenuItem disabled className="justify-between opacity-100">
+          <span className="truncate">{currentTenant.nombre}</span>
+          <Check className="h-4 w-4 text-primary" />
+        </DropdownMenuItem>
+        {hasMultipleTenants && (
           <>
             <DropdownMenuSeparator />
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              El cambio entre residenciales se habilita en Sprint 02.
-            </p>
+            <DropdownMenuItem asChild>
+              <Link href="/seleccionar-residencial" className="flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4" />
+                Cambiar residencial
+              </Link>
+            </DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>

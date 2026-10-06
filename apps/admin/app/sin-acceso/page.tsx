@@ -1,7 +1,7 @@
 import { ShieldAlert } from "lucide-react";
 import { GateFlowLogo } from "@gateflow/ui";
-import { createServerSupabaseClient } from "@gateflow/supabase";
-import { SELECT_MEMBRESIA_PANEL, mostrarCtaGuard, urlAppGuard } from "@/lib/acceso-panel";
+import { urlAppGuard } from "@/lib/acceso-panel";
+import { leerAccesoAdmin } from "@/lib/acceso-servidor";
 import { CerrarSesionButton } from "./cerrar-sesion-button";
 
 /**
@@ -9,26 +9,15 @@ import { CerrarSesionButton } from "./cerrar-sesion-button";
  * residencial activo, con un rol que no es de administración (guardia)
  * o cuando no se pudo validar la membresía. Pública y sin
  * getSessionContext a propósito: nunca redirige, así que no puede
- * entrar en bucle. Con motivo=rol solo lee la membresía para ofrecer
- * "Ir a la app de Guardia" a un guardia real; ante cualquier error, no
- * lo ofrece.
+ * entrar en bucle. Con motivo=rol solo lee la membresía del residencial
+ * SELECCIONADO (gf_tenant) para ofrecer "Ir a la app de Guardia" a un
+ * guardia real; ante cualquier error, no lo ofrece.
  */
 async function esGuardiaConAccesoAGuard(motivo: string | undefined): Promise<boolean> {
   if (motivo !== "rol") return false;
   try {
-    const supabase = createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return false;
-    const { data: membership, error } = await supabase
-      .from("user_tenants")
-      .select(SELECT_MEMBRESIA_PANEL)
-      .eq("user_id", user.id)
-      .eq("activo", true)
-      .limit(1)
-      .maybeSingle();
-    return mostrarCtaGuard(motivo, error, membership);
+    const { userId, resultado } = await leerAccesoAdmin();
+    return userId !== null && resultado.decision.tipo === "ir_a_guard";
   } catch {
     return false;
   }

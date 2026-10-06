@@ -1,4 +1,6 @@
-import { getSessionContext } from "@gateflow/auth";
+import { redirect } from "next/navigation";
+import { getSessionContext, RUTA_SELECCIONAR_RESIDENCIAL, SesionNoResueltaError } from "@gateflow/auth";
+import { RUTA_SERVICIO_INACTIVO, decisionGuard, esServicioInactivo } from "@/lib/acceso-guard";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { buscarPaquetePorPickupToken, listarPendientesPorUnidad, obtenerGrupoPorTokenConPaquetes } from "@gateflow/paquetes";
 import { GateFlowLogo, formatearFechaHora } from "@gateflow/ui";
@@ -30,6 +32,20 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
         <p className="max-w-xs text-sm text-white/70">Presenta este código al personal de seguridad.</p>
       </div>
     );
+  }
+
+  // Con sesión, esta pantalla es operativa (ver y entregar): con el
+  // residencial no operativo → servicio no activo, sin consultar el
+  // token. Error al leer el contexto → falla cerrado.
+  const decision = await decisionGuard(session.user.id);
+  if (decision.tipo === "sin_acceso" && decision.motivo === "error") {
+    throw new SesionNoResueltaError();
+  }
+  if (decision.tipo === "seleccionar_residencial") {
+    redirect(RUTA_SELECCIONAR_RESIDENCIAL);
+  }
+  if (esServicioInactivo(decision)) {
+    redirect(RUTA_SERVICIO_INACTIVO);
   }
 
   const supabase = createServerSupabaseClient();

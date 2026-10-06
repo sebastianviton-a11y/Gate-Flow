@@ -13,6 +13,11 @@
 #   A  + migración A                    → 0 FAIL esperado
 #   C  + fase C                         → 0 FAIL esperado
 #   T  + registro/trial (20261006)      → 0 FAIL esperado
+#   O  + tenant_operativo (20261007)    → 0 FAIL esperado
+#   I  + integridad multitenant         → 0 FAIL esperado
+#   rollback I → catálogo idéntico a O; con una referencia cruzada en
+#   los datos, I aborta sin cambiar nada; I se reaplica y se revierte
+#   rollback O → catálogo idéntico a T
 #   rollback T → catálogo idéntico a C
 #   rollback C → catálogo idéntico a A  → 0 FAIL en fase A
 #   rollback A → catálogo idéntico a 0
@@ -31,6 +36,10 @@ FASE_C="$SUPA/migrations/$MIG_C"
 # y se revierten antes de revertir C.
 MIG_T="20261006000000_registro_trial.sql"
 DOWN_T="$SUPA/rollback/20261006000000_registro_trial.down.sql"
+MIG_O="20261007000000_tenant_operativo.sql"
+DOWN_O="$SUPA/rollback/20261007000000_tenant_operativo.down.sql"
+MIG_I="20261007100000_integridad_multitenant.sql"
+DOWN_I="$SUPA/rollback/20261007100000_integridad_multitenant.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -62,6 +71,12 @@ union all
 select 'COLACL|' || a.attrelid::regclass::text || '.' || a.attname || '|' || (select string_agg(x::text, ',' order by x::text) from unnest(a.attacl) x)
 from pg_attribute a join pg_class c on c.oid = a.attrelid
 where c.relnamespace = 'public'::regnamespace and a.attacl is not null
+union all
+select 'CON|' || conrelid::regclass::text || '|' || conname || '|' || pg_get_constraintdef(oid)
+from pg_constraint where connamespace = 'public'::regnamespace
+union all
+select 'IDX|' || indexrelid::regclass::text || '|' || pg_get_indexdef(indexrelid)
+from pg_index i join pg_class c on c.oid = i.indrelid where c.relnamespace = 'public'::regnamespace
 order by 1;
 SQL
 }
@@ -74,11 +89,13 @@ run_suites() {
   for f in "$DIR"/[1-9]0_*.sql; do
     PGOPTIONS="-c tests.fase=$fase_sql" psql -X -q -d "$DB" -f "$f" >>"$log" 2>&1 || true
   done
-  local pass fail err
+  local pass fail err pend
   pass=$(grep -c 'NOTICE:  PASS|' "$log" || true)
+  pend=$(grep -c 'NOTICE:  PENDIENTE|' "$log" || true)
   fail=$(grep -c 'NOTICE:  FAIL|' "$log" || true)
   err=$(grep -c 'ERROR:' "$log" || true)
-  printf '  fase %-2s %-22s PASS=%-4s FAIL=%-4s ERROR=%s\n' "$fase" "($2)" "$pass" "$fail" "$err"
+  printf '  fase %-2s %-22s PASS=%-4s FAIL=%-4s ERROR=%-3s PENDIENTE=%s\n' "$fase" "($2)" "$pass" "$fail" "$err" "$pend"
+  { grep -E 'NOTICE:  PENDIENTE\|' "$log" || true; } | sed 's/^.*NOTICE:  /    /' | sort -u
   if [[ "$fase" != "0" && ( "$fail" != "0" || "$err" != "0" ) ]]; then
     grep -E 'NOTICE:  FAIL\||ERROR:' "$log" | sed 's/^/    /'
     FALLAS=$((FALLAS + 1))
@@ -99,7 +116,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.
@@ -124,6 +141,37 @@ snapshot "$OUT/snap_C.txt"
 
 sql_file "$SUPA/migrations/$MIG_T"
 run_suites T "fase C + registro trial" C
+snapshot "$OUT/snap_T.txt"
+
+sql_file "$SUPA/migrations/$MIG_O"
+run_suites O "C + trial + operativo" C
+snapshot "$OUT/snap_O.txt"
+
+sql_file "$SUPA/migrations/$MIG_I"
+run_suites I "… + integridad multitenant" C
+snapshot "$OUT/snap_I.txt"
+sql_file "$DOWN_I"
+snapshot "$OUT/snap_O_tras_down_I.txt"
+same_catalog "$OUT/snap_O.txt" "$OUT/snap_O_tras_down_I.txt" "rollback_I"
+
+# Datos inconsistentes previos: la migración debe abortar sin cambios.
+sql -c "insert into public.paquetes (tenant_id, unidad_id, recibido_por) values ('bbbbbbbb-0000-0000-0000-000000000000', 'a1000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-0000000000b9')" >/dev/null
+if sql -f "$SUPA/migrations/$MIG_I" >/dev/null 2>"$OUT/I_con_cruce.err"; then
+  echo "  integridad: aplicó con una referencia cruzada en los datos (debía abortar)"; FALLAS=$((FALLAS + 1))
+else
+  echo "  integridad: aborta con datos cruzados ($(grep -o 'paquetes.unidad_id=[0-9]*' "$OUT/I_con_cruce.err" | head -1))"
+fi
+snapshot "$OUT/snap_O_tras_abortar_I.txt"
+same_catalog "$OUT/snap_O.txt" "$OUT/snap_O_tras_abortar_I.txt" "I_abortada_sin_cambios"
+sql -c "delete from public.paquetes where tenant_id = 'bbbbbbbb-0000-0000-0000-000000000000' and unidad_id = 'a1000000-0000-0000-0000-000000000000'" >/dev/null
+sql_file "$SUPA/migrations/$MIG_I"
+snapshot "$OUT/snap_I2.txt"
+same_catalog "$OUT/snap_I.txt" "$OUT/snap_I2.txt" "reaplicar_I"
+sql_file "$DOWN_I"
+
+sql_file "$DOWN_O"
+snapshot "$OUT/snap_T_tras_down_O.txt"
+same_catalog "$OUT/snap_T.txt" "$OUT/snap_T_tras_down_O.txt" "rollback_O"
 
 sql_file "$DOWN_T"
 snapshot "$OUT/snap_C_tras_down_T.txt"

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 import type { SessionContext } from "@gateflow/types";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@gateflow/ui";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ export function Header({ session }: { session: SessionContext }) {
 
   async function handleSignOut() {
     const supabase = createBrowserSupabaseClient();
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     router.replace("/login");
     router.refresh();

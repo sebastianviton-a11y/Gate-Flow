@@ -35,7 +35,7 @@ function s(parcial: Partial<Suscripcion>): Suscripcion {
 console.log("\nsituacionSuscripcion");
 assert(situacionSuscripcion(null, AHORA) === "sin_suscripcion", "null → sin_suscripcion");
 assert(situacionSuscripcion(s({ estado: "active" }), AHORA) === "activa", "active (alta manual) → activa");
-assert(situacionSuscripcion(s({ estado: "past_due" }), AHORA) === "activa", "past_due → activa (gracia; el bloqueo es otra fase)");
+assert(situacionSuscripcion(s({ estado: "past_due" }), AHORA) === "inactiva", "past_due → inactiva (no opera; el flujo de pago es otra fase)");
 assert(
   situacionSuscripcion(s({ estado: "trialing", origen: "registro_publico", trialStartedAt: "2026-10-01T00:00:00Z", trialEndsAt: "2026-10-31T00:00:00Z" }), AHORA) === "trial_activo",
   "trialing con fin futuro → trial_activo",
@@ -46,7 +46,7 @@ assert(
 );
 assert(situacionSuscripcion(s({ estado: "trialing", trialEndsAt: null }), AHORA) === "vencida", "trialing sin fecha → vencida (falla cerrado)");
 assert(situacionSuscripcion(s({ estado: "expired" }), AHORA) === "vencida", "expired → vencida");
-assert(situacionSuscripcion(s({ estado: "canceled" }), AHORA) === "vencida", "canceled → vencida");
+assert(situacionSuscripcion(s({ estado: "canceled" }), AHORA) === "inactiva", "canceled → inactiva");
 
 console.log("\ndiasRestantesTrial");
 assert(diasRestantesTrial(null, AHORA) === null, "null → null");

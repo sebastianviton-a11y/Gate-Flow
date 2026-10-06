@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { getSessionContext } from "@gateflow/auth";
+import { getSessionContext, RUTA_SELECCIONAR_RESIDENCIAL, SesionNoResueltaError } from "@gateflow/auth";
 import type { RoleKey } from "@gateflow/types";
 import { GuardShell } from "@/components/guard-shell";
 import { GuardSessionProvider } from "@/components/session-provider";
+import { RUTA_SERVICIO_INACTIVO, esServicioInactivo, leerAccesoGuard } from "@/lib/acceso-guard";
 
 // Roles que pueden operar esta app. `residente` queda explícitamente
 // fuera — no tiene experiencia operativa en GateFlow (00-PRD.md: el
@@ -17,6 +18,27 @@ export default async function GuardLayout({ children }: { children: React.ReactN
 
   if (!session) {
     redirect("/login");
+  }
+
+  // Residencial no operativo (suspendido, trial vencido, suscripción
+  // inactiva o sin suscripción): ninguna función de guardia. Misma
+  // lógica que Admin (@gateflow/auth/acceso.ts). Los datos además están
+  // protegidos en la base (tenant_operativo). super_admin no se bloquea.
+  const { resultado } = await leerAccesoGuard(session.user.id);
+  const decision = resultado.decision;
+  if (decision.tipo === "sin_acceso" && decision.motivo === "error") {
+    throw new SesionNoResueltaError();
+  }
+  if (decision.tipo === "seleccionar_residencial") {
+    redirect(RUTA_SELECCIONAR_RESIDENCIAL);
+  }
+  if (esServicioInactivo(decision)) {
+    redirect(RUTA_SERVICIO_INACTIVO);
+  }
+  // La sesión y la decisión deben hablar del MISMO residencial (misma
+  // gf_tenant); si no, falla cerrado.
+  if (resultado.tenantId !== session.tenant.id && !session.impersonando) {
+    throw new SesionNoResueltaError();
   }
 
   if (!OPERATIONAL_ROLES.includes(session.role)) {

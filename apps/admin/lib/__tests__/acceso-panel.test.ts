@@ -23,7 +23,9 @@ function seccion(nombre: string, fn: () => void) {
   fn();
 }
 
-const TENANT_OK = { onboarding_completado: true, estado_servicio: "piloto" };
+/** Desde el ciclo de vida del trial, el acceso exige suscripción operativa. */
+const ACTIVA = { estado: "active", trial_ends_at: null };
+const TENANT_OK = { onboarding_completado: true, estado_servicio: "piloto", suscripciones: ACTIVA };
 
 function membresia(clave: unknown, tenants: unknown = TENANT_OK) {
   return { roles: clave === undefined ? null : { clave }, tenants };
@@ -68,12 +70,12 @@ seccion("Sin membresía o con error de lectura no se deja pasar", () => {
 });
 
 seccion("Suspendido y onboarding (sin cambios de comportamiento)", () => {
-  const suspendido = { onboarding_completado: true, estado_servicio: "suspendido" };
+  const suspendido = { onboarding_completado: true, estado_servicio: "suspendido", suscripciones: ACTIVA };
   assert(destinoPanelAdmin(null, membresia("admin_residencial", suspendido)) === "/residencial-suspendido", "admin de un residencial suspendido → /residencial-suspendido");
   assert(destinoPanelAdmin(null, membresia("super_admin", suspendido)) === null, "super_admin entra a un residencial suspendido (soporte)");
   assert(destinoPanelAdmin(null, membresia("guardia", suspendido)) === "/residencial-suspendido", "la suspensión se valida antes que el rol");
   assert(destinoPanelAdmin(null, membresia("rol_desconocido", suspendido)) === "/residencial-suspendido", "rol sin panel de un residencial suspendido → /residencial-suspendido");
-  const sinOnboarding = { onboarding_completado: false, estado_servicio: "piloto" };
+  const sinOnboarding = { onboarding_completado: false, estado_servicio: "piloto", suscripciones: ACTIVA };
   assert(destinoPanelAdmin(null, membresia("admin_residencial", sinOnboarding)) === "/onboarding", "onboarding pendiente → /onboarding");
   assert(destinoPanelAdmin(null, membresia("recepcion", sinOnboarding)) === "/sin-acceso?motivo=rol", "un rol sin panel no llega a /onboarding");
 });

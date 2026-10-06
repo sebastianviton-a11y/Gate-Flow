@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { ArrowLeftRight, LogOut } from "lucide-react";
 import { TenantLogo } from "@gateflow/ui";
 import type { SessionContext } from "@gateflow/types";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { ConnectivityIndicator } from "./connectivity-indicator";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 
 /**
  * A propósito NO es un header con navegación — es una barra de estado.
@@ -20,6 +22,7 @@ export function GuardShell({ session }: { session: SessionContext }) {
 
   async function handleSignOut() {
     const supabase = createBrowserSupabaseClient();
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     router.replace("/login");
     router.refresh();
@@ -37,6 +40,16 @@ export function GuardShell({ session }: { session: SessionContext }) {
 
       <div className="flex shrink-0 items-center gap-2">
         <ConnectivityIndicator />
+        {session.availableTenants.length > 1 && (
+          <Link
+            href="/seleccionar-residencial"
+            aria-label="Cambiar residencial"
+            title="Cambiar residencial"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeftRight className="h-5 w-5" />
+          </Link>
+        )}
         <button
           type="button"
           onClick={handleSignOut}

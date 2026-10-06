@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -115,16 +116,16 @@ export function AceptarInvitacionForm() {
     const { data: userData } = await supabase.auth.getUser();
     console.log("STEP 6: getUser() después del éxito ->", JSON.stringify({ userId: userData.user?.id, email: userData.user?.email }));
     // Un guardia invitado inicia sesión en la app Guard, no en Admin.
+    // Con membresías previas se evalúan TODAS: si alguna es de Admin, va
+    // al login de Admin y después a /seleccionar-residencial.
     let destino = { enGuard: false, url: "/login?password_created=1" };
     if (userData.user) {
-      const { data: membership, error: errorMembresia } = await supabase
+      const { data: membresias, error: errorMembresia } = await supabase
         .from("user_tenants")
         .select(SELECT_MEMBRESIA_PANEL)
         .eq("user_id", userData.user.id)
-        .eq("activo", true)
-        .limit(1)
-        .maybeSingle();
-      destino = destinoTrasAutenticar(errorMembresia, membership, {
+        .eq("activo", true);
+      destino = destinoTrasAutenticar(errorMembresia, membresias ?? [], {
         admin: "/login?password_created=1",
         guard: "/login?password_created=1",
       });
@@ -137,6 +138,7 @@ export function AceptarInvitacionForm() {
       console.log("STEP 6b: update perfil (nombre + términos) error:", errorPerfil ? errorPerfil.message : "ninguno");
     }
 
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     const { data: sesionDespues } = await supabase.auth.getSession();
     console.log("STEP 7: signOut() ejecutado. Sesión residual:", sesionDespues.session ? "TODAVÍA HAY SESIÓN (inesperado)" : "ninguna, correcto");

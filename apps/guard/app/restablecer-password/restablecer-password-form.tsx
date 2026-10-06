@@ -6,6 +6,7 @@ import { Loader2, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "exito";
 
@@ -74,6 +75,7 @@ export function RestablecerPasswordForm() {
       return;
     }
 
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     setEstado("exito");
     setTimeout(() => {

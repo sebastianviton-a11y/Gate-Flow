@@ -20,7 +20,11 @@
 #   GRA' has_role_in_tenant "de producción" ya existente + migración A
 #                                           → aplica sin error, mismo estado que GRA
 #   GRAC + fase C                           → 0 FAIL
-#   GRACT + registro/trial (20261006)       → 0 FAIL; contrato aquí
+#   GRACT + registro/trial (20261006)       → 0 FAIL
+#   GRACTO + tenant_operativo (20261007)    → 0 FAIL
+#   GRACTOI + integridad multitenant        → 0 FAIL; contrato aquí
+#        rollback I = GRACTO
+#        rollback O = GRACT
 #        rollback T = GRAC
 #        rollback C = GRA
 #   Contrato: los select(...) del código contra el esquema GRA.
@@ -45,6 +49,10 @@ FASE_C="$SUPA/migrations/$MIG_C"
 # Posteriores a C: se aplican después de C y se revierten antes que C.
 MIG_T="20261006000000_registro_trial.sql"
 DOWN_T="$SUPA/rollback/20261006000000_registro_trial.down.sql"
+MIG_O="20261007000000_tenant_operativo.sql"
+DOWN_O="$SUPA/rollback/20261007000000_tenant_operativo.down.sql"
+MIG_I="20261007100000_integridad_multitenant.sql"
+DOWN_I="$SUPA/rollback/20261007100000_integridad_multitenant.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -127,7 +135,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -183,9 +191,17 @@ snapshot "$OUT/snap_GRAC.txt"
 
 sql_file "$SUPA/migrations/$MIG_T"
 run_suites GRACT "grants + rec. + A + C + T"
+snapshot "$OUT/snap_GRACT.txt"
 
-# El código llama a las RPC de registro: el contrato se verifica con
-# el esquema completo (A + C + registro/trial).
+sql_file "$SUPA/migrations/$MIG_O"
+run_suites GRACTO "… + T + tenant_operativo"
+snapshot "$OUT/snap_GRACTO.txt"
+
+sql_file "$SUPA/migrations/$MIG_I"
+run_suites GRACTOI "… + O + integridad"
+
+# El código llama a las RPC de registro y lee suscripciones: el
+# contrato se verifica con el esquema completo (A + C + T + O).
 echo "Contrato código ↔ esquema:"
 if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" > "$OUT/contrato.log" 2>&1; then
   tail -n 1 "$OUT/contrato.log" | sed 's/^/  /'
@@ -193,6 +209,8 @@ else
   sed 's/^/    /' "$OUT/contrato.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_I";                    snapshot "$OUT/snap_GRACTOb.txt"; igual "$OUT/snap_GRACTO.txt" "$OUT/snap_GRACTOb.txt" rollback_I
+sql_file "$DOWN_O";                    snapshot "$OUT/snap_GRACTb.txt"; igual "$OUT/snap_GRACT.txt" "$OUT/snap_GRACTb.txt" rollback_O
 sql_file "$DOWN_T";                    snapshot "$OUT/snap_GRACb.txt"; igual "$OUT/snap_GRAC.txt" "$OUT/snap_GRACb.txt" rollback_T
 sql_file "$DOWN_C";                    snapshot "$OUT/snap_GRA3.txt"; igual "$OUT/snap_GRA2.txt" "$OUT/snap_GRA3.txt" rollback_C
 

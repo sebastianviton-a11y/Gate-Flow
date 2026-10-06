@@ -25,6 +25,9 @@ function assert(condicion: boolean, mensaje: string) {
   }
 }
 
+/** a aparece en el texto y antes que b (sin el -1 silencioso de indexOf). */
+const antes = (texto: string, a: string, b: string) => texto.indexOf(a) >= 0 && texto.indexOf(b) >= 0 && texto.indexOf(a) < texto.indexOf(b);
+
 function seccion(nombre: string, fn: () => void) {
   console.log(`\n${nombre}`);
   fn();
@@ -32,8 +35,10 @@ function seccion(nombre: string, fn: () => void) {
 
 const GUARD = "https://gateflow-guard-staging.netlify.app";
 const ADMIN = "https://gateflow-admin-staging.netlify.app";
-const TENANT_OK = { onboarding_completado: true, estado_servicio: "piloto" };
-const SUSPENDIDO = { onboarding_completado: true, estado_servicio: "suspendido" };
+/** Desde el ciclo de vida del trial, el acceso exige suscripción operativa. */
+const ACTIVA = { estado: "active", trial_ends_at: null };
+const TENANT_OK = { onboarding_completado: true, estado_servicio: "piloto", suscripciones: ACTIVA };
+const SUSPENDIDO = { onboarding_completado: true, estado_servicio: "suspendido", suscripciones: ACTIVA };
 const membresia = (clave: unknown, tenants: unknown = TENANT_OK) => ({ roles: clave === undefined ? null : { clave }, tenants });
 /** Igual que el middleware: NextResponse.redirect(new URL(destino, request.url)). */
 const resolver = (destino: string, desde = `${ADMIN}/dashboard`) => new URL(destino, desde).href;
@@ -60,10 +65,11 @@ seccion("1. guardia autenticado entrando a Admin → Guard", () => {
   // /dashboard (y de ahí a Guard); requireRole manda a /dashboard.
   const mw = fuente("middleware.ts");
   assert(mw.includes('if (user && esSoloInvitados) {\n    return NextResponse.redirect(new URL("/dashboard", request.url));'), "con sesión, /login → /dashboard → Guard");
-  assert(mw.includes("const destino = destinoPanelAdmin(error, membership);") && mw.includes("NextResponse.redirect(new URL(destino, request.url))"), "el middleware usa destinoPanelAdmin");
+  assert(mw.includes("resultadoPanel(error, filas, request.cookies.get(COOKIE_TENANT)?.value)") && mw.includes("NextResponse.redirect(new URL(destino, request.url))"), "el middleware usa la decisión del residencial seleccionado");
   const layout = fuente("app/(app)/layout.tsx");
-  assert(layout.includes('redirect(destinoPanelAdmin(error, membership) ?? "/sin-acceso?motivo=rol");'), "el layout de (app) usa destinoPanelAdmin (mismo orden que el middleware)");
-  assert(layout.includes(".select(SELECT_MEMBRESIA_PANEL)") && /\.eq\("activo", true\)/.test(layout), "el layout lee la misma membresía activa");
+  assert(layout.includes("await leerAccesoAdmin()") && layout.includes('redirect(destinoDeDecision(decision) ?? "/sin-acceso?motivo=error");'), "el layout de (app) usa la misma decisión que el middleware");
+  const lectura = fuente("lib/acceso-servidor.ts");
+  assert(lectura.includes(".select(SELECT_MEMBRESIA_PANEL)") && /\.eq\("activo", true\)/.test(lectura), "el layout lee las mismas membresías activas");
 });
 
 seccion("2/3. admin_residencial y super_admin permanecen en Admin", () => {
@@ -83,7 +89,7 @@ seccion("4. sin membresía → /sin-acceso", () => {
 
 seccion("5. guardia inactivo → /sin-acceso", () => {
   // La consulta filtra activo=true: una membresía inactiva llega como null.
-  for (const archivo of ["middleware.ts", "app/sin-acceso/page.tsx", "components/shared/login-form.tsx", "app/aceptar-invitacion/aceptar-invitacion-form.tsx"]) {
+  for (const archivo of ["middleware.ts", "lib/acceso-servidor.ts", "components/shared/login-form.tsx", "app/aceptar-invitacion/aceptar-invitacion-form.tsx"]) {
     assert(/\.eq\("activo", true\)/.test(fuente(archivo)), `${archivo} filtra activo=true`);
   }
   assert(destinoPanelAdmin(null, null, GUARD) === "/sin-acceso", "guardia inactivo → /sin-acceso");
@@ -122,8 +128,8 @@ seccion("7. aceptación de invitación de guardia termina en Guard", () => {
   const e = destinoTrasAutenticar({ code: "x" }, membresia("guardia"), rutas, GUARD);
   assert(!e.enGuard, "error → flujo de Admin (el middleware decide /sin-acceso)");
   const form = fuente("app/aceptar-invitacion/aceptar-invitacion-form.tsx");
-  assert(/destino = destinoTrasAutenticar\(errorMembresia, membership, \{\s*admin: "\/login\?password_created=1",\s*guard: "\/login\?password_created=1",/.test(form), "el formulario usa destinoTrasAutenticar");
-  assert(form.indexOf("destinoTrasAutenticar(") < form.indexOf("await supabase.auth.signOut();"), "el rol se lee antes de cerrar la sesión de invitación");
+  assert(/destino = destinoTrasAutenticar\(errorMembresia, membresias \?\? \[\], \{\s*admin: "\/login\?password_created=1",\s*guard: "\/login\?password_created=1",/.test(form), "el formulario usa destinoTrasAutenticar con todas las membresías");
+  assert(antes(form, "destinoTrasAutenticar(", "await supabase.auth.signOut();"), "el rol se lee antes de cerrar la sesión de invitación");
   assert(form.includes("window.location.assign(destino.url);"), "navega a Guard (otro dominio)");
 });
 
@@ -134,9 +140,9 @@ seccion("8. login normal de guardia termina en Guard", () => {
   assert(!destinoTrasAutenticar(null, null, rutas, GUARD).enGuard, "sin membresía → Admin (/sin-acceso vía middleware)");
   assert(!destinoTrasAutenticar(null, membresia("rol_x"), rutas, GUARD).enGuard, "rol desconocido → Admin (/sin-acceso vía middleware)");
   const form = fuente("components/shared/login-form.tsx");
-  assert(form.includes('destinoTrasAutenticar(errorMembresia, membership, { admin: next, guard: "/login" })'), "el login usa destinoTrasAutenticar");
+  assert(form.includes('destinoTrasAutenticar(errorMembresia, membresias ?? [], { admin: next, guard: "/login" })'), "el login usa destinoTrasAutenticar con todas las membresías");
   assert(form.includes('await supabase.auth.signOut({ scope: "local" });'), "cierra solo la sesión local de Admin (no la de Guard)");
-  assert(form.indexOf('signOut({ scope: "local" })') < form.indexOf("window.location.assign(destino.url);"), "cierra la sesión antes de ir a Guard");
+  assert(antes(form, 'signOut({ scope: "local" })', "window.location.assign(destino.url);"), "cierra la sesión antes de ir a Guard");
 });
 
 seccion("9. guardia + tenant suspendido → NO Guard", () => {
@@ -146,20 +152,20 @@ seccion("9. guardia + tenant suspendido → NO Guard", () => {
   assert(!login.enGuard && login.url === "/dashboard", "login → flujo de Admin (el middleware manda a /residencial-suspendido)");
   const inv = destinoTrasAutenticar(null, membresia("guardia", SUSPENDIDO), { admin: "/login?password_created=1", guard: "/login?password_created=1" }, GUARD);
   assert(!inv.enGuard && inv.url === "/login?password_created=1", "invitación → login de Admin, no Guard");
-  assert(destinoPanelAdmin(null, membresia("guardia", { onboarding_completado: false, estado_servicio: "suspendido" }), GUARD) === "/residencial-suspendido", "suspendido también con onboarding pendiente");
+  assert(destinoPanelAdmin(null, membresia("guardia", { onboarding_completado: false, estado_servicio: "suspendido", suscripciones: ACTIVA }), GUARD) === "/residencial-suspendido", "suspendido también con onboarding pendiente");
 });
 
 seccion("10. admin_residencial + tenant suspendido → comportamiento anterior", () => {
   assert(destinoPanelAdmin(null, membresia("admin_residencial", SUSPENDIDO), GUARD) === "/residencial-suspendido", "admin_residencial → /residencial-suspendido");
   assert(destinoPanelAdmin(null, membresia("super_admin", SUSPENDIDO), GUARD) === null, "super_admin sigue entrando (soporte)");
-  assert(destinoPanelAdmin(null, membresia("admin_residencial", { onboarding_completado: false, estado_servicio: "suspendido" }), GUARD) === "/residencial-suspendido", "la suspensión sigue antes que el onboarding");
+  assert(destinoPanelAdmin(null, membresia("admin_residencial", { onboarding_completado: false, estado_servicio: "suspendido", suscripciones: ACTIVA }), GUARD) === "/residencial-suspendido", "la suspensión sigue antes que el onboarding");
 });
 
 seccion("11. /sin-acceso de tenant suspendido → sin CTA a Guard", () => {
   assert(!mostrarCtaGuard("rol", null, membresia("guardia", SUSPENDIDO), GUARD), "guardia de residencial suspendido → sin CTA");
   assert(!mostrarCtaGuard(undefined, null, membresia("guardia", SUSPENDIDO), GUARD), "sin motivo → sin CTA");
   for (const estado of ["cancelado", "", "otro"]) {
-    const t = { onboarding_completado: true, estado_servicio: estado };
+    const t = { onboarding_completado: true, estado_servicio: estado, suscripciones: ACTIVA };
     assert(!redirigeAGuard(null, membresia("guardia", t), GUARD), `estado ${JSON.stringify(estado)} no habilitado → no Guard`);
     assert(destinoPanelAdmin(null, membresia("guardia", t), GUARD) === "/sin-acceso?motivo=rol", `estado ${JSON.stringify(estado)} → /sin-acceso?motivo=rol`);
   }
@@ -167,11 +173,11 @@ seccion("11. /sin-acceso de tenant suspendido → sin CTA a Guard", () => {
 
 seccion("12. guardia activo + tenant activo → Guard", () => {
   for (const estado of ["piloto", "activo"]) {
-    const t = { onboarding_completado: true, estado_servicio: estado };
+    const t = { onboarding_completado: true, estado_servicio: estado, suscripciones: ACTIVA };
     assert(destinoPanelAdmin(null, membresia("guardia", t), GUARD) === `${GUARD}/guard`, `estado ${estado} → Guard`);
     assert(mostrarCtaGuard("rol", null, membresia("guardia", t), GUARD), `estado ${estado} → CTA`);
   }
-  assert(destinoPanelAdmin(null, membresia("guardia", { onboarding_completado: false, estado_servicio: "piloto" }), GUARD) === `${GUARD}/guard`, "onboarding pendiente del residencial no bloquea al guardia (no entra al panel)");
+  assert(destinoPanelAdmin(null, membresia("guardia", { onboarding_completado: false, estado_servicio: "piloto", suscripciones: ACTIVA }), GUARD) === `${GUARD}/guard`, "onboarding pendiente del residencial no bloquea al guardia (no entra al panel)");
 });
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

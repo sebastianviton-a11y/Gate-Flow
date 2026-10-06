@@ -6,6 +6,7 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 
 export function LoginForm() {
   const router = useRouter();
@@ -63,20 +64,20 @@ export function LoginForm() {
 
     const next = searchParams.get("next") ?? "/dashboard";
 
-    // Un guardia no usa este panel: termina en la app Guard. La sesión
-    // de Admin no viaja a otro dominio, así que se cierra solo aquí
-    // (scope local: no afecta su sesión en Guard) y allí inicia sesión.
-    // Cualquier otro caso sigue igual: el middleware decide.
+    // Un guardia no usa este panel: termina en la app Guard (con varias
+    // membresías, solo si todas son de guardia; si hay alguna de Admin,
+    // el middleware lleva a /seleccionar-residencial). La sesión de Admin
+    // no viaja a otro dominio, así que se cierra solo aquí (scope local:
+    // no afecta su sesión en Guard) y allí inicia sesión.
     if (dataSignIn.user) {
-      const { data: membership, error: errorMembresia } = await supabase
+      const { data: membresias, error: errorMembresia } = await supabase
         .from("user_tenants")
         .select(SELECT_MEMBRESIA_PANEL)
         .eq("user_id", dataSignIn.user.id)
-        .eq("activo", true)
-        .limit(1)
-        .maybeSingle();
-      const destino = destinoTrasAutenticar(errorMembresia, membership, { admin: next, guard: "/login" });
+        .eq("activo", true);
+      const destino = destinoTrasAutenticar(errorMembresia, membresias ?? [], { admin: next, guard: "/login" });
       if (destino.enGuard) {
+        await borrarResidencialSeleccionado();
         await supabase.auth.signOut({ scope: "local" });
         window.location.assign(destino.url);
         return;

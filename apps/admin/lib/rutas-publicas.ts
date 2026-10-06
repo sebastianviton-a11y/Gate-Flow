@@ -32,6 +32,13 @@ export const RUTAS_SIEMPRE_PUBLICAS = [
   "/sin-acceso",
 ] as const;
 
+/**
+ * Rutas de cuenta: exigen sesión, pero el middleware NO aplica la
+ * redirección por membresía/suscripción; la propia página decide con
+ * la misma lógica (así /suscripcion nunca entra en bucle).
+ */
+export const RUTAS_CUENTA = ["/suscripcion", "/seleccionar-residencial"] as const;
+
 export function esRutaPublica(pathname: string): boolean {
   return [...RUTAS_SOLO_INVITADOS, ...RUTAS_SIEMPRE_PUBLICAS].some((ruta) => pathname.startsWith(ruta));
 }
