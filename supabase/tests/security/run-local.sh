@@ -12,6 +12,8 @@
 #   0  esquema actual (sin la fase A)   → informativo: muestra los riesgos
 #   A  + migración A                    → 0 FAIL esperado
 #   C  + fase C                         → 0 FAIL esperado
+#   T  + registro/trial (20261006)      → 0 FAIL esperado
+#   rollback T → catálogo idéntico a C
 #   rollback C → catálogo idéntico a A  → 0 FAIL en fase A
 #   rollback A → catálogo idéntico a 0
 #   A de nuevo sobre el rollback        → 0 FAIL esperado
@@ -25,6 +27,10 @@ MIG_A="20260930000000_privilegios_fase_a.sql"
 MIG_G="20260729100000_grants_minimo_privilegio.sql"
 MIG_C="20261005180000_privilegios_fase_c.sql"
 FASE_C="$SUPA/migrations/$MIG_C"
+# Migraciones posteriores a C: se aplican después de C (dependen de A)
+# y se revierten antes de revertir C.
+MIG_T="20261006000000_registro_trial.sql"
+DOWN_T="$SUPA/rollback/20261006000000_registro_trial.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -61,10 +67,12 @@ SQL
 }
 
 run_suites() {
-  local fase="$1" log="$OUT/fase_$1_$2.log"
+  # $3 (opcional): fase que ven las suites por tests.fase; la fase T es
+  # "C + registro/trial", así que las suites de A/C la leen como C.
+  local fase="$1" log="$OUT/fase_$1_$2.log" fase_sql="${3:-$1}"
   : > "$log"
   for f in "$DIR"/[1-9]0_*.sql; do
-    PGOPTIONS="-c tests.fase=$fase" psql -X -q -d "$DB" -f "$f" >>"$log" 2>&1 || true
+    PGOPTIONS="-c tests.fase=$fase_sql" psql -X -q -d "$DB" -f "$f" >>"$log" 2>&1 || true
   done
   local pass fail err
   pass=$(grep -c 'NOTICE:  PASS|' "$log" || true)
@@ -91,7 +99,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.
@@ -112,6 +120,14 @@ run_suites A "migración A"
 
 sql_file "$FASE_C"
 run_suites C "fase C"
+snapshot "$OUT/snap_C.txt"
+
+sql_file "$SUPA/migrations/$MIG_T"
+run_suites T "fase C + registro trial" C
+
+sql_file "$DOWN_T"
+snapshot "$OUT/snap_C_tras_down_T.txt"
+same_catalog "$OUT/snap_C.txt" "$OUT/snap_C_tras_down_T.txt" "rollback_T"
 
 sql_file "$DOWN_C"
 snapshot "$OUT/snap_A_tras_down_C.txt"

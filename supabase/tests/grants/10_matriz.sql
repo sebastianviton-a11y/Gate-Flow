@@ -42,6 +42,16 @@ insert into esperado values
   ('codigo_gateflow_seq',               'authenticated', '{USAGE}'),
   ('paquete_grupos_entrega_codigo_seq', 'authenticated', '{USAGE}');
 
+-- Registro/trial (20261006): suscripciones solo SELECT para
+-- authenticated; registro_intentos sin ningún grant (queda cubierta
+-- por la regla "objeto no listado = 0 permisos").
+do $$
+begin
+  if to_regclass('public.suscripciones') is not null then
+    insert into esperado values ('suscripciones', 'authenticated', '{SELECT}');
+  end if;
+end $$;
+
 -- La migración A (privilegios fase A) cambia el UPDATE de tabla en
 -- user_tenants por UPDATE solo de la columna activo (E2b) y da a
 -- service_role lo que otorgar_membresia necesita.

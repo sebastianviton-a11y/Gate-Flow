@@ -127,6 +127,7 @@ export {
 } from "./empresas";
 
 export { listarUsuariosTenant, ROLES_INVITABLES, puedeInvitar, type UsuarioTenant } from "./usuarios";
+export { situacionSuscripcion, diasRestantesTrial, obtenerSuscripcion, type SituacionSuscripcion } from "./suscripciones";
 
 export {
   buscarGrupoAbiertoDeUnidad,

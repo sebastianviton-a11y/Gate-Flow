@@ -20,6 +20,8 @@
 #   GRA' has_role_in_tenant "de producción" ya existente + migración A
 #                                           → aplica sin error, mismo estado que GRA
 #   GRAC + fase C                           → 0 FAIL
+#   GRACT + registro/trial (20261006)       → 0 FAIL; contrato aquí
+#        rollback T = GRAC
 #        rollback C = GRA
 #   Contrato: los select(...) del código contra el esquema GRA.
 # Los casos PENDIENTE son fallos conocidos con corrección por aprobar:
@@ -40,6 +42,9 @@ DOWN_R="$SUPA/rollback/20260729200000_reconciliacion_paridad_produccion.down.sql
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 MIG_C="20261005180000_privilegios_fase_c.sql"
 FASE_C="$SUPA/migrations/$MIG_C"
+# Posteriores a C: se aplican después de C y se revierten antes que C.
+MIG_T="20261006000000_registro_trial.sql"
+DOWN_T="$SUPA/rollback/20261006000000_registro_trial.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -122,7 +127,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -174,13 +179,21 @@ run_suites GRA "A sobre función preexistente"
 
 sql_file "$FASE_C"
 run_suites GRAC "grants + reconciliación + A + C"
-sql_file "$DOWN_C";                    snapshot "$OUT/snap_GRA3.txt"; igual "$OUT/snap_GRA2.txt" "$OUT/snap_GRA3.txt" rollback_C
+snapshot "$OUT/snap_GRAC.txt"
 
+sql_file "$SUPA/migrations/$MIG_T"
+run_suites GRACT "grants + rec. + A + C + T"
+
+# El código llama a las RPC de registro: el contrato se verifica con
+# el esquema completo (A + C + registro/trial).
 echo "Contrato código ↔ esquema:"
 if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" > "$OUT/contrato.log" 2>&1; then
   tail -n 1 "$OUT/contrato.log" | sed 's/^/  /'
 else
   sed 's/^/    /' "$OUT/contrato.log"; FALLAS=$((FALLAS + 1))
 fi
+
+sql_file "$DOWN_T";                    snapshot "$OUT/snap_GRACb.txt"; igual "$OUT/snap_GRAC.txt" "$OUT/snap_GRACb.txt" rollback_T
+sql_file "$DOWN_C";                    snapshot "$OUT/snap_GRA3.txt"; igual "$OUT/snap_GRA2.txt" "$OUT/snap_GRA3.txt" rollback_C
 
 if [[ "$FALLAS" == "0" ]]; then echo "OK"; else echo "FALLAS: $FALLAS"; exit 1; fi

@@ -283,3 +283,23 @@ export interface NavItem {
   /** Roles que pueden ver este ítem. Vacío = visible para todos los roles autenticados. */
   roles?: RoleKey[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Suscripción (migración 20261006000000_registro_trial)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type EstadoSuscripcion = "trialing" | "active" | "past_due" | "canceled" | "expired";
+export type OrigenSuscripcion = "registro_publico" | "alta_manual";
+
+/** Una fila por residencial (suscripciones.tenant_id es único). Los
+ * residenciales dados de alta a mano quedan active + alta_manual sin
+ * fechas; los de /registro empiezan trialing con 30 días. */
+export interface Suscripcion {
+  id: string;
+  tenantId: string;
+  estado: EstadoSuscripcion;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  viviendasDeclaradas: number | null;
+  origen: OrigenSuscripcion;
+}

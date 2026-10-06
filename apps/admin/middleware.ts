@@ -1,27 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@gateflow/supabase";
 import { destinoPanelAdmin } from "@/lib/acceso-panel";
+import { RUTAS_SIEMPRE_PUBLICAS, RUTAS_SOLO_INVITADOS } from "@/lib/rutas-publicas";
 
-// "Solo para invitados": si ya hay sesión, no tiene sentido seguir
-// viéndolas — se redirige al dashboard.
-const RUTAS_SOLO_INVITADOS = ["/login"];
-
-// "Siempre accesibles", con o sin sesión: /aceptar-invitacion porque
-// establece una sesión ANTES de que la contraseña esté creada (aplicar
-// la regla de "solo invitados" ahí sacaría a la persona a mitad del
-// proceso), y /terminos porque es contenido informativo que cualquiera
-// — con sesión o sin ella — debe poder leer sin ser redirigido.
-// /sin-acceso también: es a donde se envía a quien tiene sesión pero no
-// un residencial activo (o cuando no se pudo validar), y no consulta la
-// sesión, así que no puede entrar en bucle.
-const RUTAS_SIEMPRE_PUBLICAS = [
-  "/aceptar-invitacion",
-  "/terminos",
-  "/residencial-suspendido",
-  "/recuperar-password",
-  "/restablecer-password",
-  "/sin-acceso",
-];
+// Qué rutas no exigen sesión y por qué: lib/rutas-publicas.ts.
 
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);

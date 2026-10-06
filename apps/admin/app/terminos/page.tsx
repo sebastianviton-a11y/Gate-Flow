@@ -1,6 +1,9 @@
+import { AvisoStagingLegal } from "@/components/shared/aviso-staging-legal";
+
 export default function TerminosPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-8 text-sm leading-relaxed">
+      <AvisoStagingLegal />
       <h1 className="font-display text-xl font-semibold">Términos y condiciones de GateFlow</h1>
       <p className="text-muted-foreground">
         Texto de referencia — pendiente de reemplazar por el texto legal definitivo antes de comercializar. La aceptación de este documento

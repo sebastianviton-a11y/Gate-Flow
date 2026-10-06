@@ -72,6 +72,17 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
     return { ok: false, mensaje: e instanceof Error ? e.message : "Falta configurar SUPABASE_SERVICE_ROLE_KEY." };
   }
 
+  // Toda alta manual queda con suscripción active + alta_manual, sin
+  // trial (como el backfill de la migración de registro). Solo en el
+  // servidor y con la clave de servicio: la RPC no acepta estado,
+  // origen ni fechas, así que el navegador no puede elegirlos. Sin
+  // suscripción no se deja el residencial a medias.
+  const { error: errorSuscripcion } = await servicioClient.rpc("crear_suscripcion_alta_manual", { p_tenant_id: tenant.id });
+  if (errorSuscripcion) {
+    await supabase.from("tenants").delete().eq("id", tenant.id);
+    return { ok: false, mensaje: `No se pudo crear la suscripción del residencial: ${errorSuscripcion.message}` };
+  }
+
   // ── DIAGNÓSTICO 1: entorno en tiempo de ejecución ─────────────
   const urlBase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
