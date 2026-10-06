@@ -23,3 +23,9 @@
 # Esta app no usa Supabase ni autenticación — no requiere variables de
 # entorno de backend. Si en el futuro se agrega analítica o un formulario
 # de contacto, sus variables se configuran en la UI de Netlify, nunca aquí.
+#
+# Única variable pública (opcional): NEXT_PUBLIC_ADMIN_APP_URL — URL del
+# panel Admin del mismo entorno (misma variable que apps/admin), sin "/"
+# final. Los CTAs "Probar gratis" de la V2 apuntan a <URL>/registro. Se
+# inlinea en build: cambiarla requiere redeploy. Sin variable, los CTAs
+# conservan su ancla interna (#d-probar / #m-probar).
