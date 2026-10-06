@@ -22,7 +22,9 @@
 #   GRAC + fase C                           → 0 FAIL
 #   GRACT + registro/trial (20261006)       → 0 FAIL
 #   GRACTO + tenant_operativo (20261007)    → 0 FAIL
-#   GRACTOI + integridad multitenant        → 0 FAIL; contrato aquí
+#   GRACTOI + integridad multitenant        → 0 FAIL
+#   GRACTOIP + columnas protegidas tenants  → 0 FAIL; contrato aquí
+#        rollback P = GRACTOI
 #        rollback I = GRACTO
 #        rollback O = GRACT
 #        rollback T = GRAC
@@ -53,6 +55,8 @@ MIG_O="20261007000000_tenant_operativo.sql"
 DOWN_O="$SUPA/rollback/20261007000000_tenant_operativo.down.sql"
 MIG_I="20261007100000_integridad_multitenant.sql"
 DOWN_I="$SUPA/rollback/20261007100000_integridad_multitenant.down.sql"
+MIG_P="20261008000000_tenants_columnas_protegidas.sql"
+DOWN_P="$SUPA/rollback/20261008000000_tenants_columnas_protegidas.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -77,6 +81,13 @@ select 'PRIV|' || c.relname || '|' || r || '|' ||
   end
 from pg_class c cross join unnest(array['anon','authenticated','service_role']) r
 where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','v','m','p','S')
+union all
+select 'COLPRIV|' || c.relname || '.' || a.attname || '|' || r || '|' ||
+  (select coalesce(string_agg(p, ','), '') from unnest(array['SELECT','INSERT','UPDATE','REFERENCES']) p
+   where has_column_privilege(r, c.oid, a.attnum, p) and not has_table_privilege(r, c.oid, p))
+from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and a.attacl is not null
+cross join unnest(array['anon','authenticated','service_role']) r
+where c.relnamespace = 'public'::regnamespace
 union all
 select 'DEFAULT|' || pg_get_userbyid(d.defaclrole) || '|' || d.defaclobjtype::text || '|' || d.defaclacl::text
 from pg_default_acl d where d.defaclnamespace = 'public'::regnamespace
@@ -109,7 +120,7 @@ igual() {  # igual <a> <b> <nombre>
 run_suites() {
   local fase="$1" log="$OUT/fase_$1_$2.log"
   : > "$log"
-  for f in "$DIR"/[1-9]0_*.sql; do
+  for f in "$DIR"/[1-9][0-9]_*.sql; do
     psql -X -q -d "$DB" -f "$f" >>"$log" 2>&1 || true
   done
   local pass fail err pend
@@ -135,7 +146,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -199,9 +210,14 @@ snapshot "$OUT/snap_GRACTO.txt"
 
 sql_file "$SUPA/migrations/$MIG_I"
 run_suites GRACTOI "… + O + integridad"
+snapshot "$OUT/snap_GRACTOI.txt"
 
-# El código llama a las RPC de registro y lee suscripciones: el
-# contrato se verifica con el esquema completo (A + C + T + O).
+sql_file "$SUPA/migrations/$MIG_P"
+run_suites GRACTOIP "… + I + columnas tenants"
+
+# El código llama a las RPC de registro y de Super Admin, lee
+# suscripciones y actualiza tenants por columna: el contrato se
+# verifica con el esquema completo (A + C + T + O + I + P).
 echo "Contrato código ↔ esquema:"
 if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" > "$OUT/contrato.log" 2>&1; then
   tail -n 1 "$OUT/contrato.log" | sed 's/^/  /'
@@ -209,6 +225,7 @@ else
   sed 's/^/    /' "$OUT/contrato.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_P";                    snapshot "$OUT/snap_GRACTOIb.txt"; igual "$OUT/snap_GRACTOI.txt" "$OUT/snap_GRACTOIb.txt" rollback_P
 sql_file "$DOWN_I";                    snapshot "$OUT/snap_GRACTOb.txt"; igual "$OUT/snap_GRACTO.txt" "$OUT/snap_GRACTOb.txt" rollback_I
 sql_file "$DOWN_O";                    snapshot "$OUT/snap_GRACTb.txt"; igual "$OUT/snap_GRACT.txt" "$OUT/snap_GRACTb.txt" rollback_O
 sql_file "$DOWN_T";                    snapshot "$OUT/snap_GRACb.txt"; igual "$OUT/snap_GRAC.txt" "$OUT/snap_GRACb.txt" rollback_T

@@ -74,6 +74,16 @@ begin
   end if;
 end $$;
 
+-- Columnas protegidas de tenants (20261008): el UPDATE de tabla de
+-- authenticated pasa a UPDATE solo de las columnas que edita el
+-- admin_residencial (el detalle lo verifica 95_tenants_columnas.sql).
+do $$
+begin
+  if to_regprocedure('public.superadmin_cambiar_estado_servicio(uuid,text)') is not null then
+    update esperado set privs = '{SELECT,INSERT,DELETE}' where objeto = 'tenants' and rol = 'authenticated';
+  end if;
+end $$;
+
 do $$
 declare
   r record;

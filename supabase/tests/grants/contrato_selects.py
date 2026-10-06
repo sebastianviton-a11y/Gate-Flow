@@ -10,7 +10,10 @@ migrada que:
     nombre de tabla, de FK o de columna FK;
   * cada clave de `.insert({ ... })` / `.update({ ... })` con objeto
     literal es una columna de la tabla;
-  * cada `.rpc("funcion")` existe en public.
+  * cada `.rpc("funcion")` existe en public;
+  * en las tablas con UPDATE por columna para authenticated
+    (tenants), cada clave de `.update({ ... })` tiene ese privilegio:
+    el cliente de sesión no puede escribir columnas de plataforma.
 Habría detectado `incidencias.nivel_danio` (42703 en staging) y
 `registrar_paquete_con_incidencia` antes de llegar a un entorno real.
 
@@ -44,7 +47,17 @@ def cargar_esquema(db):
         where c.contype = 'f' and c.connamespace = 'public'::regnamespace"""):
         fks.append((nombre, origen.replace("public.", ""), col, destino.replace("public.", "")))
     rpcs = {r[0] for r in psql(db, "select proname from pg_proc where pronamespace = 'public'::regnamespace")}
-    return columnas, fks, rpcs
+    # Tablas sin UPDATE a nivel de tabla pero con UPDATE en algunas
+    # columnas: solo esas columnas son escribibles por la sesión.
+    actualizables = {}
+    for tabla, col in psql(db, """
+        select c.relname, a.attname from pg_class c join pg_attribute a on a.attrelid = c.oid
+        where c.relnamespace = 'public'::regnamespace and c.relname = any(array['tenants'])
+          and a.attnum > 0 and not a.attisdropped
+          and not has_table_privilege('authenticated', c.oid, 'UPDATE')
+          and has_column_privilege('authenticated', c.oid, a.attnum, 'UPDATE')"""):
+        actualizables.setdefault(tabla, set()).add(col)
+    return columnas, fks, rpcs, actualizables
 
 
 def partir(texto):
@@ -145,7 +158,7 @@ def main():
     ap.add_argument("--db", required=True)
     args = ap.parse_args()
 
-    columnas, fks, rpcs = cargar_esquema(args.db)
+    columnas, fks, rpcs, actualizables = cargar_esquema(args.db)
     errores, revisadas, sin_verificar = [], 0, 0
 
     for base in ("apps", "packages"):
@@ -193,6 +206,8 @@ def main():
                             for c in claves:
                                 if c not in columnas.get(tabla, set()):
                                     errores.append(f"{donde}: {op.group(1)} con columna inexistente {tabla}.{c}")
+                                elif op.group(1) == "update" and tabla in actualizables and c not in actualizables[tabla]:
+                                    errores.append(f"{donde}: update de columna protegida {tabla}.{c} (sin UPDATE para authenticated)")
                             revisadas += 1
 
                 for m in re.finditer(r"\.rpc\(\s*[\"']([a-z_]+)[\"']", fuente):

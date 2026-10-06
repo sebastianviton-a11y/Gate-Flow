@@ -231,24 +231,29 @@ export async function crearResidencial(supabase: SupabaseClient, input: Residenc
   return { id: data.id };
 }
 
+// Las columnas de plataforma de public.tenants (estado del servicio,
+// plan comercial, contacto y notas internas, etc.) no se pueden
+// actualizar con un UPDATE de authenticated (migración
+// 20261008000000_tenants_columnas_protegidas): Super Admin las cambia
+// con funciones SECURITY DEFINER que validan is_super_admin() en la
+// base de datos y no dependen de tener membresía en el residencial.
+
 export async function actualizarResidencial(supabase: SupabaseClient, id: string, input: ResidencialInput): Promise<void> {
-  const { error } = await supabase
-    .from("tenants")
-    .update({
-      nombre: input.nombre.trim(),
-      ciudad: input.ciudad?.trim() || null,
-      estado_geografico: input.estadoGeografico?.trim() || null,
-      admin_contacto_nombre: input.adminContactoNombre?.trim() || null,
-      admin_contacto_email: input.adminContactoEmail?.trim() || null,
-      admin_contacto_telefono: input.adminContactoTelefono?.trim() || null,
-      observaciones: input.observaciones?.trim() || null,
-    })
-    .eq("id", id);
+  const { error } = await supabase.rpc("superadmin_actualizar_residencial", {
+    p_tenant_id: id,
+    p_nombre: input.nombre.trim(),
+    p_ciudad: input.ciudad?.trim() || null,
+    p_estado_geografico: input.estadoGeografico?.trim() || null,
+    p_admin_contacto_nombre: input.adminContactoNombre?.trim() || null,
+    p_admin_contacto_email: input.adminContactoEmail?.trim() || null,
+    p_admin_contacto_telefono: input.adminContactoTelefono?.trim() || null,
+    p_observaciones: input.observaciones?.trim() || null,
+  });
   if (error) throw error;
 }
 
 export async function cambiarEstadoServicio(supabase: SupabaseClient, id: string, estado: EstadoServicio): Promise<void> {
-  const { error } = await supabase.from("tenants").update({ estado_servicio: estado }).eq("id", id);
+  const { error } = await supabase.rpc("superadmin_cambiar_estado_servicio", { p_tenant_id: id, p_estado: estado });
   if (error) throw error;
 }
 
@@ -257,15 +262,13 @@ export async function actualizarPlanResidencial(
   id: string,
   input: { plan: PlanClave; precio?: number | null; fechaInicio?: string | null; fechaRenovacion?: string | null },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("tenants")
-    .update({
-      plan: input.plan,
-      plan_precio: input.precio ?? null,
-      plan_fecha_inicio: input.fechaInicio || null,
-      plan_fecha_renovacion: input.fechaRenovacion || null,
-    })
-    .eq("id", id);
+  const { error } = await supabase.rpc("superadmin_actualizar_plan_residencial", {
+    p_tenant_id: id,
+    p_plan: input.plan,
+    p_precio: input.precio ?? null,
+    p_fecha_inicio: input.fechaInicio || null,
+    p_fecha_renovacion: input.fechaRenovacion || null,
+  });
   if (error) throw error;
 }
 

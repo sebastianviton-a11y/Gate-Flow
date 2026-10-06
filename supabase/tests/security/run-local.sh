@@ -15,6 +15,8 @@
 #   T  + registro/trial (20261006)      → 0 FAIL esperado
 #   O  + tenant_operativo (20261007)    → 0 FAIL esperado
 #   I  + integridad multitenant         → 0 FAIL esperado
+#   P  + columnas protegidas de tenants → 0 FAIL esperado
+#   rollback P → catálogo idéntico a I; P se reaplica y se revierte
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
 #   los datos, I aborta sin cambiar nada; I se reaplica y se revierte
 #   rollback O → catálogo idéntico a T
@@ -40,6 +42,8 @@ MIG_O="20261007000000_tenant_operativo.sql"
 DOWN_O="$SUPA/rollback/20261007000000_tenant_operativo.down.sql"
 MIG_I="20261007100000_integridad_multitenant.sql"
 DOWN_I="$SUPA/rollback/20261007100000_integridad_multitenant.down.sql"
+MIG_P="20261008000000_tenants_columnas_protegidas.sql"
+DOWN_P="$SUPA/rollback/20261008000000_tenants_columnas_protegidas.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -86,7 +90,7 @@ run_suites() {
   # "C + registro/trial", así que las suites de A/C la leen como C.
   local fase="$1" log="$OUT/fase_$1_$2.log" fase_sql="${3:-$1}"
   : > "$log"
-  for f in "$DIR"/[1-9]0_*.sql; do
+  for f in "$DIR"/[1-9][0-9]_*.sql; do
     PGOPTIONS="-c tests.fase=$fase_sql" psql -X -q -d "$DB" -f "$f" >>"$log" 2>&1 || true
   done
   local pass fail err pend
@@ -116,7 +120,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.
@@ -150,6 +154,18 @@ snapshot "$OUT/snap_O.txt"
 sql_file "$SUPA/migrations/$MIG_I"
 run_suites I "… + integridad multitenant" C
 snapshot "$OUT/snap_I.txt"
+
+sql_file "$SUPA/migrations/$MIG_P"
+run_suites P "… + columnas tenants" C
+snapshot "$OUT/snap_P.txt"
+sql_file "$DOWN_P"
+snapshot "$OUT/snap_I_tras_down_P.txt"
+same_catalog "$OUT/snap_I.txt" "$OUT/snap_I_tras_down_P.txt" "rollback_P"
+sql_file "$SUPA/migrations/$MIG_P"
+snapshot "$OUT/snap_P2.txt"
+same_catalog "$OUT/snap_P.txt" "$OUT/snap_P2.txt" "reaplicar_P"
+sql_file "$DOWN_P"
+
 sql_file "$DOWN_I"
 snapshot "$OUT/snap_O_tras_down_I.txt"
 same_catalog "$OUT/snap_O.txt" "$OUT/snap_O_tras_down_I.txt" "rollback_I"
