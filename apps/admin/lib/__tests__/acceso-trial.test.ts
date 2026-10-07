@@ -319,7 +319,7 @@ seccion("/suscripcion con billing V1: solo planId, sin secretos ni activación d
 
 seccion("/suscripcion — diseño aprobado (variante B: beneficios compartidos)", () => {
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-  assert(pagina.includes("Elige el plan para seguir usando Gate Flow") && pagina.includes("Tu información sigue aquí. Activa tu suscripción y continúa donde lo dejaste."), "cabecera de continuidad");
+  assert(pagina.includes("Elige el plan para seguir usando Gate Flow") && pagina.includes("Tu información sigue aquí. Activa tu suscripción y continúa usando Gate Flow."), "cabecera de continuidad");
   // Los beneficios se escriben una sola vez y se muestran en el bloque compartido.
   assert((pagina.match(/"Administradores y guardias ilimitados"/g) ?? []).length === 1 && pagina.includes("Todos los planes de Gate Flow incluyen:"), "beneficios compartidos, no repetidos por tarjeta");
   assert(pagina.includes('const destacado = plan.id === "hasta-150";') && pagina.includes("Más elegido"), "badge solo en Hasta 150");

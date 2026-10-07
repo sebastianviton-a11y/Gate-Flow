@@ -177,19 +177,19 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
 /** Cabecera de la elección de plan: continuidad, no bloqueo. */
 function EncabezadoPlanes({ etiqueta }: { etiqueta: string }) {
   return (
-    <section className="flex flex-col gap-4 md:max-w-[640px] md:gap-5 lg:grid lg:max-w-none lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-end lg:gap-16">
-      <div className="flex flex-col items-start gap-4 md:gap-5 lg:gap-[22px]">
+    <section className="flex flex-col gap-4 md:max-w-[640px] md:gap-5 xl:grid xl:max-w-none xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:items-end xl:gap-10">
+      <div className="flex flex-col items-start gap-4 md:gap-5 xl:gap-[22px]">
         <p className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[12.5px] font-medium text-white/[0.78] md:gap-2.5 md:px-3.5 md:text-[13px]">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/[0.45]" />
           {etiqueta}
         </p>
-        <h1 className="font-display text-[32px] font-bold leading-[1.12] tracking-[-0.02em] [text-wrap:balance] md:text-[44px] md:leading-[1.08] md:tracking-[-0.025em] lg:max-w-[640px] lg:text-[54px] lg:leading-[1.06]">
+        <h1 className="font-display text-[32px] font-bold leading-[1.12] tracking-[-0.02em] [text-wrap:balance] md:text-[44px] md:leading-[1.08] md:tracking-[-0.025em] xl:max-w-[640px] xl:text-[54px] xl:leading-[1.06]">
           Elige el plan para seguir usando Gate Flow
         </h1>
       </div>
-      <div className="flex flex-col gap-3 lg:gap-4 lg:pb-1.5">
-        <p className="text-base leading-[1.55] text-white/[0.82] md:text-lg lg:text-[19px]">
-          Tu información sigue aquí. Activa tu suscripción y continúa donde lo dejaste.
+      <div className="flex flex-col gap-3 xl:gap-4 xl:pb-1.5">
+        <p className="text-base leading-[1.55] text-white/[0.82] md:text-lg xl:text-[19px]">
+          Tu información sigue aquí. Activa tu suscripción y continúa usando Gate Flow.
         </p>
         <p className="text-sm leading-[1.6] text-white/[0.58] md:text-[15px]">Todos los planes incluyen todas las funciones. Elige según el tamaño de tu residencial.</p>
       </div>
@@ -211,12 +211,12 @@ function SeccionPlanes({ viviendas, comprable, enTrial = false }: { viviendas: n
 
         <section
           aria-labelledby="planes-incluyen"
-          className="my-1.5 flex flex-col gap-3.5 border-y border-white/[0.08] px-1 py-5 md:my-0 md:gap-4 md:py-[22px] lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:gap-x-14 lg:px-2 lg:py-[26px]"
+          className="my-1.5 flex flex-col gap-3.5 border-y border-white/[0.08] px-1 py-5 md:my-0 md:gap-4 md:py-[22px] xl:grid xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start xl:gap-x-14 xl:px-2 xl:py-[26px]"
         >
-          <h2 id="planes-incluyen" className="text-sm font-semibold leading-[1.45] text-white/[0.92] md:text-[15px] lg:whitespace-nowrap">
+          <h2 id="planes-incluyen" className="text-sm font-semibold leading-[1.45] text-white/[0.92] md:text-[15px] xl:whitespace-nowrap">
             Todos los planes de Gate Flow incluyen:
           </h2>
-          <ul className="flex flex-col gap-2.5 text-sm leading-[1.45] text-white/80 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-3 md:text-[15px] lg:grid-cols-4 lg:gap-x-7">
+          <ul className="flex flex-col gap-2.5 text-sm leading-[1.45] text-white/80 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-3 md:text-[15px] xl:grid-cols-4 xl:gap-x-7">
             {BENEFICIOS.map((beneficio) => (
               <li key={beneficio} className="flex items-start gap-2.5">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="mt-0.5 shrink-0 text-primary md:mt-[3px]">
@@ -292,7 +292,8 @@ function TarjetaPlan({ plan, viviendas, comprable, enTrial = false }: { plan: Pl
         apagada
           ? "border-white/[0.06] bg-[#0F2236]"
           : destacado
-            ? "border-primary/[0.55] bg-[#16314B] shadow-[0_0_0_4px_rgba(0,196,154,0.06),0_28px_56px_-30px_rgba(0,0,0,0.65)] lg:shadow-[0_0_0_5px_rgba(0,196,154,0.06),0_32px_64px_-32px_rgba(0,0,0,0.65)]"
+            ? // Mismo producto, solo otro tamaño: destaque por borde/badge/CTA, profundidad apenas mayor.
+              "border-primary/[0.55] bg-[#152E44] shadow-[0_0_0_3px_rgba(0,196,154,0.04),0_18px_40px_-28px_rgba(0,0,0,0.5)]"
             : "border-white/[0.08] bg-ink-900",
       )}
     >
@@ -311,12 +312,12 @@ function TarjetaPlan({ plan, viviendas, comprable, enTrial = false }: { plan: Pl
         <span
           className={cn(
             "font-display text-[44px] font-bold leading-none tracking-[-0.035em] tabular-nums md:text-[52px] lg:text-[64px]",
-            apagada && "text-white/[0.42]",
+            apagada && "text-white/60",
           )}
         >
           {plan.precio.texto}
         </span>
-        <span className={cn("text-sm font-medium md:text-[15px] lg:text-base", apagada ? "text-white/40" : destacado ? "text-white/[0.66]" : "text-white/[0.62]")}>
+        <span className={cn("text-sm font-medium md:text-[15px] lg:text-base", apagada ? "text-white/50" : destacado ? "text-white/[0.66]" : "text-white/[0.62]")}>
           MXN / {plan.precio.periodo}
         </span>
       </p>
