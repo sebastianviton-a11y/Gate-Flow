@@ -42,7 +42,8 @@ Stripe ── POST /api/billing/webhook/stripe ─► lib/billing/webhook.ts (n�
 | `suscripciones.provider` | quién cobra (`stripe`) |
 | `suscripciones.provider_customer_id` | portal de gestión; realta con el mismo cliente |
 | `suscripciones.provider_subscription_id` | asocia eventos de renovación/fallo/cancelación; único por proveedor |
-| `suscripciones.current_period_end` | fin del periodo pagado; base de la gracia y de la cancelación |
+| `suscripciones.current_period_end` | fin del periodo vigente; base de la cancelación al final del periodo (**no** de la gracia: en una renovación fallida Stripe ya lo adelantó al periodo impago) |
+| `suscripciones.impago_desde` | inicio del episodio de impago vigente (`20261009000000`): `current_period_start` del periodo impago; solo con `past_due` (check); base de la gracia |
 | `suscripciones.cancel_at_period_end` | cancelación pedida, efectiva al final |
 | `suscripciones.provider_version_at` | instante del último snapshot aplicado (descarta los viejos) |
 | `billing_checkouts` | intento de pago creado por nuestro servidor (tenant, usuario, plan, moneda, monto en centavos, estado `created/completed/expired/canceled`) |
@@ -51,20 +52,29 @@ Stripe ── POST /api/billing/webhook/stripe ─► lib/billing/webhook.ts (n�
 Filas existentes: columnas nulas / `cancel_at_period_end = false`; los
 trials y las altas manuales no cambian.
 
+`20261009000000` **no rellena** `impago_desde`: no existe una fecha fiable
+del inicio del impago en la base (`current_period_end` es justamente el
+dato equivocado y `billing_eventos` no guarda payload). Una fila que ya
+esté en `past_due` queda sin gracia (falla cerrado) hasta el siguiente
+evento de Stripe, que trae `current_period_start` y la fija. La migración
+avisa con un NOTICE cuántas filas `past_due` hay (staging: 0 en la última revisión; producción aún sin billing).
+
 ## Estados
 
 | Estado | Operativo (`tenant_operativo`, `estadoEfectivoSuscripcion`) |
 |---|---|
 | `trialing` | mientras `now() < trial_ends_at` (sin cambios) |
 | `active` | sí; con `cancel_at_period_end`, solo mientras `now() < current_period_end` |
-| `past_due` | gracia: mientras `now() < current_period_end + 7 días` |
+| `past_due` | gracia: mientras `now() < impago_desde + 7 días`; sin `impago_desde` → no (falla cerrado) |
 | `canceled`, `expired` | no |
 
 Transiciones que aplica `billing_aplicar_evento`:
 
 - trial vencido / `expired` / `canceled` → `active` (primer pago, con checkout nuestro y monto exacto);
 - `active` → `active` (renovación; nuevo `current_period_end`);
-- `active` → `past_due` (cobro fallido) → `active` (recuperado);
+- `active` → `past_due` (cobro fallido; abre el episodio: `impago_desde`) → `active` (recuperado; lo cierra: `impago_desde = null`);
+- `past_due` → `past_due` (reintento fallido, `unpaid`, duplicado o evento fuera de orden): `impago_desde` **nunca avanza** (se conserva el más temprano); si faltaba, el primer evento con una fecha fiable lo fija;
+- `past_due` → `canceled` (reintentos agotados, según la configuración de la cuenta): bloqueado, `impago_desde = null`;
 - `active` + `cancel_at_period_end` (cancelación pedida) → `canceled` (fin del periodo);
 - nunca vuelve a `trialing`; nunca toca `tenants.estado_servicio` (un residencial suspendido sigue suspendido aunque pague).
 
@@ -118,9 +128,25 @@ Resultados en `billing_eventos.resultado`: `aplicado`, `obsoleto`,
 - Cancelación: al final del periodo pagado (portal de Stripe con
   configuración propia). El acceso se corta en `current_period_end`
   aunque no llegue el webhook.
-- Cobro fallido: 7 días de gracia desde `current_period_end`. Admin
-  muestra un banner fuerte con "Actualizar método de pago"; Guard opera
-  normal. Después se bloquea igual que hoy.
+- Cobro fallido de una renovación: **exactamente 7 días de gracia desde
+  el inicio del impago** (`impago_desde`). Admin muestra un banner
+  fuerte con "Actualizar método de pago" y la fecha de fin de la gracia
+  (también en `/suscripcion`); Guard opera normal. Después se bloquea
+  igual que hoy. Detalle:
+  - **Inicio del impago** = `current_period_start` del ítem de la
+    suscripción cuando Stripe la reporta `past_due` (el inicio del periodo
+    que no se pudo cobrar). No se usa la hora de recepción del webhook ni
+    se inventa una fecha: si Stripe no la trae, `impago_desde` queda nulo
+    y el residencial **no** tiene gracia hasta que un evento posterior la
+    traiga. Una fecha posterior a la versión del evento + 5 min se
+    descarta y queda en `billing_eventos.detalle.impago_desde_descartado`.
+  - Reintentos, duplicados y eventos fuera de orden no reinician ni
+    extienden el plazo; un pago exitoso (`active`) cierra el episodio y un
+    impago posterior abre uno nuevo con su propio inicio.
+  - Mapeo de estados finales de Stripe: `unpaid` → `past_due` con el mismo
+    inicio (bloqueado al cumplirse los 7 días); `canceled` → `canceled`
+    (bloqueado); `incomplete` / `incomplete_expired` (rechazo del **pago
+    inicial**) → `ignorar`: nunca abre un impago.
 
 ## Variables (solo servidor; nunca `NEXT_PUBLIC_`)
 
@@ -152,12 +178,37 @@ muestra "Pagos en línea no disponibles por ahora" y el webhook responde 503.
 5. Variables en Netlify (solo sitio Admin staging) como secretas.
 6. Migraciones en staging, en orden y **antes** del deploy:
    `20261008100000_billing_base`, `20261008200000_tenant_operativo_billing`,
-   `20261008300000_billing_evento_otro_tenant` (cada una en una
+   `20261008300000_billing_evento_otro_tenant`,
+   `20261009000000_billing_impago_desde` (cada una en una
    transacción con su registro en `schema_migrations`). El código nuevo
-   lee `current_period_end` y `cancel_at_period_end` en todas las
-   consultas de acceso.
+   lee `current_period_end`, `cancel_at_period_end` e `impago_desde` en
+   todas las consultas de acceso (por eso `20261009000000` va antes del
+   deploy; el parámetro nuevo de la RPC es opcional, así que el código
+   anterior sigue funcionando mientras tanto).
 7. Prueba con tarjetas de prueba de Stripe sobre un residencial
    sintético con trial vencido.
+
+### Aplicar `20261009000000_billing_impago_desde` en staging (no aplicada)
+
+Requiere autorización explícita; solo staging (`sfuckzzqejerrifuypby`).
+
+1. Precheck (solo lectura): `select count(*) from suscripciones where
+   estado = 'past_due'` (esperado 0; si no, esas filas quedan sin gracia
+   hasta su próximo evento de Stripe), hash de `suscripciones` y la firma
+   vigente de `billing_aplicar_evento` (14 argumentos) y su ACL.
+2. Aplicar la migración en una transacción con su registro en
+   `schema_migrations` (NOTICE con el conteo de `past_due`).
+3. Desplegar Admin/Guard con el código que selecciona `impago_desde`
+   **después** de la migración. Entre ambos pasos el código anterior
+   llama la RPC sin `p_impago_desde` (opcional): un `past_due` nuevo en
+   esa ventana queda sin gracia (falla cerrado) hasta el siguiente evento.
+4. Verificar: una sola firma (15 argumentos) con EXECUTE solo para
+   `service_role`; `tenant_operativo` con `impago_desde + 7 días`; check
+   `suscripciones_impago_desde_check`; `tests/billing/staging/run-staging.sh`
+   (opt-in, revertido) con 0 FAIL y hash igual; luego P3/P6 de la capa S
+   cuando exista el runner.
+5. Rollback: `supabase/rollback/20261009000000_billing_impago_desde.down.sql`
+   tras revertir el código (el código nuevo selecciona la columna).
 
 ### Configuración del portal (Workbench → Shell, modo test)
 
@@ -216,7 +267,10 @@ el checkout que las creó).
 
 ## Rollback
 
-Orden inverso: `supabase/rollback/20261008300000_billing_evento_otro_tenant.down.sql`,
+Orden inverso: `supabase/rollback/20261009000000_billing_impago_desde.down.sql`
+(vuelve a la gracia desde `current_period_end` y borra `impago_desde`;
+antes, revertir el código que la selecciona),
+`supabase/rollback/20261008300000_billing_evento_otro_tenant.down.sql`,
 `supabase/rollback/20261008200000_tenant_operativo_billing.down.sql`
 y luego `supabase/rollback/20261008100000_billing_base.down.sql`
 (verificados localmente: catálogo idéntico). Con cobros reales, el

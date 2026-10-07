@@ -169,22 +169,42 @@ async function main() {
 
   // ── 09. invoice.payment_failed → past_due ──
   escenario = "09";
-  est.subs[`sub_${RUN}_PIPE`] = { ...sub(`sub_${RUN}_PIPE`, "past_due") };
+  // Como en Stripe: la renovación ya ADELANTÓ el periodo del ítem (fin
+  // futuro) y el impago empieza en el inicio de ese periodo (hace 2 días).
+  const inicioImpago = Math.floor(Date.now() / 1000) - 2 * 86_400;
+  const subImpaga = (inicio: number) => {
+    const s = sub(`sub_${RUN}_PIPE`, "past_due");
+    s.items.data[0] = { ...s.items.data[0], current_period_start: inicio, current_period_end: inicio + 30 * 86_400 } as any;
+    return s;
+  };
+  est.subs[`sub_${RUN}_PIPE`] = subImpaga(inicioImpago);
   est.facturas[`in_${RUN}_1`] = { id: `in_${RUN}_1`, parent: { subscription_details: { subscription: `sub_${RUN}_PIPE` } } };
   const w09 = await enviar(nuevoEvento("09"), "invoice.payment_failed", `in_${RUN}_1`);
   assert(w09.status === 200 && sql(`select estado from public.suscripciones where tenant_id = '${T.PIPE}'`) === "past_due", "past_due en la base");
+  escenario = "10";
+  const impagoEnBase = () => sql(`select coalesce((impago_desde = to_timestamp(${inicioImpago}))::text, 'null') || '/' || (current_period_end > now() + interval '20 days')::text from public.suscripciones where tenant_id = '${T.PIPE}'`);
+  assert(impagoEnBase() === "true/true", "impago_desde = inicio del periodo impago (no el fin futuro del periodo)");
+  // Reintento fallido: Stripe reporta otra vez el periodo (aquí, con un
+  // inicio posterior a propósito): el inicio del episodio no se mueve.
+  est.subs[`sub_${RUN}_PIPE`] = subImpaga(inicioImpago + 3 * 86_400);
+  const evt09b = nuevoEvento("09b");
+  const w09b = await enviar(evt09b, "invoice.payment_failed", `in_${RUN}_1`);
+  assert(w09b.status === 200 && impagoEnBase() === "true/true", "reintento fallido: no reinicia ni extiende la gracia");
+  const w09c = await enviar(evt09b, "invoice.payment_failed", `in_${RUN}_1`);
+  assert(w09c.status === 200 && impagoEnBase() === "true/true", "evento duplicado: sin cambios");
+  escenario = "09";
 
   // ── 11. invoice.paid → active ──
   escenario = "11";
   est.subs[`sub_${RUN}_PIPE`] = sub(`sub_${RUN}_PIPE`, "active");
   const w11 = await enviar(nuevoEvento("11"), "invoice.paid", `in_${RUN}_1`);
-  assert(w11.status === 200 && sql(`select estado from public.suscripciones where tenant_id = '${T.PIPE}'`) === "active", "pago recuperado: active");
+  assert(w11.status === 200 && sql(`select estado || '/' || coalesce(impago_desde::text, 'null') from public.suscripciones where tenant_id = '${T.PIPE}'`) === "active/null", "pago recuperado: active y episodio de impago cerrado");
   assert(sql(`select count(*) from public.audit_log where tenant_id = '${T.PIPE}' and accion = 'billing.pago_recuperado'`) === "1", "auditoría billing.pago_recuperado");
 
   // ── 13. Fuera de orden: un evento viejo se aplica con el estado ACTUAL ──
   escenario = "13";
   const w13 = await enviar(nuevoEvento("13"), "invoice.payment_failed", `in_${RUN}_1`);
-  assert(w13.status === 200 && sql(`select estado from public.suscripciones where tenant_id = '${T.PIPE}'`) === "active", "payment_failed tardío con la suscripción ya active: sigue active");
+  assert(w13.status === 200 && sql(`select estado || '/' || coalesce(impago_desde::text, 'null') from public.suscripciones where tenant_id = '${T.PIPE}'`) === "active/null", "payment_failed tardío con la suscripción ya active: sigue active, sin reabrir el impago");
 
   // ── 12. customer.subscription.deleted ──
   escenario = "12";

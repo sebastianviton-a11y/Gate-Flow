@@ -25,7 +25,10 @@
 #   GRACTOI + integridad multitenant        → 0 FAIL
 #   GRACTOIP + columnas protegidas tenants  → 0 FAIL
 #   …B   + billing_base                     → 0 FAIL
-#   …BO  + tenant_operativo_billing         → 0 FAIL; contrato aquí
+#   …BO  + tenant_operativo_billing         → 0 FAIL
+#   …BOF + corrección otro tenant           → 0 FAIL
+#   …BOFM + gracia desde impago_desde       → 0 FAIL; contrato aquí
+#        rollback IM = …BOF
 #        rollback OB = …B, rollback B = GRACTOIP
 #        rollback P = GRACTOI
 #        rollback I = GRACTO
@@ -68,6 +71,8 @@ MIG_OB="20261008200000_tenant_operativo_billing.sql"
 DOWN_OB="$SUPA/rollback/20261008200000_tenant_operativo_billing.down.sql"
 MIG_BF="20261008300000_billing_evento_otro_tenant.sql"
 DOWN_BF="$SUPA/rollback/20261008300000_billing_evento_otro_tenant.down.sql"
+MIG_IM="20261009000000_billing_impago_desde.sql"
+DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -157,7 +162,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -245,6 +250,10 @@ run_suites GRACTOIPBO "… + B + operativo_billing"
 snapshot "$OUT/snap_GRACTOIPBO.txt"
 sql_file "$SUPA/migrations/$MIG_BF"
 run_suites GRACTOIPBOF "… + corrección otro tenant"
+snapshot "$OUT/snap_GRACTOIPBOF.txt"
+sql_file "$SUPA/migrations/$MIG_IM"
+run_suites GRACTOIPBOFM "… + gracia desde impago_desde"
+snapshot "$OUT/snap_GRACTOIPBOFM.txt"
 
 # El código llama a las RPC de registro, Super Admin y billing, lee
 # suscripciones (con las columnas de billing) y actualiza tenants por
@@ -271,6 +280,7 @@ else
   echo "  la autoprueba NO detecta lo esperado:"; sed 's/^/    /' "$OUT/contrato_autoprueba.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_IM";                   snapshot "$OUT/snap_GRACTOIPBOFb.txt"; igual "$OUT/snap_GRACTOIPBOF.txt" "$OUT/snap_GRACTOIPBOFb.txt" rollback_IM
 sql_file "$DOWN_BF";                   snapshot "$OUT/snap_GRACTOIPBOb.txt"; igual "$OUT/snap_GRACTOIPBO.txt" "$OUT/snap_GRACTOIPBOb.txt" rollback_BF
 sql_file "$DOWN_OB";                   snapshot "$OUT/snap_GRACTOIPBb.txt"; igual "$OUT/snap_GRACTOIPB.txt" "$OUT/snap_GRACTOIPBb.txt" rollback_OB
 sql_file "$DOWN_B";                    snapshot "$OUT/snap_GRACTOIPb.txt"; igual "$OUT/snap_GRACTOIP.txt" "$OUT/snap_GRACTOIPb.txt" rollback_B

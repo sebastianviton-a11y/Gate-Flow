@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Stripe from "stripe";
-import { avisoTrial, estadoEfectivoSuscripcion, resolverAcceso, resolverAccesoUsuario, type FilaMembresia } from "@gateflow/auth/client";
+import { avisoPago, avisoTrial, estadoEfectivoSuscripcion, resolverAcceso, resolverAccesoUsuario, type FilaMembresia } from "@gateflow/auth/client";
 import { destinoDeDecision } from "../acceso-panel";
 import { autorizarBilling, permiteAlta } from "../billing/autorizacion";
 import { CATALOGO_BILLING, MAX_VIVIENDAS_AUTOSERVICIO, validarPlanParaViviendas, viviendasRequeridas } from "../billing/catalogo";
@@ -38,14 +38,6 @@ function assert(condicion: boolean, mensaje: string) {
     console.error(`✗ FALLÓ: [${escenario}] ${mensaje}`);
   }
 }
-let pendientes = 0;
-/** Comportamiento esperado que HOY no se cumple, documentado y pendiente de una corrección aprobada: no cuenta como FAIL. */
-function pendiente(condicion: boolean, mensaje: string, detalle: string) {
-  const limpio = (t: string) => t.replace(/[|\n]/g, " ");
-  if (condicion) return assert(true, mensaje);
-  pendientes++;
-  console.log(`RESULT|A|${escenario}|PENDIENTE|${limpio(mensaje)} — ${limpio(detalle)}`);
-}
 async function seccion(id: string, nombre: string, fn: () => void | Promise<void>) {
   escenario = id;
   console.log(`\n${id}. ${nombre}`);
@@ -65,8 +57,16 @@ const TA = "aaaaaaaa-0000-4000-8000-0000000000a1";
 const TB = "bbbbbbbb-0000-4000-8000-0000000000b1";
 const USUARIO = "00000000-0000-4000-8000-00000000000a";
 
-type Sus = { estado: string; trial_ends_at: string | null; current_period_end?: string | null; cancel_at_period_end?: boolean };
+type Sus = { estado: string; trial_ends_at: string | null; current_period_end?: string | null; cancel_at_period_end?: boolean; impago_desde?: string | null };
 const trial = (finMs: number): Sus => ({ estado: "trialing", trial_ends_at: en(finMs), current_period_end: null, cancel_at_period_end: false });
+/** past_due como lo deja Stripe: periodo ya avanzado (current_period_end futuro) e inicio del impago. */
+const impagada = (inicioMs: number | null): Sus => ({
+  estado: "past_due",
+  trial_ends_at: null,
+  current_period_end: inicioMs === null ? en(30 * DIA) : en(inicioMs + 30 * DIA),
+  cancel_at_period_end: false,
+  impago_desde: inicioMs === null ? null : en(inicioMs),
+});
 const pagada = (estado: string, cpeMs: number | null, cancel = false): Sus => ({
   estado,
   trial_ends_at: null,
@@ -167,6 +167,27 @@ function checkoutFalso(viviendas: { declaradas: number | null; unidadesActivas: 
     ahora: () => AHORA,
   };
   return { est, deps, enBase, registrados };
+}
+
+/** Suscripción tal como la deja Stripe tras una renovación fallida, normalizada por NUESTRO adaptador. */
+async function renovacionFallida(inicioImpagoSeg: number, status = "past_due", evento_ = "invoice.payment_failed") {
+  const { proveedor, est } = stripeFalso();
+  const item = { ...est.suscripciones.sub_zz_a.items.data[0], current_period_start: inicioImpagoSeg, current_period_end: inicioImpagoSeg + 30 * 86_400 };
+  est.suscripciones.sub_zz_a = { ...est.suscripciones.sub_zz_a, status, items: { data: [item] } };
+  const b = base();
+  const e = evento(`evt_zz_ren_${inicioImpagoSeg}_${status}`, evento_, evento_.startsWith("invoice.") ? "in_zz1" : "sub_zz_a");
+  await procesarWebhook(b.deps(proveedor), e.cuerpo, e.cabeceras);
+  return b.aplicados[0] ?? null;
+}
+/** Lo que guardaría la base para ese evento, como lo lee la regla de acceso. */
+function datosDe(n: EventoNormalizado | null): Sus {
+  return {
+    estado: n?.estado ?? "sin_dato",
+    trial_ends_at: null,
+    current_period_end: n?.currentPeriodEnd?.toISOString() ?? null,
+    cancel_at_period_end: n?.cancelAtPeriodEnd ?? false,
+    impago_desde: (n as { impagoDesde?: Date | null } | null)?.impagoDesde?.toISOString() ?? null,
+  } as Sus;
 }
 
 async function main() {
@@ -300,39 +321,57 @@ async function main() {
   });
 
   await seccion("09", "past_due dentro de la gracia", () => {
-    const s = pagada("past_due", -3 * DIA);
+    const s = impagada(-3 * DIA);
     const d = admin(s);
     assert(d.tipo === "permitir" && d.estado === "gracia", "día 3: operativo (gracia)");
     assert(d.tipo === "permitir" && d.avisoPago?.nivel === "gracia" && /No pudimos cobrar/.test(d.avisoPago.texto), "aviso de pago fallido en Admin");
     const g = guardiaEnGuard(s);
     assert(g.tipo === "permitir" && g.avisoPago === null, "Guard opera y no muestra mensajes de pago");
-    assert(estadoEfectivoSuscripcion(pagada("past_due", -7 * DIA + 1), AHORA) === "gracia", "1 ms antes de agotar los 7 días: gracia");
+    assert(estadoEfectivoSuscripcion(impagada(-7 * DIA + 1), AHORA) === "gracia", "1 ms antes de agotar los 7 días: gracia");
   });
 
   await seccion("10", "past_due fuera de la gracia", async () => {
-    const s = pagada("past_due", -7 * DIA);
+    const s = impagada(-7 * DIA);
     assert(estadoEfectivoSuscripcion(s, AHORA) === "inactiva", "frontera exacta de 7 días: inactiva");
     assert(destinoDeDecision(admin(s), URL_GUARD) === "/suscripcion", "Admin → /suscripcion");
     assert(guardBloquea(guardiaEnGuard(s)), "Guard bloqueado");
-    assert(estadoEfectivoSuscripcion(pagada("past_due", null), AHORA) === "inactiva", "past_due sin fin de periodo: bloqueado (falla cerrado)");
-    // Renovación fallida con la semántica de Stripe: al renovar, Stripe AVANZA
-    // current_period_end al periodo nuevo (el impago) aunque el cobro falle.
-    // Regla de negocio: 7 días de gracia desde el fallo. Confirmación real:
-    // billing-stripe-integracion.test.ts (P3, test clock).
-    const { proveedor, est } = stripeFalso();
+    assert(estadoEfectivoSuscripcion(impagada(null), AHORA) === "inactiva", "past_due sin inicio de impago fiable: bloqueado (falla cerrado, no se inventa fecha)");
+    // REGRESIÓN (antes PENDIENTE): renovación fallida con la semántica de
+    // Stripe. Al renovar, Stripe ya avanzó el periodo: current_period_start =
+    // inicio del periodo impago (el fallo) y current_period_end = un mes
+    // DESPUÉS. La gracia son 7 días desde el inicio del impago, no desde
+    // current_period_end. Confirmación contra Stripe real: capa S (P3/P6).
     const falloSeg = Math.floor(AHORA.getTime() / 1000);
-    est.suscripciones.sub_zz_a = { ...est.suscripciones.sub_zz_a, status: "past_due", items: { data: [{ ...est.suscripciones.sub_zz_a.items.data[0], current_period_end: falloSeg + 30 * 86_400 }] } };
-    const b10 = base();
-    const e10 = evento("evt_zz_10", "invoice.payment_failed", "in_zz1");
-    await procesarWebhook(b10.deps(proveedor), e10.cuerpo, e10.cabeceras);
-    const n10 = b10.aplicados[0];
-    const dia8 = n10 ? estadoEfectivoSuscripcion({ estado: n10.estado, trial_ends_at: null, current_period_end: n10.currentPeriodEnd?.toISOString() ?? null, cancel_at_period_end: false }, new Date(AHORA.getTime() + 8 * DIA)) : "sin_dato";
-    pendiente(
-      dia8 === "inactiva",
-      "renovación fallida real (periodo ya avanzado por Stripe): día 8 tras el fallo → bloqueado",
-      `hoy queda "${dia8}": la gracia se mide desde current_period_end (${n10?.currentPeriodEnd?.toISOString()}), gracia efectiva ≈ 37 días`,
-    );
+    const r10 = await renovacionFallida(falloSeg);
+    const d10 = datosDe(r10);
+    assert(r10?.estado === "past_due" && r10.currentPeriodEnd?.getTime() === (falloSeg + 30 * 86_400) * 1000, "fixture: past_due con current_period_end FUTURO (periodo ya avanzado)");
+    assert(r10?.impagoDesde?.getTime() === falloSeg * 1000, `normalizado: inicio del impago = current_period_start del periodo impago (${String(r10?.impagoDesde)})`);
+    assert(estadoEfectivoSuscripcion(d10, new Date(AHORA.getTime() + 7 * DIA - 1)) === "gracia", "7 días menos 1 ms desde el inicio del impago: gracia");
+    assert(estadoEfectivoSuscripcion(d10, new Date(AHORA.getTime() + 7 * DIA)) === "inactiva", "frontera exacta: 7 días desde el inicio del impago → bloqueado (aunque current_period_end sea futuro)");
+    assert(estadoEfectivoSuscripcion(d10, new Date(AHORA.getTime() + 8 * DIA)) === "inactiva", "día 8 tras el fallo de renovación: bloqueado");
+    const aviso10 = avisoPago(d10, AHORA, "America/Mexico_City");
+    assert(aviso10?.hasta === new Date(AHORA.getTime() + 7 * DIA).toISOString(), `aviso de pago: fecha límite = inicio del impago + 7 días (${String(aviso10?.hasta)})`);
+    // Reintentos (más eventos del mismo periodo impago): mismo inicio, no extienden.
+    const reintento = await renovacionFallida(falloSeg, "past_due", "customer.subscription.updated");
+    assert(reintento?.impagoDesde?.getTime() === falloSeg * 1000, "reintento/actualización del mismo periodo impago: mismo inicio de impago (no reinicia)");
+    // Reintentos agotados: unpaid sigue siendo impago, misma ventana, sin extenderla.
+    const unpaid = await renovacionFallida(falloSeg, "unpaid", "customer.subscription.updated");
+    assert(unpaid?.estado === "past_due" && unpaid.impagoDesde?.getTime() === falloSeg * 1000, "unpaid → past_due con el mismo inicio de impago");
+    assert(estadoEfectivoSuscripcion(datosDe(unpaid), new Date(AHORA.getTime() + 7 * DIA)) === "inactiva", "unpaid: bloqueado al cumplirse los 7 días (no extiende)");
+    // canceled: cierra el episodio y bloquea.
+    const cancelada = await renovacionFallida(falloSeg, "canceled", "customer.subscription.deleted");
+    assert(cancelada?.estado === "canceled" && cancelada.impagoDesde === null && estadoEfectivoSuscripcion(datosDe(cancelada), AHORA) === "inactiva", "canceled: sin impago_desde y bloqueado");
+    // Pago recuperado: active, sin impago_desde (episodio cerrado).
+    const pagadaOtraVez = await renovacionFallida(falloSeg, "active", "invoice.paid");
+    assert(pagadaOtraVez?.estado === "active" && pagadaOtraVez.impagoDesde === null, "invoice.paid → active y el episodio de impago se cierra (impago_desde null)");
+    // Nuevo impago posterior: su propio inicio (el del nuevo periodo impago).
+    const nuevo = await renovacionFallida(falloSeg + 30 * 86_400);
+    assert(nuevo?.impagoDesde?.getTime() === (falloSeg + 30 * 86_400) * 1000, "nuevo impago en la renovación siguiente: nuevo inicio, 7 días desde él");
+    // Rechazo del PAGO INICIAL: incomplete se ignora; nunca abre un impago.
+    const inicial = await renovacionFallida(falloSeg, "incomplete", "customer.subscription.created");
+    assert(inicial?.estado === "ignorar" && inicial.impagoDesde === null, "rechazo del pago inicial (incomplete): ignorado, sin impago_desde");
     const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
+    assert(/finGraciaPago\(/.test(pagina), "/suscripcion en gracia muestra el fin de la gracia (finGraciaPago)");
     assert(/suscripcion\?\.estado === "past_due"/.test(pagina) && /Actualizar método de pago/.test(pagina), "/suscripcion con past_due: actualizar método de pago (no un checkout nuevo)");
   });
 
@@ -372,7 +411,7 @@ async function main() {
     await procesarWebhook(b.deps(proveedor), e2.cuerpo, e2.cabeceras);
     const [v1, v2] = [b.aplicados[0]?.versionAt.getTime() ?? 0, b.aplicados[1]?.versionAt.getTime() ?? 0];
     assert(v2 >= v1 && v1 > 0, "provider_version_at = instante de la consulta (monótono)");
-    assert(/p_version_at <= v_s\.provider_version_at/.test(fuente("supabase/migrations/20261008300000_billing_evento_otro_tenant.sql")), "la RPC descarta snapshots más viejos (obsoleto)");
+    assert(/p_version_at <= v_s\.provider_version_at/.test(fuente("supabase/migrations/20261009000000_billing_impago_desde.sql")), "la RPC vigente descarta snapshots más viejos (obsoleto)");
   });
 
   await seccion("14", "Firma inválida", async () => {
@@ -474,7 +513,7 @@ async function main() {
     assert(/xlozkpygubyiuxopmdxw/.test(staging) && /GF_BILLING_E2E_STAGING/.test(staging) && /sfuckzzqejerrifuypby/.test(staging), "runner de staging: opt-in explícito, solo staging, rechaza producción");
   });
 
-  console.log(`\n${pasadas} pasadas, ${fallidas} fallidas${pendientes ? `, ${pendientes} pendientes` : ""}`);
+  console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
   if (fallidas > 0) process.exit(1);
 }
 

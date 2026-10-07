@@ -307,6 +307,8 @@ export interface Suscripcion {
   provider: "stripe" | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** Inicio del impago (solo past_due): base de los 7 días de gracia. */
+  impagoDesde: string | null;
   /** Hay cliente en el proveedor: habilita "Administrar suscripción". */
   tieneClienteProveedor: boolean;
 }

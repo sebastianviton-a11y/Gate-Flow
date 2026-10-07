@@ -48,6 +48,12 @@ export interface EventoNormalizado {
   customerId: string | null;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
+  /**
+   * Solo con estado past_due: inicio del periodo impago según el proveedor
+   * (Stripe: current_period_start del ítem). Base de los 7 días de gracia;
+   * null si el proveedor no lo da (sin gracia: falla cerrado).
+   */
+  impagoDesde: Date | null;
   /** Instante en que se consultó al proveedor (ordena los snapshots). */
   versionAt: Date;
   moneda: string | null;

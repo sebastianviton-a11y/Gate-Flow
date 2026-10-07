@@ -25,6 +25,7 @@ export function situacionSuscripcion(suscripcion: Suscripcion | null, ahora: Dat
           trial_ends_at: suscripcion.trialEndsAt,
           current_period_end: suscripcion.currentPeriodEnd,
           cancel_at_period_end: suscripcion.cancelAtPeriodEnd,
+          impago_desde: suscripcion.impagoDesde,
         }
       : null,
     ahora,
@@ -52,6 +53,7 @@ interface FilaSuscripcion {
   provider_customer_id: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean | null;
+  impago_desde: string | null;
 }
 
 /** Lee con la sesión del usuario: RLS solo deja ver la de sus tenants. */
@@ -59,7 +61,7 @@ export async function obtenerSuscripcion(supabase: SupabaseClient, tenantId: str
   const { data, error } = await supabase
     .from("suscripciones")
     .select(
-      "id, tenant_id, estado, trial_started_at, trial_ends_at, viviendas_declaradas, origen, plan, provider, provider_customer_id, current_period_end, cancel_at_period_end",
+      "id, tenant_id, estado, trial_started_at, trial_ends_at, viviendas_declaradas, origen, plan, provider, provider_customer_id, current_period_end, cancel_at_period_end, impago_desde",
     )
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -78,6 +80,7 @@ export async function obtenerSuscripcion(supabase: SupabaseClient, tenantId: str
     provider: fila.provider,
     currentPeriodEnd: fila.current_period_end,
     cancelAtPeriodEnd: fila.cancel_at_period_end === true,
+    impagoDesde: fila.impago_desde,
     tieneClienteProveedor: Boolean(fila.provider_customer_id),
   };
 }

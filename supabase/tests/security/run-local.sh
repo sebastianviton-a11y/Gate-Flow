@@ -21,6 +21,8 @@
 #   OB + tenant_operativo_billing       → 0 FAIL esperado; concurrencia real
 #   BF + corrección billing_aplicar_evento (otro tenant) → 0 FAIL;
 #        rollback BF → catálogo idéntico a OB
+#   IM + gracia de past_due desde impago_desde (20261009) → 0 FAIL;
+#        rollback IM → catálogo idéntico a BF; IM se reaplica idéntico
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -56,6 +58,8 @@ MIG_OB="20261008200000_tenant_operativo_billing.sql"
 DOWN_OB="$SUPA/rollback/20261008200000_tenant_operativo_billing.down.sql"
 MIG_BF="20261008300000_billing_evento_otro_tenant.sql"
 DOWN_BF="$SUPA/rollback/20261008300000_billing_evento_otro_tenant.down.sql"
+MIG_IM="20261009000000_billing_impago_desde.sql"
+DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -132,7 +136,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.
@@ -191,6 +195,17 @@ snapshot "$OUT/snap_OB_tras_concurrencia.txt"
 same_catalog "$OUT/snap_OB.txt" "$OUT/snap_OB_tras_concurrencia.txt" "concurrencia_sin_cambios_de_catalogo"
 sql_file "$SUPA/migrations/$MIG_BF"
 run_suites BF "… + corrección otro tenant" C
+snapshot "$OUT/snap_BF.txt"
+sql_file "$SUPA/migrations/$MIG_IM"
+run_suites IM "… + gracia desde impago_desde" C
+snapshot "$OUT/snap_IM.txt"
+sql_file "$DOWN_IM"
+snapshot "$OUT/snap_BF_tras_down_IM.txt"
+same_catalog "$OUT/snap_BF.txt" "$OUT/snap_BF_tras_down_IM.txt" "rollback_IM"
+sql_file "$SUPA/migrations/$MIG_IM"
+snapshot "$OUT/snap_IM2.txt"
+same_catalog "$OUT/snap_IM.txt" "$OUT/snap_IM2.txt" "reaplicar_IM"
+sql_file "$DOWN_IM"
 sql_file "$DOWN_BF"
 snapshot "$OUT/snap_OB_tras_down_BF.txt"
 same_catalog "$OUT/snap_OB.txt" "$OUT/snap_OB_tras_down_BF.txt" "rollback_BF"

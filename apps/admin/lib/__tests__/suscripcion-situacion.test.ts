@@ -32,6 +32,7 @@ function s(parcial: Partial<Suscripcion>): Suscripcion {
     provider: null,
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
+    impagoDesde: null,
     tieneClienteProveedor: false,
     ...parcial,
   };

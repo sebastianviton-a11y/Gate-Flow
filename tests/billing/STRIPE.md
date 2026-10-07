@@ -6,30 +6,47 @@ Dos fallos de cobro distintos que **no** deben confundirse:
 |---|---|---|
 | Cuándo | El admin paga por primera vez en el Checkout hospedado (trial vencido o realta) | La suscripción ya está `active` y llega el fin del periodo |
 | Qué hace Stripe | Checkout muestra el rechazo y deja reintentar; **no** emite `checkout.session.completed`; si se abandona, la sesión expira (`checkout.session.expired`, 60 min). Por API, la suscripción nace `incomplete` → `incomplete_expired` a las 23 h | Crea la factura del periodo nuevo, **avanza `current_period_end` al periodo nuevo** e intenta cobrar (~1 h después); si falla: `invoice.payment_failed` y la suscripción pasa a `past_due`. Luego reintenta según la configuración de la cuenta |
-| Qué hace Gate Flow | Nada se activa: `incomplete*` → `ignorar`; el checkout queda `created` → `expired`; el residencial sigue bloqueado por trial vencido. **Nunca** `past_due` | `past_due` con 7 días de gracia (aviso de pago en Admin, Guard opera); `invoice.paid` → `active`; al agotarse los reintentos, lo que diga la configuración |
+| Qué hace Gate Flow | Nada se activa: `incomplete*` → `ignorar`; el checkout queda `created` → `expired`; el residencial sigue bloqueado por trial vencido. **Nunca** `past_due` ni abre un impago | `past_due` con 7 días de gracia **desde el inicio del impago** (`impago_desde` = `current_period_start` del periodo impago; aviso de pago con la fecha en Admin, Guard opera); `invoice.paid` → `active` y cierra el episodio; al agotarse los reintentos, lo que diga la configuración |
 | Tarjetas TEST | Checkout: `4000 0000 0000 0002` (rechazo genérico), `4000 0000 0000 9995` (fondos insuficientes), `4000 0027 6000 3184` (3DS) · API: `pm_card_chargeCustomerFail` | `pm_card_chargeCustomerFail` (`4000 0000 0000 0341`): se adjunta bien y **todos** los cobros fallan |
 | Cómo se valida | Capa S · P2 (API) + Checkout hospedado (manual) | Capa S · P3 (test clock) y P6 (residencial sintético activado por Checkout, cadena real completa) |
 
-## Hallazgo pendiente antes de preproducción: la gracia de `past_due`
+## Gracia de `past_due`: hallazgo y corrección (`20261009000000`, pendiente de aplicar)
 
-La regla vigente (`tenant_operativo`, `estadoEfectivoSuscripcion`,
-`docs/operations/BILLING.md`) es `now < current_period_end + 7 días`, y el
-normalizador guarda el `current_period_end` del ítem de la suscripción. Pero en
-una renovación fallida Stripe **ya avanzó** ese `current_period_end` al final
-del periodo impago. Resultado: la gracia efectiva sería ≈ **1 mes + 7 días**
-desde el fallo, y el aviso "Actualiza tu método de pago antes del …" mostraría
-esa fecha. Los tests anteriores no lo detectaban porque modelaban `past_due`
+**Hallazgo.** La regla anterior (`tenant_operativo`,
+`estadoEfectivoSuscripcion`) era `now < current_period_end + 7 días` y el
+normalizador guardaba el `current_period_end` del ítem. En una renovación
+fallida Stripe **ya avanzó** ese `current_period_end` al final del periodo
+impago (typedoc de stripe-node 23 / API `2026-09-30.endive`:
+`current_period_start` = "the start time of this subscription item's
+current billing period"; la suscripción queda `past_due` mientras la
+factura de ese periodo no se cobra). Resultado: gracia efectiva ≈ **1 mes +
+7 días**. Los tests anteriores no lo detectaban porque modelaban `past_due`
 con un `current_period_end` en el pasado.
 
-- La capa A lo registra como **PENDIENTE** (escenario 10) con el objeto que
-  devuelve Stripe tras una renovación fallida; pasa a PASS cuando se corrija.
-- La capa S lo **confirma contra Stripe real** (P3 con test clock y P6 con la
-  cadena completa en staging) y falla si la gracia efectiva supera 7 días.
-- Corrección propuesta (requiere aprobación; no se implementó): medir la
-  gracia desde el fallo — p. ej. guardar el inicio del periodo impago
-  (`current_period_start` del ítem, o el `period_start` de la factura abierta)
-  al aplicar `past_due` y usarlo en `tenant_operativo`, en
-  `estadoEfectivoSuscripcion` y en el aviso. Implica migración + TS + tests.
+**Corrección** (código en esta rama; la migración está preparada y **no**
+aplicada en staging ni producción):
+
+- `suscripciones.impago_desde`: inicio del episodio de impago =
+  `current_period_start` del ítem cuando Stripe reporta `past_due`
+  (referencia estable: es la misma en el fallo, en cada reintento y en
+  cada evento duplicado o tardío del mismo periodo). No se usa la hora de
+  recepción del webhook ni se inventan fechas.
+- Gracia = `now < impago_desde + 7 días` en `tenant_operativo`,
+  `estadoEfectivoSuscripcion`, el aviso de Admin y `/suscripcion`.
+- La RPC conserva el inicio más temprano mientras siga `past_due`
+  (reintentos, `unpaid`, duplicados y eventos fuera de orden no lo
+  extienden), lo borra en `active`/`canceled` y descarta fechas futuras.
+- Sin fecha fiable → sin gracia (falla cerrado) hasta el siguiente evento
+  que la traiga. Filas `past_due` existentes: no se rellenan (ver
+  `docs/operations/BILLING.md`).
+- El escenario 10 dejó de ser **PENDIENTE**: es una aserción obligatoria en
+  las capas A, B, B2 y C-local, y en CI (`GF_BILLING_EXIGIR`) cualquier
+  PENDIENTE cuenta como FAIL.
+- La capa S lo **confirma contra Stripe real** cuando corra: P3 comprueba
+  `impagoDesde = current_period_start ≤ fallo`, la frontera exacta de 7
+  días y que un reintento no lo mueve; P6 lee `impago_desde` de staging y
+  exige una gracia de 7 días desde el fallo. **Aún no ejecutado contra
+  Stripe** (sin runner autorizado).
 
 ## Qué depende de la configuración de la cuenta de Stripe
 
@@ -44,7 +61,7 @@ final, que luego pasa por nuestro normalizador:
 | Estado final en Stripe | Normalizado | Acceso en Gate Flow |
 |---|---|---|
 | `canceled` | `canceled` | bloqueado |
-| `unpaid` | `past_due` | **gracia según `current_period_end`** → ver hallazgo |
+| `unpaid` | `past_due` (mismo inicio de impago) | gracia hasta `impago_desde + 7 días`; después bloqueado |
 | `past_due` (sin acción) | `past_due` | ídem |
 
 P3 falla si con el estado final el residencial sigue operativo.
@@ -57,7 +74,7 @@ P3 falla si con el estado final el residencial sigue operativo.
 | Forma de TODAS las solicitudes a Stripe de la capa S (66), contra la especificación OpenAPI oficial | Job `stripe-mock` (cada PR) | automatizado |
 | P1 configuración: endpoint del webhook de staging habilitado y suscrito a los 11 eventos; Customer Portal (cancelar al final del periodo, sin cambio de plan, actualizar tarjeta) | Capa S, workflow manual | automatizado, **no ejecutado aún** |
 | P2 rechazo del pago inicial (API): `incomplete` → `incomplete_expired`, ignorado | Capa S | automatizado, no ejecutado |
-| P3 renovación fallida con test clock: `past_due`, gracia medida desde el fallo, recuperación con `invoices.pay`, reintentos hasta el estado final | Capa S | automatizado, no ejecutado |
+| P3 renovación fallida con test clock: `past_due`, `impagoDesde` = inicio del periodo impago, frontera de 7 días, reintento sin cambio, recuperación con `invoices.pay`, reintentos hasta el estado final | Capa S | automatizado, no ejecutado |
 | P4 cancelación al final del periodo → `canceled` | Capa S | automatizado, no ejecutado |
 | P5 webhooks reales: Stripe entregó y staging aceptó (2xx) cada evento (`pending_webhooks = 0`), quedaron registrados sin tocar ningún tenant, y se borran por id | Capa S | automatizado, no ejecutado |
 | P6 renovación fallida REAL de un residencial sintético activado por Checkout (`billing_cycle_anchor = now` con tarjeta que falla → webhook → staging `past_due` → `tenant_operativo` → `invoice.paid` → `active`) | Capa S + 1 paso manual previo | automatizado, no ejecutado |
@@ -95,8 +112,9 @@ Stripe TEST no envía correos a clientes; los correos de prueba son
    de Stripe: manual. P1 verifica su configuración por API (solo lectura).
 4. **Configuración de reintentos.** Solo observable (P3); cambiarla está fuera
    de alcance.
-5. **Hallazgo de la gracia** (arriba): bloquea preproducción hasta decidir y
-   aplicar la corrección.
+5. **Gracia de `past_due`** (arriba): corregida en código; falta aplicar
+   `20261009000000` en staging (plan en `docs/operations/BILLING.md`) y
+   confirmarla con P3/P6 contra Stripe TEST real.
 
 ## Paso manual previo a P6 (staging, Stripe TEST)
 

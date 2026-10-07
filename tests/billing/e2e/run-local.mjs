@@ -315,14 +315,18 @@ async function main() {
 // ── Flujos de navegador ──
 async function flujos(navegador, { run, T, U, email, secreto, eventos, bloqueos }) {
   let n = 0;
-  const evento = (tenantKey, tipo, estado, cpe, cancel, cs, ref, sub) => {
+  // impago: expresión SQL del inicio del impago (solo past_due), como la
+  // normaliza el servidor desde current_period_start; null = sin fecha.
+  const evento = (tenantKey, tipo, estado, cpe, cancel, cs, ref, sub, impago = "null") => {
     const id = `evt_${run}_C${++n}`;
     eventos.push(id);
     return JSON.parse(
       sql(`select public.billing_aplicar_evento('stripe', '${id}', '${tipo}', '${estado}', ${cs ? `'${cs}'` : "null"}, ${ref ? `'${ref}'` : "null"},
-        '${sub}', 'cus_${run}_${tenantKey}', ${cpe}, ${cancel}, clock_timestamp(), 'MXN', 49900, 'month')`),
+        '${sub}', 'cus_${run}_${tenantKey}', ${cpe}, ${cancel}, clock_timestamp(), 'MXN', 49900, 'month', ${impago})`),
     );
   };
+  const fechaMx = (ms, conAnio) =>
+    new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "long", ...(conAnio ? { year: "numeric" } : {}) }).format(new Date(ms));
   const contexto = async (usuario, gfTenant) => {
     const ctx = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
     const { nombre, valor } = cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: U[usuario], email: email(usuario) });
@@ -386,16 +390,32 @@ async function flujos(navegador, { run, T, U, email, secreto, eventos, bloqueos 
   await v.ctx.close();
 
   // 09 · past_due en gracia: opera + aviso de pago (Admin), Guard opera
-  evento("VENC", "invoice.payment_failed", "past_due", "now() - interval '3 days'", false, cs, chk, subV);
+  // Como Stripe en una renovación fallida: el periodo ya se adelantó (fin
+  // en +27 días) y el impago empezó hace 3 días.
+  evento("VENC", "invoice.payment_failed", "past_due", "now() + interval '27 days'", false, cs, chk, subV, "now() - interval '3 days'");
+  const finGracia = Date.parse(sql(`select to_char((impago_desde + interval '7 days') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') from public.suscripciones where tenant_id = '${T.VENC}'`));
+  const finPeriodo = Date.parse(sql(`select to_char(current_period_end at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') from public.suscripciones where tenant_id = '${T.VENC}'`));
   v = await visitar("admin_venc", `${URL_ADMIN}/dashboard`);
-  ok("09", v.ruta === "/dashboard" && (await texto(v.page)).includes("No pudimos cobrar tu suscripción"), "Playwright: past_due día 3 → dashboard con aviso de pago", v.ruta);
+  t = await texto(v.page);
+  ok("09", v.ruta === "/dashboard" && t.includes("No pudimos cobrar tu suscripción"), "Playwright: past_due día 3 (periodo futuro) → dashboard con aviso de pago", v.ruta);
+  ok("10", t.includes(`antes del ${fechaMx(finGracia)}`) && !t.includes(`antes del ${fechaMx(finPeriodo + 7 * 86_400_000)}`),
+    "Playwright: el aviso fecha el fin de la gracia en inicio del impago + 7 días (no fin de periodo + 7)", `${fechaMx(finGracia)}`);
+  await v.ctx.close();
+  v = await visitar("admin_venc", `${URL_ADMIN}/suscripcion`);
+  t = await texto(v.page);
+  ok("10", t.includes(`hasta el ${fechaMx(finGracia, true)}`), "Playwright: /suscripcion muestra 'sigue funcionando hasta' el fin de la gracia", v.ruta);
   await v.ctx.close();
   v = await visitar("guard_venc", `${URL_GUARD}/guard`);
   ok("09", v.ruta === "/guard", "Playwright: past_due en gracia → Guard opera", v.ruta);
   await v.ctx.close();
 
   // 10 · fuera de la gracia: bloqueado; /suscripcion pide actualizar método de pago
-  evento("VENC", "customer.subscription.updated", "past_due", "now() - interval '8 days'", false, cs, chk, subV);
+  // El paso del tiempo se simula moviendo el inicio del episodio a hace 8
+  // días (el reloj no se toca); luego un reintento fallido con una fecha
+  // nueva NO debe reabrir la gracia.
+  sql(`update public.suscripciones set impago_desde = now() - interval '8 days' where tenant_id = '${T.VENC}'`);
+  evento("VENC", "customer.subscription.updated", "past_due", "now() + interval '22 days'", false, cs, chk, subV, "now() - interval '1 hour'");
+  ok("10", sql(`select (impago_desde < now() - interval '7 days')::text from public.suscripciones where tenant_id = '${T.VENC}'`) === "true", "reintento fallido con la gracia agotada: el inicio del impago no se mueve");
   v = await visitar("admin_venc", `${URL_ADMIN}/dashboard`);
   t = await texto(v.page);
   ok("10", v.ruta === "/suscripcion" && t.includes("Actualizar método de pago") && (await v.page.locator('[data-plan="hasta-50"]').count()) === 0, "Playwright: past_due día 8 → /suscripcion con 'Actualizar método de pago' (sin planes)", v.ruta);

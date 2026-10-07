@@ -13,7 +13,9 @@
 // En CI (CI=true) staging y Stripe TEST solo corren desde un workflow
 // manual (GITHUB_EVENT_NAME=workflow_dispatch) con la confirmación
 // explícita GF_BILLING_CONFIRMACION=staging | stripe-test.
-// GF_BILLING_EXIGIR=A,B convierte en FAIL un SKIP de esas capas (CI).
+// GF_BILLING_EXIGIR=A,B convierte en FAIL un SKIP de esas capas (CI) y,
+// con cualquier valor, también un PENDIENTE: en CI ninguna regla conocida
+// puede quedar como pendiente (la gracia de past_due es obligatoria).
 //
 // Capas:
 //   A        apps/admin/lib/__tests__/billing-bateria.test.ts (+ las suites
@@ -176,8 +178,11 @@ if (fallos.length) {
   for (const f of fallos) console.log(`  ✗ [${f.capa} ${f.escenario}] ${f.caso}`);
 }
 const pendientes = resultados.filter((r) => r.estado === "PENDIENTE");
+const pendientesBloquean = EXIGIDAS.size > 0 && pendientes.length > 0;
 if (pendientes.length) {
-  console.log("\nPendientes conocidos (comportamiento esperado que hoy no se cumple; no cuentan como FAIL):");
+  console.log(pendientesBloquean
+    ? "\nPendientes (en CI cuentan como FAIL: GF_BILLING_EXIGIR):"
+    : "\nPendientes conocidos (comportamiento esperado que hoy no se cumple; no cuentan como FAIL):");
   for (const p of pendientes) console.log(`  * [${p.capa} ${p.escenario}] ${p.caso}`);
 }
 const omitidos = resultados.filter((r) => r.estado === "SKIP");
@@ -197,5 +202,6 @@ console.log("\nCapas:");
 for (const c of capas) console.log(`  ${c.codigo === 0 ? "✓" : "✗"} ${c.nombre} (${c.segundos}s)`);
 const total = resultados.length;
 console.log(`\nTOTAL=${total}  PASS=${cuenta((r) => r.estado === "PASS")}  FAIL=${fallos.length}  SKIPPED=${omitidos.length}  PENDIENTES=${pendientes.length}  RESIDUOS=${residuos}  DURACION=${Math.round((Date.now() - inicio) / 1000)}s`);
-console.log(fallos.length || residuos ? "RESULTADO: FAIL" : pendientes.length ? `RESULTADO: PASS con ${pendientes.length} pendiente(s) conocido(s)` : "RESULTADO: PASS");
-process.exit(fallos.length || residuos ? 1 : 0);
+const falla = fallos.length > 0 || residuos > 0 || pendientesBloquean;
+console.log(falla ? "RESULTADO: FAIL" : pendientes.length ? `RESULTADO: PASS con ${pendientes.length} pendiente(s) conocido(s)` : "RESULTADO: PASS");
+process.exit(falla ? 1 : 0);

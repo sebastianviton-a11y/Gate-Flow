@@ -23,6 +23,7 @@ export {
   suscripcionOperativa,
   avisoTrial,
   avisoPago,
+  finGraciaPago,
   DIAS_GRACIA_PAGO,
   resolverAcceso,
   puedeOperar,

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { finGraciaPago } from "@gateflow/auth/client";
 import { GateFlowLogo, cn } from "@gateflow/ui";
 import { obtenerSuscripcion } from "@gateflow/paquetes";
 import { createServerSupabaseClient } from "@gateflow/supabase";
@@ -404,9 +405,11 @@ function VistaGestion({
   }
 
   if (estado === "gracia") {
+    // Fin de la gracia: 7 días desde el inicio del impago (no current_period_end).
+    const hasta = suscripcion ? finGraciaPago({ estado: suscripcion.estado, trial_ends_at: suscripcion.trialEndsAt, impago_desde: suscripcion.impagoDesde }) : null;
     return (
       <Aviso titulo="No pudimos cobrar tu suscripción">
-        El servicio sigue funcionando por ahora. Actualiza tu método de pago para no interrumpirlo.
+        El servicio sigue funcionando {hasta ? <>hasta el {fecha(hasta, zona)}</> : "por ahora"}. Actualiza tu método de pago para no interrumpirlo.
         <BotonGestion disponible={gestion} texto="Actualizar método de pago" />
       </Aviso>
     );

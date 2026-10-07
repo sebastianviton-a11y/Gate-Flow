@@ -15,7 +15,9 @@
 -- ============================================================
 
 create or replace function tests.billing() returns boolean language sql as $$
-  select to_regprocedure('public.billing_aplicar_evento(text,text,text,text,text,text,text,text,timestamptz,boolean,timestamptz,text,bigint,text)') is not null;
+  -- Cualquier firma: 14 argumentos (20261008100000) o 15 con p_impago_desde
+  -- (20261009000000); tests.ev llama con 14 posicionales, válido en ambas.
+  select exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento');
 $$;
 
 -- Lo que hace la server action: crea el checkout con el monto del catálogo.

@@ -26,7 +26,7 @@ export function opcionesCookieTenant() {
 
 /** Todas las membresías ACTIVAS del usuario (sin limit): una fila por tenant (unique user_id, tenant_id). */
 export const SELECT_MEMBRESIAS_ACCESO =
-  "tenant_id, roles(clave), tenants(nombre, onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end))";
+  "tenant_id, roles(clave), tenants(nombre, onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde))";
 
 export interface FilaMembresia {
   tenant_id: string;

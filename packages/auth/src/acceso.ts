@@ -21,9 +21,11 @@ export interface DatosSuscripcion {
   /** Billing (migración 20261008100000); ausentes en filas sin proveedor. */
   current_period_end?: string | null;
   cancel_at_period_end?: boolean | null;
+  /** Inicio del episodio de impago (solo past_due; migración 20261009000000). */
+  impago_desde?: string | null;
 }
 
-/** Gracia tras un cobro fallido (past_due), contada desde current_period_end. */
+/** Gracia tras un cobro fallido (past_due), contada desde el inicio del impago (impago_desde). */
 export const DIAS_GRACIA_PAGO = 7;
 const MS_GRACIA_PAGO = DIAS_GRACIA_PAGO * 86_400_000;
 
@@ -39,8 +41,11 @@ function instante(valor: string | null | undefined): number {
  *                                  (después, inactiva aunque el webhook
  *                                  de cancelación no haya llegado)
  *   trialing con fin futuro      → trial_activo; vencido o sin fecha → vencida
- *   past_due                     → gracia mientras ahora < current_period_end
- *                                  + 7 días; después (o sin fecha) inactiva
+ *   past_due                     → gracia mientras ahora < impago_desde + 7
+ *                                  días (inicio del periodo impago; NO
+ *                                  current_period_end, que Stripe ya avanzó
+ *                                  al renovar); después, o sin impago_desde,
+ *                                  inactiva (falla cerrado)
  *   expired                      → vencida
  *   canceled                     → inactiva
  *   sin fila o estado desconocido → sin_suscripcion (falla cerrado)
@@ -58,8 +63,8 @@ export function estadoEfectivoSuscripcion(s: DatosSuscripcion | null | undefined
       return Number.isFinite(fin) && ahora.getTime() < fin ? "trial_activo" : "vencida";
     }
     case "past_due": {
-      const fin = instante(s.current_period_end);
-      return Number.isFinite(fin) && ahora.getTime() < fin + MS_GRACIA_PAGO ? "gracia" : "inactiva";
+      const inicio = instante(s.impago_desde);
+      return Number.isFinite(inicio) && ahora.getTime() < inicio + MS_GRACIA_PAGO ? "gracia" : "inactiva";
     }
     case "expired":
       return "vencida";
@@ -72,6 +77,13 @@ export function estadoEfectivoSuscripcion(s: DatosSuscripcion | null | undefined
 
 export function suscripcionOperativa(estado: EstadoEfectivoSuscripcion): boolean {
   return estado === "activa" || estado === "trial_activo" || estado === "gracia";
+}
+
+/** Fin de la gracia de un past_due (impago_desde + 7 días), o null si no aplica o no hay fecha fiable. */
+export function finGraciaPago(s: DatosSuscripcion | null | undefined): string | null {
+  if (!s || s.estado !== "past_due") return null;
+  const inicio = instante(s.impago_desde);
+  return Number.isFinite(inicio) ? new Date(inicio + MS_GRACIA_PAGO).toISOString() : null;
 }
 
 // ── Aviso de pago (gracia o cancelación pendiente) ────────────
@@ -104,7 +116,7 @@ export function avisoPago(s: DatosSuscripcion | null | undefined, ahora: Date, z
   const estado = estadoEfectivoSuscripcion(s, ahora);
   const zona = zonaHoraria || "America/Mexico_City";
   if (estado === "gracia") {
-    const hasta = instante(s.current_period_end) + MS_GRACIA_PAGO;
+    const hasta = instante(s.impago_desde) + MS_GRACIA_PAGO;
     return {
       nivel: "gracia",
       hasta: new Date(hasta).toISOString(),
@@ -178,7 +190,7 @@ export function avisoTrial(s: DatosSuscripcion | null | undefined, ahora: Date, 
  * user_tenants (activo = true, del usuario) → rol, tenant y su suscripción.
  */
 export const SELECT_MEMBRESIA_ACCESO =
-  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end))";
+  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde))";
 
 export type MembresiaAcceso = {
   roles: unknown;

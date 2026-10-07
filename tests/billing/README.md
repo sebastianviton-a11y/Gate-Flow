@@ -98,8 +98,8 @@ export GF_CHROMIUM=/ruta/a/chrome                          # opcional
 | 6 | Otro tenant (W04) | no cancela | `suscripcion_de_otro_tenant`, B intacto | base real | |
 | 7 | Duplicada mismo tenant | cancela solo la nueva | `suscripcion_duplicada`, reintento | base real | |
 | 8 | `cancel_at_period_end` | aviso, límite exacto | operativo antes / no en el límite | | Admin y Guard bloqueados |
-| 9 | `past_due` en gracia | aviso de pago | día 3 y 1 s antes de 7 días | base real | aviso + Guard opera |
-| 10 | `past_due` fuera de gracia | bloqueo; **PENDIENTE**: renovación fallida real (ver `STRIPE.md`) | frontera de 7 días, día 8 | | "Actualizar método de pago" |
+| 9 | `past_due` en gracia | aviso de pago | día 3 y 1 s antes de 7 días desde `impago_desde` | base real | aviso + Guard opera |
+| 10 | `past_due` fuera de gracia | **obligatorio**: renovación fallida con `current_period_end` futuro → 7 días desde el inicio del impago; reintentos, `unpaid`, nuevo episodio, sin fecha (falla cerrado) | frontera exacta, día 8, reintento/duplicado/fuera de orden no extienden, recuperación, nuevo episodio, aislamiento | `impago_desde` del webhook; reintento y duplicado no lo mueven | fecha del aviso = inicio + 7 d; "Actualizar método de pago" |
 | 11 | `invoice.paid` | factura → suscripción | active + auditoría | base real | Guard desbloqueado |
 | 12 | `subscription.deleted` | canceled | canceled, datos intactos, realta | base real | planes de nuevo |
 | 13 | Fuera de orden | refetch, versión monótona | `obsoleto` (más viejo / misma versión) | base real | |
@@ -115,7 +115,7 @@ export GF_CHROMIUM=/ruta/a/chrome                          # opcional
 
 | Workflow | Disparo | Qué corre | Credenciales |
 |---|---|---|---|
-| `billing-tests.yml` | cada pull request | `pnpm test:billing` (A + B; un SKIP de A/B es FAIL por `GF_BILLING_EXIGIR`) con un `postgres:17` desechable, y la capa S completa contra `stripe-mock` | ninguna |
+| `billing-tests.yml` | cada pull request | `pnpm test:billing` (A + B; un SKIP de A/B o cualquier PENDIENTE es FAIL por `GF_BILLING_EXIGIR`) con un `postgres:17` desechable, y la capa S completa contra `stripe-mock` | ninguna |
 | `billing-staging.yml` | manual, escribiendo `staging`, environment `billing-staging` | `node tests/billing/run.mjs --staging` | `GF_STAGING_DB_URL` |
 | `billing-stripe-test.yml` | manual, escribiendo `stripe-test`, environment `billing-stripe-test` | `node tests/billing/run.mjs --stripe` | `STRIPE_TEST_SECRET_KEY`, `GF_STAGING_DB_URL` |
 
@@ -132,4 +132,4 @@ opt-in, `run.mjs`, `run-staging.sh` y la capa S rechazan `CI=true` salvo
 
 Rechazo del pago inicial vs. fallo de una factura de renovación, qué depende
 de la configuración de la cuenta, qué está automatizado, qué queda manual y el
-**hallazgo pendiente sobre la gracia de `past_due`**: ver [`STRIPE.md`](STRIPE.md).
+**hallazgo y la corrección de la gracia de `past_due`** (`impago_desde`): ver [`STRIPE.md`](STRIPE.md).

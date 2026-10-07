@@ -93,6 +93,15 @@ if [[ -z "$ANTES" ]]; then
 fi
 EVENTOS_ANTES="$(q "select count(*) from public.billing_eventos")"
 
+# El paquete exige 20261009000000 (impago_desde y la RPC de 15 argumentos).
+# Sin ella no se ejecuta nada (ni siquiera la transacción revertida).
+IMPAGO="$(q "select (to_regprocedure('public.billing_aplicar_evento(text,text,text,text,text,text,text,text,timestamptz,boolean,timestamptz,text,bigint,text,timestamptz)') is not null
+               and exists (select 1 from pg_attribute where attrelid = 'public.suscripciones'::regclass and attname = 'impago_desde' and not attisdropped))::text")"
+if [[ "$IMPAGO" != "true" ]]; then
+  res "10" FAIL "staging sin 20261009000000_billing_impago_desde: la gracia de past_due sigue midiéndose desde current_period_end; el paquete no se ejecuta"
+  exit 1
+fi
+
 # 3. Paquete SQL (siempre revertido).
 SALIDA="$(mktemp)"
 trap 'rm -f "$SALIDA"' EXIT

@@ -5,7 +5,7 @@
  * Las reglas de la base (rol, estado, viviendas, un solo checkout
  * abierto, concurrencia) se prueban en supabase/tests/security/96_billing.sql.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolverAccesoUsuario, type FilaMembresia } from "@gateflow/auth/client";
 import { autorizarBilling, permiteAlta } from "../billing/autorizacion";
@@ -233,10 +233,15 @@ async function main() {
   });
 
   await seccion("Contrato de nombres: servidor.ts ↔ parámetros de las RPC (PostgREST llama por nombre)", () => {
-    const mig = fuente("supabase/migrations/20261008100000_billing_base.sql");
+    // La definición VIGENTE de cada RPC: la última migración que la crea o reemplaza.
+    const migraciones = readdirSync(join(RAIZ, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
     const servidor = fuente("apps/admin/lib/billing/servidor.ts");
     for (const fn of ["billing_crear_checkout", "billing_registrar_checkout_proveedor", "billing_aplicar_evento"]) {
-      const firma = new RegExp(`create function public\\.${fn}\\(([^)]*)\\)`).exec(mig)?.[1] ?? "";
+      let firma = "";
+      for (const m of migraciones) {
+        const def = new RegExp(`create (?:or replace )?function public\\.${fn}\\(([^)]*)\\)`).exec(fuente(`supabase/migrations/${m}`))?.[1];
+        if (def) firma = def;
+      }
       const sql = firma.split(",").map((x) => x.trim().split(/\s+/)[0]).filter(Boolean).sort();
       const llamada = new RegExp(`rpc\\("${fn}", \\{([\\s\\S]*?)\\}\\)`).exec(servidor)?.[1] ?? "";
       const ts = [...llamada.matchAll(/(p_[a-z_]+):/g)].map((m) => m[1]).sort();

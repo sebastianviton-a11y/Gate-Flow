@@ -17,8 +17,10 @@
  *       de plan)
  *   P2  rechazo del PAGO INICIAL: la suscripción nace incomplete →
  *       incomplete_expired; nunca activa ni past_due
- *   P3  fallo de una FACTURA DE RENOVACIÓN: active → past_due; gracia
- *       efectiva medida desde el fallo; recuperación (invoice.paid);
+ *   P3  fallo de una FACTURA DE RENOVACIÓN: active → past_due; inicio del
+ *       impago (impagoDesde = current_period_start del periodo impago) y
+ *       gracia de 7 días desde ahí aunque current_period_end ya sea futuro;
+ *       un reintento no lo mueve; recuperación (invoice.paid) lo cierra;
  *       reintentos hasta el estado final que dicte la configuración de la
  *       cuenta (Smart Retries / "si fallan todos los reintentos")
  *   P4  cancelación al final del periodo → canceled
@@ -115,7 +117,7 @@ async function main() {
   /** Estado tras la normalización de NUESTRO adaptador (refetch real a Stripe). */
   const normalizar = (tipo: string, objetoId: string) => llamar(`normalizar ${tipo}`, () => proveedor.normalizarEvento({ id: `evt_local_${run}`, tipo, objetoId }));
   const acceso = (n: EventoNormalizado | null, en: number) =>
-    n ? estadoEfectivoSuscripcion({ estado: n.estado === "active" || n.estado === "past_due" || n.estado === "canceled" ? n.estado : "ignorar", trial_ends_at: null, current_period_end: n.currentPeriodEnd?.toISOString() ?? null, cancel_at_period_end: n.cancelAtPeriodEnd }, new Date(en * 1000)) : "sin_dato";
+    n ? estadoEfectivoSuscripcion({ estado: n.estado === "active" || n.estado === "past_due" || n.estado === "canceled" ? n.estado : "ignorar", trial_ends_at: null, current_period_end: n.currentPeriodEnd?.toISOString() ?? null, cancel_at_period_end: n.cancelAtPeriodEnd, impago_desde: n.impagoDesde?.toISOString() ?? null }, new Date(en * 1000)) : "sin_dato";
 
   const esperarReloj = async (id: string) => {
     for (let i = 0; i < 90; i++) {
@@ -228,15 +230,28 @@ async function main() {
         const n = await normalizar("invoice.payment_failed", factura.id);
         estadoOk(n?.estado === "past_due", "nuestro normalizador: past_due", String(n?.estado));
         estadoOk(suscripcionOperativa(acceso(n, fallo + 3 * DIA) as any), "día 3 tras el fallo: operativo (gracia)", String(acceso(n, fallo + 3 * DIA)));
-        // Regla de negocio: 7 días de gracia desde el fallo de cobro.
+        // Regla de negocio: 7 días de gracia desde el inicio del impago
+        // (inicio del periodo impago), aunque Stripe ya adelantó el fin.
         escenario = "10";
-        const dia8 = acceso(n, fallo + (DIAS_GRACIA_PAGO + 1) * DIA);
-        const finGracia = n?.currentPeriodEnd ? n.currentPeriodEnd.getTime() / 1000 + DIAS_GRACIA_PAGO * DIA : null;
+        const inicio = n?.impagoDesde ? n.impagoDesde.getTime() / 1000 : null;
+        const inicioItem = s2?.items?.data?.[0]?.current_period_start ?? null;
+        info(`inicio del impago normalizado ${n?.impagoDesde?.toISOString() ?? "null"}; fallo del cobro ${new Date(fallo * 1000).toISOString()}`);
         estadoOk(
-          dia8 === "inactiva",
-          `día ${DIAS_GRACIA_PAGO + 1} tras el fallo de renovación: bloqueado`,
-          `sigue "${dia8}": la gracia se cuenta desde current_period_end (${n?.currentPeriodEnd?.toISOString()}), que Stripe ya avanzó al periodo impago → gracia efectiva ${finGracia ? Math.round((finGracia - fallo) / DIA) : "?"} días`,
+          inicio !== null && inicio === inicioItem && inicio <= fallo && (finPeriodo2 ?? 0) > fallo + DIAS_GRACIA_PAGO * DIA,
+          "impagoDesde = current_period_start del periodo impago (≤ fallo) y current_period_end ya es futuro",
+          `inicio=${inicio} item=${inicioItem} fallo=${fallo} fin=${finPeriodo2}`,
         );
+        if (inicio !== null) {
+          const antes = acceso(n, inicio + DIAS_GRACIA_PAGO * DIA - 60);
+          const enLimite = acceso(n, inicio + DIAS_GRACIA_PAGO * DIA);
+          estadoOk(antes === "gracia" && enLimite === "inactiva", `frontera exacta: gracia 1 min antes de ${DIAS_GRACIA_PAGO} días desde el impago, bloqueado en el límite`, `${antes}/${enLimite}`);
+        }
+        const dia8 = acceso(n, fallo + (DIAS_GRACIA_PAGO + 1) * DIA);
+        estadoOk(dia8 === "inactiva", `día ${DIAS_GRACIA_PAGO + 1} tras el fallo de renovación: bloqueado`, `sigue "${dia8}" (impagoDesde ${n?.impagoDesde?.toISOString() ?? "null"}, fin de periodo ${n?.currentPeriodEnd?.toISOString()})`);
+        // Un reintento (3 días después) no mueve el inicio del impago.
+        await avanzar(b.reloj.id, fallo + 3 * DIA);
+        const nr = await normalizar("customer.subscription.updated", s.id);
+        estadoOk(nr?.estado === "past_due" && nr?.impagoDesde?.getTime() === n?.impagoDesde?.getTime(), "tras un reintento: sigue past_due con el MISMO inicio de impago", `${nr?.estado}/${nr?.impagoDesde?.toISOString()}`);
         // Recuperación.
         escenario = "11";
         await usarTarjeta(b.cliente.id, "pm_card_visa");
@@ -244,7 +259,7 @@ async function main() {
         const s3: any = await stripe.subscriptions.retrieve(s.id);
         estadoOk(pagada?.status === "paid" && s3.status === "active", "pago recuperado: factura paid, suscripción active", `${pagada?.status}/${s3.status}`);
         const n3 = await normalizar("invoice.paid", factura.id);
-        estadoOk(n3?.estado === "active", "nuestro normalizador: active", String(n3?.estado));
+        estadoOk(n3?.estado === "active" && n3?.impagoDesde === null, "nuestro normalizador: active, sin inicio de impago (episodio cerrado)", `${n3?.estado}/${n3?.impagoDesde}`);
         // Reintentos hasta el estado final que dicte la configuración de la cuenta.
         escenario = "10";
         await usarTarjeta(b.cliente.id, "pm_card_chargeCustomerFail");
@@ -325,18 +340,20 @@ async function main() {
         await stripe.subscriptions.update(subSintetica, { billing_cycle_anchor: { type: "now" }, proration_behavior: "none", payment_behavior: "allow_incomplete" });
         const esperarEstado = async (esperado: string) => {
           for (let i = 0; !MOCK && i < 60; i++) {
-            const [estado, cpe] = q(`select estado || '|' || coalesce(extract(epoch from current_period_end)::bigint::text, '') from public.suscripciones where provider_subscription_id = '${subSintetica}'`).split("|");
-            if (estado === esperado) return Number(cpe);
+            // Devuelve el inicio del impago guardado (epoch; 0 si es null).
+            const [estado, impago] = q(`select estado || '|' || coalesce(extract(epoch from impago_desde)::bigint::text, '0') from public.suscripciones where provider_subscription_id = '${subSintetica}'`).split("|");
+            if (estado === esperado) return Number(impago);
             await dormir(3000);
           }
           return null;
         };
-        const cpe = await esperarEstado("past_due");
-        estadoOk(cpe !== null, "P6: el webhook real llevó el residencial a past_due en staging", "no llegó a past_due en 180 s");
-        if (cpe !== null && !MOCK) {
-          const graciaDias = (cpe + DIAS_GRACIA_PAGO * DIA - forzada) / DIA;
-          info(`current_period_end guardado ${new Date(cpe * 1000).toISOString()} → gracia efectiva ${graciaDias.toFixed(1)} días desde el fallo`);
-          assert(graciaDias <= DIAS_GRACIA_PAGO + 0.1, `P6: gracia efectiva ≤ ${DIAS_GRACIA_PAGO} días desde el fallo de renovación`, `${graciaDias.toFixed(1)} días (la gracia se mide desde current_period_end, que Stripe avanzó al renovar)`);
+        const impago = await esperarEstado("past_due");
+        estadoOk(impago !== null, "P6: el webhook real llevó el residencial a past_due en staging", "no llegó a past_due en 180 s");
+        if (impago !== null && !MOCK) {
+          assert(impago > 0, "P6: staging guardó impago_desde (inicio del impago) desde el webhook real", "impago_desde null: sin gracia (falla cerrado)");
+          const graciaDias = (impago + DIAS_GRACIA_PAGO * DIA - forzada) / DIA;
+          info(`impago_desde guardado ${new Date(impago * 1000).toISOString()} → gracia efectiva ${graciaDias.toFixed(2)} días desde el fallo forzado`);
+          assert(impago > 0 && graciaDias <= DIAS_GRACIA_PAGO + 0.1 && graciaDias > DIAS_GRACIA_PAGO - 0.1, `P6: gracia efectiva = ${DIAS_GRACIA_PAGO} días desde el inicio del impago`, `${graciaDias.toFixed(2)} días`);
           if (admin) {
             // Transacción de solo evaluación: JWT simulado + rol authenticated, y rollback.
             const op = q(`begin; select set_config('request.jwt.claims', json_build_object('sub', '${admin}', 'role', 'authenticated')::text, true); set local role authenticated; select public.tenant_operativo('${tenant}'); rollback;`);
@@ -349,8 +366,9 @@ async function main() {
         const sub1: any = await stripe.subscriptions.retrieve(subSintetica, { expand: ["latest_invoice"] });
         const factura = typeof sub1.latest_invoice === "string" ? sub1.latest_invoice : sub1.latest_invoice?.id;
         await stripe.invoices.pay(factura);
-        const cpe2 = await esperarEstado("active");
-        estadoOk(cpe2 !== null, "P6: invoice.paid real → active en staging (pago recuperado)", "no volvió a active en 180 s");
+        const impago2 = await esperarEstado("active");
+        estadoOk(impago2 !== null, "P6: invoice.paid real → active en staging (pago recuperado)", "no volvió a active en 180 s");
+        if (impago2 !== null && !MOCK) assert(impago2 === 0, "P6: el pago cerró el episodio (impago_desde null en staging)", String(impago2));
         if (!MOCK) {
           const eventos: string[] = [];
           for await (const e of stripe.events.list({ created: { gte: forzada - 5 }, types: EVENTOS_STRIPE, limit: 100 })) if (e.data?.object?.customer === cliente) eventos.push(e.id);
