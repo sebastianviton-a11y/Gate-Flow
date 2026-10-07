@@ -1,0 +1,95 @@
+# Integración con Stripe TEST real — solo manual, solo desde main.
+#
+# Ejecuta la capa S del commit REVISADO Y FIJO de abajo (no la de main ni la
+# de una rama elegida al lanzar): crea test clocks, clientes y suscripciones
+# en Stripe TEST, los pasa por el normalizador y la regla de acceso de ese
+# commit, verifica que los webhooks reales lleguen a staging y limpia (borra
+# los test clocks y, en staging, los billing_eventos de la prueba por id).
+# Nunca modo live. Requiere staging con 20261009000000 aplicada y el código
+# de ese commit desplegado (P5 espera que staging acepte los eventos).
+#
+# Cambiar el commit probado = cambiar GF_COMMIT_REVISADO por PR a main.
+#
+# Requisitos (los configura una persona con permisos de administración):
+#   - environment "billing-stripe-test": revisores obligatorios y
+#     "Deployment branches" limitado a main
+#   - secretos del environment:
+#       STRIPE_TEST_SECRET_KEY  clave restringida rk_test_ (permisos en tests/billing/STRIPE.md del commit)
+#       GF_STAGING_DB_URL       base de STAGING (limpieza de eventos por id)
+#   - variable opcional del environment: GF_STRIPE_PORTAL_CONFIGURATION_ID (bpc_…)
+name: billing · Stripe TEST (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe "stripe-test": crea y borra objetos en Stripe TEST y limpia en staging los eventos que genere'
+        required: true
+        type: string
+      suscripcion_sintetica:
+        description: "Opcional (P6): sub_… de un residencial ZZ_AUTOTEST_ de staging ya activado por el Checkout hospedado"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billing-stripe-test
+  cancel-in-progress: false
+
+env:
+  # PR #1, revisado. Inmutable: es un SHA completo, no una rama ni un tag.
+  GF_COMMIT_REVISADO: 87266da5375cf088b71bf009d966b9be964db85f
+
+jobs:
+  stripe-test:
+    if: >-
+      inputs.confirmacion == 'stripe-test' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'sebastianviton-a11y/Gate-Flow'
+    name: Stripe TEST (test clocks + webhooks reales)
+    runs-on: ubuntu-24.04
+    environment: billing-stripe-test
+    timeout-minutes: 45
+    steps:
+      - name: Validar entradas
+        env:
+          SUB: ${{ inputs.suscripcion_sintetica }}
+        run: |
+          [[ -z "$SUB" || "$SUB" =~ ^sub_[A-Za-z0-9]{8,64}$ ]] || { echo "suscripcion_sintetica no es un id sub_…" >&2; exit 1; }
+      - name: Código del commit revisado (no el de main)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.GF_COMMIT_REVISADO }}
+          persist-credentials: false
+      - name: Verificar el commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$GF_COMMIT_REVISADO" || { echo "HEAD no es el commit revisado" >&2; exit 1; }
+          test -f apps/admin/lib/__tests__/billing-stripe-integracion.test.ts
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0 (versión desde packageManager)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Cliente de PostgreSQL
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
+          psql --version
+      # Instalación SIN secretos (los scripts de instalación no los ven).
+      - name: Dependencias
+        run: pnpm install --no-frozen-lockfile
+      - name: tsx en caché (sin secretos)
+        run: npx -y tsx --version
+      # Los secretos solo existen en este paso.
+      - name: Stripe TEST
+        env:
+          GF_BILLING_STRIPE_TEST: "1"
+          GF_BILLING_CONFIRMACION: ${{ inputs.confirmacion }}
+          GF_STRIPE_SUSCRIPCION_SINTETICA: ${{ inputs.suscripcion_sintetica }}
+          GF_STRIPE_PORTAL_CONFIGURATION_ID: ${{ vars.GF_STRIPE_PORTAL_CONFIGURATION_ID }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          GF_STAGING_DB_URL: ${{ secrets.GF_STAGING_DB_URL }}
+          # Nunca stripe-mock ni otra API: Stripe real (modo test).
+          GF_BILLING_STRIPE_MOCK: ""
+          GF_STRIPE_API_BASE: ""
+        run: node tests/billing/run.mjs --stripe

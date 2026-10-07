@@ -1,0 +1,71 @@
+# Batería billing contra STAGING — solo manual, solo desde main.
+#
+# Ejecuta las pruebas del commit REVISADO Y FIJO de abajo (no las de main ni
+# las de una rama elegida al lanzar): tests/billing/staging/run-staging.sh
+# escribe filas sintéticas ZZ_AUTOTEST_ en la base de staging DENTRO de una
+# transacción y las revierte; compara un hash de 11 tablas antes y después.
+# Exige 20261009000000_billing_impago_desde aplicada en staging (si falta,
+# falla sin ejecutar el paquete). Nunca producción.
+#
+# Cambiar el commit probado = cambiar GF_COMMIT_REVISADO por PR a main.
+#
+# Requisitos (los configura una persona con permisos de administración):
+#   - environment "billing-staging": revisores obligatorios y "Deployment
+#     branches" limitado a main (una copia del workflow en otra rama no
+#     obtiene el secreto)
+#   - secreto del environment: GF_STAGING_DB_URL (base de STAGING)
+name: billing · staging (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe "staging": escribe filas sintéticas en staging dentro de una transacción y las revierte'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billing-staging
+  cancel-in-progress: false
+
+env:
+  # PR #1, revisado. Inmutable: es un SHA completo, no una rama ni un tag.
+  GF_COMMIT_REVISADO: 87266da5375cf088b71bf009d966b9be964db85f
+
+jobs:
+  staging:
+    if: >-
+      inputs.confirmacion == 'staging' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'sebastianviton-a11y/Gate-Flow'
+    name: escenarios 1–20 en staging (revertidos) + HTTP
+    runs-on: ubuntu-24.04
+    environment: billing-staging
+    timeout-minutes: 15
+    steps:
+      - name: Código del commit revisado (no el de main)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.GF_COMMIT_REVISADO }}
+          persist-credentials: false
+      - name: Verificar el commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$GF_COMMIT_REVISADO" || { echo "HEAD no es el commit revisado" >&2; exit 1; }
+          test -f tests/billing/staging/run-staging.sh
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Cliente de PostgreSQL
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
+          psql --version
+      # El secreto solo existe en este paso (no en los de instalación).
+      - name: Staging (sin dependencias de pnpm)
+        env:
+          GF_BILLING_E2E_STAGING: "1"
+          GF_BILLING_CONFIRMACION: ${{ inputs.confirmacion }}
+          GF_STAGING_DB_URL: ${{ secrets.GF_STAGING_DB_URL }}
+        run: node tests/billing/run.mjs --staging
