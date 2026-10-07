@@ -39,6 +39,13 @@ export const RUTAS_SIEMPRE_PUBLICAS = [
  */
 export const RUTAS_CUENTA = ["/suscripcion", "/seleccionar-residencial"] as const;
 
+/**
+ * Webhooks de billing: fuera del middleware (excluidos en su matcher).
+ * No tienen sesión; se autentican por la firma del proveedor sobre el
+ * cuerpo crudo (lib/billing). Nunca deben pasar por /login.
+ */
+export const RUTA_WEBHOOKS_BILLING = "/api/billing/webhook/";
+
 export function esRutaPublica(pathname: string): boolean {
   return [...RUTAS_SOLO_INVITADOS, ...RUTAS_SIEMPRE_PUBLICAS].some((ruta) => pathname.startsWith(ruta));
 }

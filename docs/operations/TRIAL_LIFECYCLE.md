@@ -82,10 +82,10 @@ mantiene su comportamiento anterior.
   - vencida: "Tu prueba gratuita terminó" + planes;
   - inactiva: "Tu suscripción no está activa" + planes;
   - sin suscripción: problema de configuración + soporte, sin planes.
-- Los planes salen de `apps/admin/lib/planes.ts`. "Elegir plan" está
-  deshabilitado ("Pagos disponibles próximamente"); más de 150 →
-  `mailto:soporte@gateflow.mx`. Para conectar Stripe o Mercado Pago, se
-  cambia la acción del plan a `checkout` y se implementa su handler.
+- Los planes salen de `apps/admin/lib/planes.ts` (montos del catálogo
+  `apps/admin/lib/billing/catalogo.ts`). "Elegir plan" abre el checkout
+  de Stripe; más de 150 → `mailto:soporte@gateflow.mx`. Pagos, gracia y
+  cancelación: `docs/operations/BILLING.md`.
 - `/suscripcion` exige sesión pero el middleware no la redirige
   (`RUTAS_CUENTA`); la página decide con la misma lógica: sin bucles.
 - Las server actions que escriben con la clave de servicio

@@ -18,7 +18,17 @@ const MS_POR_DIA = 24 * 60 * 60 * 1000;
  * sin_suscripcion (falla cerrado).
  */
 export function situacionSuscripcion(suscripcion: Suscripcion | null, ahora: Date = new Date()): SituacionSuscripcion {
-  return estadoEfectivoSuscripcion(suscripcion ? { estado: suscripcion.estado, trial_ends_at: suscripcion.trialEndsAt } : null, ahora);
+  return estadoEfectivoSuscripcion(
+    suscripcion
+      ? {
+          estado: suscripcion.estado,
+          trial_ends_at: suscripcion.trialEndsAt,
+          current_period_end: suscripcion.currentPeriodEnd,
+          cancel_at_period_end: suscripcion.cancelAtPeriodEnd,
+        }
+      : null,
+    ahora,
+  );
 }
 
 /** Días completos que faltan para que termine el trial; null si no está en trial. */
@@ -37,13 +47,20 @@ interface FilaSuscripcion {
   trial_ends_at: string | null;
   viviendas_declaradas: number | null;
   origen: Suscripcion["origen"];
+  plan: Suscripcion["plan"];
+  provider: Suscripcion["provider"];
+  provider_customer_id: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
 }
 
 /** Lee con la sesión del usuario: RLS solo deja ver la de sus tenants. */
 export async function obtenerSuscripcion(supabase: SupabaseClient, tenantId: string): Promise<Suscripcion | null> {
   const { data, error } = await supabase
     .from("suscripciones")
-    .select("id, tenant_id, estado, trial_started_at, trial_ends_at, viviendas_declaradas, origen")
+    .select(
+      "id, tenant_id, estado, trial_started_at, trial_ends_at, viviendas_declaradas, origen, plan, provider, provider_customer_id, current_period_end, cancel_at_period_end",
+    )
     .eq("tenant_id", tenantId)
     .maybeSingle();
   if (error) throw error;
@@ -57,5 +74,10 @@ export async function obtenerSuscripcion(supabase: SupabaseClient, tenantId: str
     trialEndsAt: fila.trial_ends_at,
     viviendasDeclaradas: fila.viviendas_declaradas,
     origen: fila.origen,
+    plan: fila.plan,
+    provider: fila.provider,
+    currentPeriodEnd: fila.current_period_end,
+    cancelAtPeriodEnd: fila.cancel_at_period_end === true,
+    tieneClienteProveedor: Boolean(fila.provider_customer_id),
   };
 }

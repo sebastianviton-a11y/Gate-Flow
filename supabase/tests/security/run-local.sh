@@ -16,7 +16,11 @@
 #   O  + tenant_operativo (20261007)    → 0 FAIL esperado
 #   I  + integridad multitenant         → 0 FAIL esperado
 #   P  + columnas protegidas de tenants → 0 FAIL esperado
-#   rollback P → catálogo idéntico a I; P se reaplica y se revierte
+#   rollback P → catálogo idéntico a I; P se reaplica
+#   B  + billing_base                   → 0 FAIL esperado
+#   OB + tenant_operativo_billing       → 0 FAIL esperado; concurrencia real
+#   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
+#   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
 #   los datos, I aborta sin cambiar nada; I se reaplica y se revierte
 #   rollback O → catálogo idéntico a T
@@ -44,6 +48,10 @@ MIG_I="20261007100000_integridad_multitenant.sql"
 DOWN_I="$SUPA/rollback/20261007100000_integridad_multitenant.down.sql"
 MIG_P="20261008000000_tenants_columnas_protegidas.sql"
 DOWN_P="$SUPA/rollback/20261008000000_tenants_columnas_protegidas.down.sql"
+MIG_B="20261008100000_billing_base.sql"
+DOWN_B="$SUPA/rollback/20261008100000_billing_base.down.sql"
+MIG_OB="20261008200000_tenant_operativo_billing.sql"
+DOWN_OB="$SUPA/rollback/20261008200000_tenant_operativo_billing.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -120,7 +128,7 @@ echo "Base: $DB   Salida: $OUT"
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" ]] && continue
+  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" ]] && continue
   # Estas suites modelan producción (grants amplios de Supabase, RLS
   # como única barrera). Los grants de mínimo privilegio tienen su
   # propia suite: supabase/tests/grants/run-local.sh.
@@ -164,6 +172,32 @@ same_catalog "$OUT/snap_I.txt" "$OUT/snap_I_tras_down_P.txt" "rollback_P"
 sql_file "$SUPA/migrations/$MIG_P"
 snapshot "$OUT/snap_P2.txt"
 same_catalog "$OUT/snap_P.txt" "$OUT/snap_P2.txt" "reaplicar_P"
+
+sql_file "$SUPA/migrations/$MIG_B"
+run_suites B "… + billing_base" C
+snapshot "$OUT/snap_B.txt"
+sql_file "$SUPA/migrations/$MIG_OB"
+run_suites OB "… + operativo_billing" C
+snapshot "$OUT/snap_OB.txt"
+echo "  concurrencia (dos sesiones):"
+bash "$DIR/concurrencia_billing.sh" "$DB" > "$OUT/concurrencia.log" 2>&1 || true
+sed 's/^/    /' "$OUT/concurrencia.log"
+if grep -qv '^PASS|' "$OUT/concurrencia.log" || [[ "$(grep -c '^PASS|' "$OUT/concurrencia.log")" != "3" ]]; then FALLAS=$((FALLAS + 1)); fi
+snapshot "$OUT/snap_OB_tras_concurrencia.txt"
+same_catalog "$OUT/snap_OB.txt" "$OUT/snap_OB_tras_concurrencia.txt" "concurrencia_sin_cambios_de_catalogo"
+sql_file "$DOWN_OB"
+snapshot "$OUT/snap_B_tras_down_OB.txt"
+same_catalog "$OUT/snap_B.txt" "$OUT/snap_B_tras_down_OB.txt" "rollback_OB"
+sql_file "$DOWN_B"
+snapshot "$OUT/snap_P_tras_down_B.txt"
+same_catalog "$OUT/snap_P.txt" "$OUT/snap_P_tras_down_B.txt" "rollback_B"
+sql_file "$SUPA/migrations/$MIG_B"
+sql_file "$SUPA/migrations/$MIG_OB"
+snapshot "$OUT/snap_OB2.txt"
+same_catalog "$OUT/snap_OB.txt" "$OUT/snap_OB2.txt" "reaplicar_B_OB"
+sql_file "$DOWN_OB"
+sql_file "$DOWN_B"
+
 sql_file "$DOWN_P"
 
 sql_file "$DOWN_I"

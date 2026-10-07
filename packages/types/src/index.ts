@@ -302,4 +302,11 @@ export interface Suscripcion {
   trialEndsAt: string | null;
   viviendasDeclaradas: number | null;
   origen: OrigenSuscripcion;
+  /** Billing (migración 20261008100000). null en altas manuales y trials. */
+  plan: "hasta-50" | "hasta-150" | null;
+  provider: "stripe" | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  /** Hay cliente en el proveedor: habilita "Administrar suscripción". */
+  tieneClienteProveedor: boolean;
 }

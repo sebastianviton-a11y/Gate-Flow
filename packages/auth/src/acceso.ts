@@ -12,32 +12,57 @@ import { puedeUsarPanelAdmin } from "./roles";
  * ni valores del cliente).
  */
 
-export type EstadoEfectivoSuscripcion = "trial_activo" | "activa" | "vencida" | "inactiva" | "sin_suscripcion";
+export type EstadoEfectivoSuscripcion = "trial_activo" | "activa" | "gracia" | "vencida" | "inactiva" | "sin_suscripcion";
 
 /** Fila de suscripciones tal como llega embebida en la consulta. */
 export interface DatosSuscripcion {
   estado: string | null;
   trial_ends_at: string | null;
+  /** Billing (migración 20261008100000); ausentes en filas sin proveedor. */
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean | null;
+}
+
+/** Gracia tras un cobro fallido (past_due), contada desde current_period_end. */
+export const DIAS_GRACIA_PAGO = 7;
+const MS_GRACIA_PAGO = DIAS_GRACIA_PAGO * 86_400_000;
+
+function instante(valor: string | null | undefined): number {
+  return valor ? Date.parse(valor) : Number.NaN;
 }
 
 /**
- * active → activa; trialing con fin futuro → trial_activo; trialing
- * vencido o sin fecha, expired → vencida; past_due/canceled → inactiva;
- * sin fila o estado desconocido → sin_suscripcion (falla cerrado).
- * La expiración compara el instante exacto: la zona horaria no influye.
+ * Misma regla que tenant_operativo() (migración 20261008200000), con
+ * instantes exactos (la zona horaria no influye):
+ *   active                       → activa; con cancel_at_period_end, solo
+ *                                  mientras ahora < current_period_end
+ *                                  (después, inactiva aunque el webhook
+ *                                  de cancelación no haya llegado)
+ *   trialing con fin futuro      → trial_activo; vencido o sin fecha → vencida
+ *   past_due                     → gracia mientras ahora < current_period_end
+ *                                  + 7 días; después (o sin fecha) inactiva
+ *   expired                      → vencida
+ *   canceled                     → inactiva
+ *   sin fila o estado desconocido → sin_suscripcion (falla cerrado)
  */
 export function estadoEfectivoSuscripcion(s: DatosSuscripcion | null | undefined, ahora: Date = new Date()): EstadoEfectivoSuscripcion {
   if (!s) return "sin_suscripcion";
   switch (s.estado) {
-    case "active":
-      return "activa";
+    case "active": {
+      if (!s.cancel_at_period_end) return "activa";
+      const fin = instante(s.current_period_end);
+      return Number.isFinite(fin) && ahora.getTime() < fin ? "activa" : "inactiva";
+    }
     case "trialing": {
-      const fin = s.trial_ends_at ? Date.parse(s.trial_ends_at) : Number.NaN;
+      const fin = instante(s.trial_ends_at);
       return Number.isFinite(fin) && ahora.getTime() < fin ? "trial_activo" : "vencida";
+    }
+    case "past_due": {
+      const fin = instante(s.current_period_end);
+      return Number.isFinite(fin) && ahora.getTime() < fin + MS_GRACIA_PAGO ? "gracia" : "inactiva";
     }
     case "expired":
       return "vencida";
-    case "past_due":
     case "canceled":
       return "inactiva";
     default:
@@ -46,7 +71,55 @@ export function estadoEfectivoSuscripcion(s: DatosSuscripcion | null | undefined
 }
 
 export function suscripcionOperativa(estado: EstadoEfectivoSuscripcion): boolean {
-  return estado === "activa" || estado === "trial_activo";
+  return estado === "activa" || estado === "trial_activo" || estado === "gracia";
+}
+
+// ── Aviso de pago (gracia o cancelación pendiente) ────────────
+
+export type NivelAvisoPago = "gracia" | "cancelacion";
+
+export interface AvisoPago {
+  nivel: NivelAvisoPago;
+  /** Instante en que se bloquea (fin de la gracia o del periodo pagado). */
+  hasta: string;
+  texto: string;
+}
+
+function fechaLegible(ms: number, zona: string): string {
+  const formato = (z: string) => new Intl.DateTimeFormat("es-MX", { timeZone: z, day: "numeric", month: "long" }).format(new Date(ms));
+  try {
+    return formato(zona);
+  } catch {
+    return formato("America/Mexico_City");
+  }
+}
+
+/**
+ * Solo para quien administra el residencial (Admin); Guard no lo muestra.
+ *   gracia       "No pudimos cobrar tu suscripción…" (fuerte)
+ *   cancelacion  "Tu suscripción termina el …" (cancelación pedida, aún vigente)
+ */
+export function avisoPago(s: DatosSuscripcion | null | undefined, ahora: Date, zonaHoraria: string | null | undefined): AvisoPago | null {
+  if (!s) return null;
+  const estado = estadoEfectivoSuscripcion(s, ahora);
+  const zona = zonaHoraria || "America/Mexico_City";
+  if (estado === "gracia") {
+    const hasta = instante(s.current_period_end) + MS_GRACIA_PAGO;
+    return {
+      nivel: "gracia",
+      hasta: new Date(hasta).toISOString(),
+      texto: `No pudimos cobrar tu suscripción. Actualiza tu método de pago antes del ${fechaLegible(hasta, zona)} para no interrumpir el servicio.`,
+    };
+  }
+  if (estado === "activa" && s.estado === "active" && s.cancel_at_period_end) {
+    const hasta = instante(s.current_period_end);
+    return {
+      nivel: "cancelacion",
+      hasta: new Date(hasta).toISOString(),
+      texto: `Tu suscripción está cancelada y termina el ${fechaLegible(hasta, zona)}.`,
+    };
+  }
+  return null;
 }
 
 // ── Aviso de días restantes ───────────────────────────────────
@@ -105,7 +178,7 @@ export function avisoTrial(s: DatosSuscripcion | null | undefined, ahora: Date, 
  * user_tenants (activo = true, del usuario) → rol, tenant y su suscripción.
  */
 export const SELECT_MEMBRESIA_ACCESO =
-  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at))";
+  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end))";
 
 export type MembresiaAcceso = {
   roles: unknown;
@@ -122,11 +195,11 @@ interface TenantAcceso {
 export type AppAcceso = "admin" | "guard";
 
 export type DecisionAcceso =
-  | { tipo: "permitir"; rol: string; estado: EstadoEfectivoSuscripcion; aviso: AvisoTrial | null }
+  | { tipo: "permitir"; rol: string; estado: EstadoEfectivoSuscripcion; aviso: AvisoTrial | null; avisoPago: AvisoPago | null }
   | { tipo: "onboarding" }
   | { tipo: "sin_acceso"; motivo: "sin_membresia" | "error" | "rol" }
   | { tipo: "suspendido" }
-  | { tipo: "suscripcion"; estado: Exclude<EstadoEfectivoSuscripcion, "activa" | "trial_activo"> }
+  | { tipo: "suscripcion"; estado: Exclude<EstadoEfectivoSuscripcion, "activa" | "trial_activo" | "gracia"> }
   | { tipo: "ir_a_guard" };
 
 /** Roles que operan la app Guard (igual que app/guard/layout.tsx). */
@@ -180,7 +253,7 @@ export function resolverAcceso(entrada: {
     if (tenant.estado_servicio === "suspendido") return { tipo: "suspendido" };
 
     if (!suscripcionOperativa(estado)) {
-      const estadoBloqueado = estado as Exclude<EstadoEfectivoSuscripcion, "activa" | "trial_activo">;
+      const estadoBloqueado = estado as Exclude<EstadoEfectivoSuscripcion, "activa" | "trial_activo" | "gracia">;
       if (app === "guard") {
         return ROLES_APP_GUARD.includes(rol) ? { tipo: "suscripcion", estado: estadoBloqueado } : { tipo: "sin_acceso", motivo: "rol" };
       }
@@ -192,7 +265,7 @@ export function resolverAcceso(entrada: {
 
   if (app === "guard") {
     if (!ROLES_APP_GUARD.includes(rol)) return { tipo: "sin_acceso", motivo: "rol" };
-    return { tipo: "permitir", rol, estado, aviso: null };
+    return { tipo: "permitir", rol, estado, aviso: null, avisoPago: null };
   }
 
   if (!puedeUsarPanelAdmin(rol)) {
@@ -202,7 +275,13 @@ export function resolverAcceso(entrada: {
 
   if (tenant.onboarding_completado === false) return { tipo: "onboarding" };
 
-  return { tipo: "permitir", rol, estado, aviso: avisoTrial(suscripcion, ahora, tenant.timezone) };
+  return {
+    tipo: "permitir",
+    rol,
+    estado,
+    aviso: avisoTrial(suscripcion, ahora, tenant.timezone),
+    avisoPago: avisoPago(suscripcion, ahora, tenant.timezone),
+  };
 }
 
 /** Puede operar (escribir) desde el panel: permitir u onboarding. */

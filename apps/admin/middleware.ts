@@ -75,8 +75,10 @@ export const config = {
   matcher: [
     /*
      * Aplica a todas las rutas excepto assets estáticos y archivos internos
-     * de Next.js, para no interceptar el propio bundle de la app.
+     * de Next.js, para no interceptar el propio bundle de la app, y los
+     * webhooks de billing (lib/rutas-publicas.ts, RUTA_WEBHOOKS_BILLING):
+     * los llama el proveedor sin sesión y se autentican por firma.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/billing/webhook/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

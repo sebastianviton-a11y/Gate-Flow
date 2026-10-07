@@ -159,7 +159,7 @@ seccion("12. sin suscripción → falla cerrado (estado excepcional)", () => {
   assert(estadoEfectivoSuscripcion({ estado: "desconocido", trial_ends_at: null }, AHORA) === "sin_suscripcion", "estado desconocido → sin_suscripcion");
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
   assert(pagina.includes("No pudimos determinar una suscripción activa para este residencial."), "texto de problema de configuración");
-  assert(pagina.includes('{decision.estado !== "sin_suscripcion" && ('), "sin suscripción no muestra planes");
+  assert(pagina.includes('{decision.tipo === "suscripcion" && decision.estado !== "sin_suscripcion" && suscripcion?.estado !== "past_due" && ('), "sin suscripción no muestra planes");
 });
 
 seccion("13–14. past_due y canceled → operación bloqueada (inactiva)", () => {
@@ -253,7 +253,8 @@ seccion("19. /suscripcion no entra en bucle", () => {
   }
   assert((RUTAS_CUENTA as readonly string[]).includes("/suscripcion"), "/suscripcion está exenta de la redirección del middleware");
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-  assert(pagina.includes('if (decision.tipo !== "suscripcion") {\n    redirect(destinoDeDecision(decision) ?? "/dashboard");'), "la página decide con la misma lógica");
+  assert(pagina.includes('} else if (decision.tipo !== "suscripcion") {\n    redirect(destinoDeDecision(decision) ?? "/dashboard");'), "la página decide con la misma lógica");
+  assert(pagina.includes('if (decision.tipo === "permitir") {\n    // Operativo: solo quien administra el residencial ve la gestión.\n    if (!autorizacion.ok) redirect("/dashboard");'), "operativo: gestión solo para admin_residencial");
 });
 
 seccion("20. registro nuevo → onboarding y todo disponible", () => {
@@ -302,13 +303,14 @@ seccion("24. active manual nunca se considera trial vencido", () => {
   assert(avisoTrial(ACTIVA, AHORA, TZ) === null, "active: sin aviso de trial");
 });
 
-seccion("/suscripcion preparada para pagos, sin fingir cobro", () => {
-  assert(PLANES.map((p) => `${p.id}:${p.precio?.monto ?? "-"}:${p.accion.tipo}`).join(",") === "hasta-50:29:proximamente,hasta-150:49:proximamente,mas-150:-:contacto", "planes y acciones");
+seccion("/suscripcion con billing V1: solo planId, sin secretos ni activación desde el navegador", () => {
+  assert(PLANES.map((p) => `${p.id}:${p.precio ? "precio" : "-"}:${p.accion.tipo}`).join(",") === "hasta-50:precio:checkout,hasta-150:precio:checkout,mas-150:-:contacto", "planes y acciones");
   const contacto = PLANES.find((p) => p.id === "mas-150")!.accion;
-  assert(contacto.tipo === "contacto" && contacto.href.startsWith("mailto:soporte@gateflow.mx"), "más de 150 → mailto:soporte@gateflow.mx");
+  assert(contacto.tipo === "contacto" && contacto.href.startsWith("mailto:soporte@gateflow.mx"), "más de 150 → mailto:soporte@gateflow.mx (sin checkout)");
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-  assert(pagina.includes("disabled") && pagina.includes("Pagos disponibles próximamente") && pagina.includes("Elegir plan"), "Elegir plan deshabilitado + 'Pagos disponibles próximamente'");
-  assert(!/stripe|mercadopago|checkout\(/i.test(pagina), "sin checkout ni proveedor de pagos");
+  assert(pagina.includes("<form action={elegirPlanAction}>") && pagina.includes('<input type="hidden" name="plan" value={plan.accion.planId} />') && pagina.includes("Elegir plan"), "Elegir plan envía solo planId a la server action");
+  assert(!/name="(monto|moneda|precio|tenant|tenant_id)"/.test(pagina), "el formulario no envía monto, moneda ni tenant");
+  assert(!/from "stripe"|STRIPE_|NEXT_PUBLIC_STRIPE/.test(pagina), "la página no importa el SDK ni lee secretos");
   for (const enlace of ["<CerrarSesionButton />", 'href="/terminos"', 'href="/privacidad"', "Soporte"]) {
     assert(pagina.includes(enlace), `siempre disponible: ${enlace}`);
   }
