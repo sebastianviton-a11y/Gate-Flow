@@ -323,7 +323,8 @@ async function main() {
     assert(leer("apps/admin/middleware.ts").includes("api/billing/webhook/"), "el webhook queda fuera del middleware de sesión (no redirige a /login)");
     const servidor = leer("apps/admin/lib/billing/servidor.ts");
     assert(servidor.startsWith('import "server-only";'), "lib/billing/servidor.ts es server-only");
-    assert(servidor.includes('esLive && process.env.STRIPE_PERMITIR_LIVE !== "true"'), "una clave live se rechaza salvo STRIPE_PERMITIR_LIVE=true");
+    assert(servidor.includes("const config = configuracionStripe(process.env);") && servidor.includes("if (!config.ok) {"), "el cliente Stripe solo se crea con configuración validada (config.ts)");
+    assert(!/console\.(error|info|log)\([^)]*config\.clave/.test(servidor), "la clave nunca se registra");
   });
 
   console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

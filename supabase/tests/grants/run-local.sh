@@ -64,6 +64,8 @@ MIG_B="20261008100000_billing_base.sql"
 DOWN_B="$SUPA/rollback/20261008100000_billing_base.down.sql"
 MIG_OB="20261008200000_tenant_operativo_billing.sql"
 DOWN_OB="$SUPA/rollback/20261008200000_tenant_operativo_billing.down.sql"
+MIG_BF="20261008300000_billing_evento_otro_tenant.sql"
+DOWN_BF="$SUPA/rollback/20261008300000_billing_evento_otro_tenant.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -153,7 +155,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -229,6 +231,9 @@ snapshot "$OUT/snap_GRACTOIPB.txt"
 
 sql_file "$SUPA/migrations/$MIG_OB"
 run_suites GRACTOIPBO "… + B + operativo_billing"
+snapshot "$OUT/snap_GRACTOIPBO.txt"
+sql_file "$SUPA/migrations/$MIG_BF"
+run_suites GRACTOIPBOF "… + corrección otro tenant"
 
 # El código llama a las RPC de registro, Super Admin y billing, lee
 # suscripciones (con las columnas de billing) y actualiza tenants por
@@ -240,6 +245,7 @@ else
   sed 's/^/    /' "$OUT/contrato.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_BF";                   snapshot "$OUT/snap_GRACTOIPBOb.txt"; igual "$OUT/snap_GRACTOIPBO.txt" "$OUT/snap_GRACTOIPBOb.txt" rollback_BF
 sql_file "$DOWN_OB";                   snapshot "$OUT/snap_GRACTOIPBb.txt"; igual "$OUT/snap_GRACTOIPB.txt" "$OUT/snap_GRACTOIPBb.txt" rollback_OB
 sql_file "$DOWN_B";                    snapshot "$OUT/snap_GRACTOIPb.txt"; igual "$OUT/snap_GRACTOIP.txt" "$OUT/snap_GRACTOIPb.txt" rollback_B
 sql_file "$DOWN_P";                    snapshot "$OUT/snap_GRACTOIb.txt"; igual "$OUT/snap_GRACTOI.txt" "$OUT/snap_GRACTOIb.txt" rollback_P

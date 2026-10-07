@@ -2,6 +2,7 @@ import "server-only";
 import Stripe from "stripe";
 import { createServerSupabaseClient, createServiceRoleClient } from "@gateflow/supabase";
 import { iniciarCheckout, type ResultadoCheckout } from "./checkout";
+import { configuracionStripe } from "./config";
 import { StripeBillingProvider } from "./proveedores/stripe";
 import { procesarWebhook, type ResultadoAplicar, type RespuestaWebhook } from "./webhook";
 import type { EventoNormalizado } from "./tipos";
@@ -12,7 +13,8 @@ import type { EventoNormalizado } from "./tipos";
  * llega al navegador: las claves no llevan prefijo NEXT_PUBLIC_.
  *
  *   STRIPE_SECRET_KEY                 sk_test_… (live solo con
- *                                     STRIPE_PERMITIR_LIVE=true)
+ *                                     STRIPE_PERMITIR_LIVE=true y nunca
+ *                                     en staging/preview: config.ts)
  *   STRIPE_WEBHOOK_SECRET             whsec_… del endpoint
  *   STRIPE_PORTAL_CONFIGURATION_ID    bpc_… (portal: cancelar al final
  *                                     del periodo, sin cambio de plan)
@@ -26,17 +28,20 @@ function log(mensaje: string, datos: Record<string, unknown>) {
   console.info(`[GateFlow] ${mensaje}`, datos);
 }
 
-/** null si Stripe no está configurado, o si la clave es live sin permiso explícito. */
+/**
+ * null si Stripe no está configurado o la configuración no es segura
+ * (lib/billing/config.ts: clave live sin STRIPE_PERMITIR_LIVE=true, o
+ * live en staging/preview). Nunca registra el valor de una clave.
+ */
 export function proveedorStripe(): StripeBillingProvider | null {
-  const clave = process.env.STRIPE_SECRET_KEY ?? "";
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
-  if (!clave || !webhookSecret) return null;
-  const esLive = /^(sk|rk)_live_/.test(clave);
-  if (esLive && process.env.STRIPE_PERMITIR_LIVE !== "true") {
-    console.error("[GateFlow] billing: clave live de Stripe sin STRIPE_PERMITIR_LIVE=true; billing deshabilitado.");
+  const config = configuracionStripe(process.env);
+  if (!config.ok) {
+    if (config.motivo !== "sin_clave" && config.motivo !== "sin_webhook_secret") {
+      console.error(`[GateFlow] billing deshabilitado: configuración de Stripe rechazada (${config.motivo}).`);
+    }
     return null;
   }
-  const cliente = new Stripe(clave, {
+  const cliente = new Stripe(config.clave, {
     apiVersion: STRIPE_API_VERSION,
     // El webhook hace 2–3 consultas: deben caber en el límite de una
     // función de Netlify. Si algo falla → 500 y Stripe reintenta.
@@ -44,7 +49,7 @@ export function proveedorStripe(): StripeBillingProvider | null {
     timeout: 8_000,
     appInfo: { name: "Gate Flow" },
   });
-  return new StripeBillingProvider(cliente, webhookSecret, process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim() || null);
+  return new StripeBillingProvider(cliente, config.webhookSecret, config.portalConfiguracionId);
 }
 
 /** URL pública de Admin para success/cancel/return: de configuración, nunca del Host. */
@@ -163,5 +168,6 @@ export function checkoutDisponible(): boolean {
 }
 
 export function gestionDisponible(): boolean {
-  return Boolean(proveedorStripe() && process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim());
+  const config = configuracionStripe(process.env);
+  return config.ok && Boolean(config.portalConfiguracionId);
 }

@@ -129,7 +129,7 @@ Resultados en `billing_eventos.resultado`: `aplicado`, `obsoleto`,
 | `STRIPE_SECRET_KEY` | `sk_test_…` en staging |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` del endpoint |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | `bpc_…` (sin ella, "Administrar suscripción" lleva a soporte) |
-| `STRIPE_PERMITIR_LIVE` | `true` solo en producción; sin ella una clave live deshabilita billing |
+| `STRIPE_PERMITIR_LIVE` | `true` solo en producción; sin ella una clave live deshabilita billing (en staging/preview, live nunca se acepta) |
 | `NEXT_PUBLIC_ADMIN_APP_URL` | URL https de Admin (success/cancel/return); ya existente |
 
 Sin `STRIPE_SECRET_KEY` o `STRIPE_WEBHOOK_SECRET`, `/suscripcion`
@@ -137,23 +137,52 @@ muestra "Pagos en línea no disponibles por ahora" y el webhook responde 503.
 
 ## Procedimiento test (staging)
 
-1. Stripe en **modo test**. Nada live.
-2. Portal: Settings → Billing → Customer portal → crear una
-   configuración con: actualizar método de pago ON; cancelar
-   suscripción ON, modo **al final del periodo**; cambiar de plan OFF;
-   pausar OFF. Copiar su id `bpc_…`.
-3. Endpoint: Developers → Webhooks → `https://<admin-staging>/api/billing/webhook/stripe`
-   con los eventos de arriba; copiar el signing secret.
-4. Reintentos de cobro (Settings → Billing → Subscriptions): reintentos
-   que cubran al menos 7 días; al agotarse, **cancelar** la suscripción.
-5. Variables en Netlify (sitio Admin staging) como secretas.
-6. Migraciones en staging, en orden: `20261008100000_billing_base`,
-   `20261008200000_tenant_operativo_billing` (cada una en una
-   transacción con su registro en `schema_migrations`). **Antes** del
-   deploy: el código nuevo lee `current_period_end` y
-   `cancel_at_period_end` en todas las consultas de acceso.
+1. Stripe en **modo test / sandbox**. Nada live (la app lo rechaza:
+   `lib/billing/config.ts`).
+2. Portal: la configuración propia (`bpc_…`) se crea por API desde
+   Workbench → Shell (el Dashboard solo edita la configuración por
+   defecto). Comando en la sección siguiente.
+3. Webhook: Workbench → Webhooks → crear destino de eventos, **formato
+   Snapshot** (no Thin: el handler espera `data.object.id`), destino
+   "Webhook endpoint", URL `https://<admin-staging>/api/billing/webhook/stripe`,
+   con los eventos de arriba. Copiar el signing secret (`whsec_…`).
+4. Reintentos: Settings → Billing → Subscriptions and emails → Manage
+   failed payments: reintentos que cubran ≥ 7 días; al agotarse,
+   **cancelar** la suscripción.
+5. Variables en Netlify (solo sitio Admin staging) como secretas.
+6. Migraciones en staging, en orden y **antes** del deploy:
+   `20261008100000_billing_base`, `20261008200000_tenant_operativo_billing`,
+   `20261008300000_billing_evento_otro_tenant` (cada una en una
+   transacción con su registro en `schema_migrations`). El código nuevo
+   lee `current_period_end` y `cancel_at_period_end` en todas las
+   consultas de acceso.
 7. Prueba con tarjetas de prueba de Stripe sobre un residencial
    sintético con trial vencido.
+
+### Configuración del portal (Workbench → Shell, modo test)
+
+```
+stripe billing_portal configurations create \
+  -d "business_profile[headline]=Gate Flow — administra tu suscripción" \
+  -d "default_return_url=https://gateflow-admin-staging.netlify.app/suscripcion" \
+  -d "features[payment_method_update][enabled]=true" \
+  -d "features[invoice_history][enabled]=true" \
+  -d "features[subscription_cancel][enabled]=true" \
+  -d "features[subscription_cancel][mode]=at_period_end" \
+  -d "features[subscription_cancel][proration_behavior]=none" \
+  -d "features[subscription_update][enabled]=false" \
+  -d "features[customer_update][enabled]=false"
+```
+
+El `id` de la respuesta (`bpc_…`) es `STRIPE_PORTAL_CONFIGURATION_ID`.
+
+## Seguridad de claves
+
+`lib/billing/config.ts` decide antes de crear el cliente de Stripe:
+clave live (`sk_live_`/`rk_live_`) sin `STRIPE_PERMITIR_LIVE=true` →
+billing deshabilitado; clave live en un host de staging, preview o local
+→ deshabilitado aunque haya permiso. Nunca se registra el valor de una
+clave.
 
 ## Precios
 
@@ -187,7 +216,8 @@ el checkout que las creó).
 
 ## Rollback
 
-Orden inverso: `supabase/rollback/20261008200000_tenant_operativo_billing.down.sql`
+Orden inverso: `supabase/rollback/20261008300000_billing_evento_otro_tenant.down.sql`,
+`supabase/rollback/20261008200000_tenant_operativo_billing.down.sql`
 y luego `supabase/rollback/20261008100000_billing_base.down.sql`
 (verificados localmente: catálogo idéntico). Con cobros reales, el
 rollback de `billing_base` borra la asociación con Stripe: exportar
