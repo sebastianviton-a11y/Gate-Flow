@@ -1,0 +1,64 @@
+# Integración con Stripe TEST real — solo manual, separada del CI de PR.
+# Crea test clocks, clientes y suscripciones en Stripe TEST (cuenta de
+# pruebas), los hace pasar por NUESTRO normalizador y regla de acceso, verifica
+# que los webhooks reales lleguen a staging y limpia: borra los test clocks
+# (con sus clientes y suscripciones) y, en staging, los billing_eventos de la
+# prueba por id. Producto y precio fixture se reutilizan. Nunca modo live.
+#
+# Requisitos (los configura una persona con permisos en el repo):
+#   - environment "billing-stripe-test" con revisores obligatorios
+#   - secretos de ese environment:
+#       STRIPE_TEST_SECRET_KEY  clave restringida rk_test_ (permisos en tests/billing/STRIPE.md)
+#       GF_STAGING_DB_URL       base de STAGING (limpieza de eventos por id)
+#   - variable opcional: GF_STRIPE_PORTAL_CONFIGURATION_ID (bpc_… de staging)
+name: billing · Stripe TEST (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe "stripe-test": crea y borra objetos en Stripe TEST y limpia en staging los eventos que genere'
+        required: true
+        type: string
+      suscripcion_sintetica:
+        description: "Opcional (P6): sub_… de un residencial ZZ_AUTOTEST_ de staging ya activado por el Checkout hospedado"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billing-stripe-test
+  cancel-in-progress: false
+
+jobs:
+  stripe-test:
+    if: inputs.confirmacion == 'stripe-test'
+    name: Stripe TEST (test clocks + webhooks reales)
+    runs-on: ubuntu-24.04
+    environment: billing-stripe-test
+    timeout-minutes: 45
+    env:
+      GF_BILLING_STRIPE_TEST: "1"
+      GF_BILLING_CONFIRMACION: ${{ inputs.confirmacion }}
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      GF_STAGING_DB_URL: ${{ secrets.GF_STAGING_DB_URL }}
+      GF_STRIPE_PORTAL_CONFIGURATION_ID: ${{ vars.GF_STRIPE_PORTAL_CONFIGURATION_ID }}
+      GF_STRIPE_SUSCRIPCION_SINTETICA: ${{ inputs.suscripcion_sintetica }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Cliente de PostgreSQL
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
+          psql --version
+      - name: Dependencias
+        run: pnpm install --no-frozen-lockfile
+      - name: Stripe TEST
+        run: node tests/billing/run.mjs --stripe

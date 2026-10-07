@@ -13,7 +13,9 @@
     "lint": "pnpm lint:admin && pnpm lint:guard",
     "lint:admin": "pnpm --filter @gateflow/admin lint",
     "lint:guard": "pnpm --filter @gateflow/guard lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test:billing": "node tests/billing/run.mjs",
+    "test:billing:e2e": "node tests/billing/run.mjs --e2e"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

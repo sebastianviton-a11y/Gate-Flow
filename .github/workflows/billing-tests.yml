@@ -1,0 +1,88 @@
+# Batería billing + lifecycle en cada pull request.
+# Sin secretos, sin red hacia staging/Stripe/producción: Postgres
+# desechable del propio job (trust, sin contraseña) y stripe-mock.
+# La ejecución contra staging y contra Stripe TEST real vive en workflows
+# manuales separados (billing-staging.yml, billing-stripe-test.yml).
+name: billing · pruebas (PR)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billing-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test-billing:
+    name: pnpm test:billing (capas A + B)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Misma versión mayor que staging (PostgreSQL 17).
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      # En CI una capa omitida es un fallo (nunca un verde falso).
+      GF_BILLING_EXIGIR: A,A-existentes,B
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4 # versión desde "packageManager" (pnpm@9.0.0)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # igual que Netlify (NODE_VERSION = "20")
+      - name: Cliente de PostgreSQL
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
+          psql --version
+          psql -X -At -c 'select version()'
+      - name: Dependencias
+        # El repo no versiona pnpm-lock.yaml: sin --frozen-lockfile (igual que el build de Netlify).
+        run: pnpm install --no-frozen-lockfile
+      - name: pnpm test:billing
+        run: pnpm test:billing
+
+  stripe-mock:
+    name: solicitudes a Stripe validadas con stripe-mock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      stripe:
+        image: stripe/stripe-mock:v0.206.0
+        ports:
+          - 12111:12111
+    env:
+      GF_BILLING_STRIPE_TEST: "1"
+      GF_BILLING_STRIPE_MOCK: "1"
+      GF_STRIPE_API_BASE: http://localhost:12111
+      # Clave ficticia que solo acepta stripe-mock (no es una credencial).
+      STRIPE_TEST_SECRET_KEY: sk_test_stripemock0000000000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Dependencias
+        run: pnpm install --no-frozen-lockfile
+      - name: Flujo completo de la capa S contra stripe-mock
+        run: npx -y tsx apps/admin/lib/__tests__/billing-stripe-integracion.test.ts
