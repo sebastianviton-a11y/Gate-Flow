@@ -6,7 +6,7 @@
 -- current_period_end (comportamiento anterior, defectuoso).
 -- ============================================================
 
-drop function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz);
+drop function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz, text);
 
 create function public.billing_aplicar_evento(
   p_provider text,

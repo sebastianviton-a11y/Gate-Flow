@@ -132,6 +132,7 @@ export async function aplicarEventoEnBase(evento: EventoNormalizado, provider: s
     p_monto: evento.monto,
     p_intervalo: evento.intervalo,
     p_impago_desde: evento.impagoDesde?.toISOString() ?? null,
+    p_estado_proveedor: evento.estadoProveedor,
   });
   if (error) throw new Error(error.message);
   return data as ResultadoAplicar;

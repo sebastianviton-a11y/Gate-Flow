@@ -49,11 +49,18 @@ export interface EventoNormalizado {
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
   /**
-   * Solo con estado past_due: inicio del periodo impago según el proveedor
-   * (Stripe: current_period_start del ítem). Base de los 7 días de gracia;
-   * null si el proveedor no lo da (sin gracia: falla cerrado).
+   * Solo con estado past_due y status real past_due: inicio del periodo
+   * impago según el proveedor (Stripe: current_period_start del ítem;
+   * hipótesis verificada por la capa S P3/P6). Base de los 7 días de
+   * gracia; null si el proveedor no lo da o el status es unpaid/paused
+   * (nunca abren gracia: falla cerrado).
    */
   impagoDesde: Date | null;
+  /**
+   * Status real del proveedor (Stripe: subscription.status, p. ej. unpaid
+   * aunque se normalice a past_due); null si el evento no trae suscripción.
+   */
+  estadoProveedor: string | null;
   /** Instante en que se consultó al proveedor (ordena los snapshots). */
   versionAt: Date;
   moneda: string | null;

@@ -10,7 +10,7 @@
 -- ============================================================
 
 create or replace function tests.impago() returns boolean language sql as $$
-  select to_regprocedure('public.billing_aplicar_evento(text,text,text,text,text,text,text,text,timestamptz,boolean,timestamptz,text,bigint,text,timestamptz)') is not null;
+  select to_regprocedure('public.billing_aplicar_evento(text,text,text,text,text,text,text,text,timestamptz,boolean,timestamptz,text,bigint,text,timestamptz,text)') is not null;
 $$;
 grant execute on function tests.impago() to anon, authenticated, service_role;
 
@@ -24,13 +24,13 @@ select tests.impago() as hay_impago_rpc \gset
 -- Lo que hace el webhook: evento normalizado con el inicio del impago.
 create or replace function tests.evi(p_event text, p_estado text, p_sub text, p_impago timestamptz,
                                      p_version timestamptz default clock_timestamp(), p_checkout text default null,
-                                     p_cpe timestamptz default now() + interval '28 days')
+                                     p_cpe timestamptz default now() + interval '28 days', p_estado_prov text default null)
 returns text language plpgsql as $$
 declare v jsonb;
 begin
   set local role service_role;
   v := public.billing_aplicar_evento('stripe', p_event, 'test.evento', p_estado, p_checkout, null, p_sub, 'cus_test',
-                                     p_cpe, false, p_version, 'MXN', 49900, 'month', p_impago);
+                                     p_cpe, false, p_version, 'MXN', 49900, 'month', p_impago, coalesce(p_estado_prov, p_estado));
   reset role;
   return v->>'resultado';
 end $$;
@@ -55,17 +55,17 @@ $$;
 
 -- ── Permisos de la firma nueva ────────────────────────────────
 do $$ begin
-  perform tests.igual('IM-00a', 'solo existe la firma de 15 argumentos (la de 14 se reemplazó)',
+  perform tests.igual('IM-00a', 'solo existe la firma de 16 argumentos (la de 14 se reemplazó): sin sobrecargas ambiguas',
     $q$select count(*)::text || '/' || max(pronargs)::text from pg_proc
-       where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento'$q$, '1/15');
+       where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento'$q$, '1/16');
   perform tests.igual('IM-00b', 'EXECUTE solo para service_role; DEFINER y search_path vacío',
     $q$select p.prosecdef::text || '/' || coalesce(array_to_string(p.proconfig, ','), '-') || '/'
          || has_function_privilege('anon', p.oid, 'execute')::text || has_function_privilege('authenticated', p.oid, 'execute')::text
          || has_function_privilege('service_role', p.oid, 'execute')::text || has_function_privilege('public', p.oid, 'execute')::text
        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'billing_aplicar_evento'$q$,
     'true/search_path=""/falsefalsetruefalse');
-  perform tests.igual('IM-00c', 'p_impago_desde es opcional (el servidor viejo sigue funcionando durante el deploy)',
-    $q$select pronargdefaults::text from pg_proc where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento'$q$, '1');
+  perform tests.igual('IM-00c', 'p_impago_desde y p_estado_proveedor son opcionales (la llamada de 14 argumentos resuelve a esta función)',
+    $q$select pronargdefaults::text from pg_proc where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento'$q$, '2');
 end $$;
 
 select tests.como('00000000-0000-0000-0000-00000000000a');
@@ -120,9 +120,9 @@ begin
     'aplicado past_due/-48h/true');
   perform tests.igual('IM-08b', 'la fecha descartada queda en el detalle del evento (auditable)',
     $q$select (detalle ? 'impago_desde_descartado')::text from public.billing_eventos where provider_event_id = 'evt_im_fut'$q$, 'true');
-  perform tests.igual('IM-09', 'una fecha anterior no extiende: toma la más temprana (−72 h)',
+  perform tests.igual('IM-09', 'una fecha anterior (p. ej. de un episodio previo) tampoco lo mueve: inmutable (−48 h)',
     format($q$select tests.evi('evt_im_f4', 'past_due', 'sub_im', %L) || ' ' || tests.estado_a()$q$, v_t0 - interval '1 day'),
-    'aplicado past_due/-72h/true');
+    'aplicado past_due/-48h/true');
 
   -- Frontera exacta desde el inicio fijado por la RPC (no se toca la fila).
   update public.suscripciones set impago_desde = now() - interval '7 days' + interval '1 second' where tenant_id = 'aaaaaaaa-0000-0000-0000-000000000000';
@@ -142,9 +142,11 @@ begin
   perform tests.igual('IM-12', 'impago posterior: abre un episodio NUEVO desde su propio inicio (−1 h)',
     $q$select tests.evi('evt_im_g1', 'past_due', 'sub_im', now() - interval '1 hour') || ' ' || tests.estado_a()$q$,
     'aplicado past_due/-1h/true');
-  perform tests.igual('IM-13', 'unpaid (normalizado a past_due) mantiene el inicio del episodio',
-    $q$select tests.evi('evt_im_g2', 'past_due', 'sub_im', now()) || ' ' || tests.estado_a()$q$,
+  perform tests.igual('IM-13', 'unpaid (normalizado a past_due) mantiene el inicio del episodio aunque traiga otra fecha',
+    $q$select tests.evi('evt_im_g2', 'past_due', 'sub_im', now() - interval '30 minutes', p_estado_prov => 'unpaid') || ' ' || tests.estado_a()$q$,
     'aplicado past_due/-1h/true');
+  perform tests.igual('IM-13b', 'unpaid: status real en el detalle del evento',
+    $q$select detalle->>'estado_proveedor' from public.billing_eventos where provider_event_id = 'evt_im_g2'$q$, 'unpaid');
 
   -- Sin fecha fiable: falla cerrado; un evento posterior con fecha la fija.
   perform tests.igual('IM-14', 'pago exitoso: active', $q$select tests.evi('evt_im_p2', 'active', 'sub_im', null, p_checkout => 'cs_test_im1')$q$, 'aplicado');
@@ -154,6 +156,15 @@ begin
   perform tests.igual('IM-14b', 'el siguiente evento con fecha fija el inicio (sin inventarlo)',
     $q$select tests.evi('evt_im_h2', 'past_due', 'sub_im', now() - interval '5 hours') || ' ' || tests.estado_a()$q$,
     'aplicado past_due/-5h/true');
+
+  -- unpaid/paused sin episodio abierto (se perdió el past_due): no abre gracia.
+  perform tests.evi('evt_im_p3', 'active', 'sub_im', null, p_checkout => 'cs_test_im1');
+  perform tests.igual('IM-14c', 'active → unpaid directo con fecha: past_due SIN inicio (no abre gracia), bloqueado',
+    $q$select tests.evi('evt_im_u1', 'past_due', 'sub_im', now() - interval '1 hour', p_estado_prov => 'unpaid') || ' ' || tests.estado_a()$q$,
+    'aplicado past_due/nullh/false');
+  perform tests.igual('IM-14d', 'paused tampoco abre gracia',
+    $q$select tests.evi('evt_im_u2', 'past_due', 'sub_im', now() - interval '1 hour', p_estado_prov => 'paused') || ' ' || tests.estado_a()$q$,
+    'aplicado past_due/nullh/false');
 
   -- Estado final canceled.
   perform tests.igual('IM-15', 'canceled: bloqueado y cierra el episodio',
@@ -187,6 +198,30 @@ begin
     $q$select string_agg(round(extract(epoch from impago_desde - now()) / 3600)::text, ',' order by tenant_id)
        from public.suscripciones where tenant_id in ('aaaaaaaa-0000-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000000')$q$,
     '-48,-1');
+end $$;
+rollback;
+
+-- Llamada EXACTA del servidor anterior (14 argumentos, sin p_impago_desde
+-- ni p_estado_proveedor) contra el esquema migrado.
+begin;
+do $$
+begin
+  update public.suscripciones set estado = 'active', provider = 'stripe', provider_subscription_id = 'sub_old', plan = 'hasta-50',
+         current_period_end = now() + interval '28 days'
+  where tenant_id = 'aaaaaaaa-0000-0000-0000-000000000000';
+  set local role service_role;
+  perform tests.debe_fallar_msg('IM-20', 'servidor anterior + past_due: error billing:estado_proveedor_requerido (500 → el proveedor reintenta)',
+    $q$select public.billing_aplicar_evento('stripe', 'evt_im_old1', 'invoice.payment_failed', 'past_due', null, null, 'sub_old', 'cus_test',
+                                            now() + interval '28 days', false, clock_timestamp(), 'MXN', 49900, 'month')$q$, 'billing:estado_proveedor_requerido');
+  reset role;
+  perform tests.igual('IM-21', 'el past_due rechazado no se registró ni cambió la suscripción (el reintento se aplicará completo)',
+    $q$select (select count(*) from public.billing_eventos where provider_event_id = 'evt_im_old1')::text || '/'
+              || (select estado from public.suscripciones where tenant_id = 'aaaaaaaa-0000-0000-0000-000000000000')$q$, '0/active');
+  set local role service_role;
+  perform tests.igual('IM-22', 'servidor anterior + canceled (14 argumentos): se aplica',
+    $q$select public.billing_aplicar_evento('stripe', 'evt_im_old2', 'customer.subscription.deleted', 'canceled', null, null, 'sub_old', 'cus_test',
+                                            now() + interval '28 days', false, clock_timestamp(), 'MXN', 49900, 'month')->>'resultado'$q$, 'aplicado');
+  reset role;
 end $$;
 rollback;
 \endif

@@ -72,13 +72,26 @@ exception when others then
 end $$;
 
 -- p_impago: inicio del impago que normaliza el servidor (solo past_due).
+-- p_estado_prov: status real del proveedor (por defecto, el normalizado).
 create function pg_temp.gf_evento(p_event text, p_tipo text, p_estado text, p_cs text, p_ref text, p_sub text, p_cus text,
                                   p_cpe timestamptz, p_cancel boolean, p_ver timestamptz, p_moneda text, p_monto bigint,
-                                  p_impago timestamptz default null)
+                                  p_impago timestamptz default null, p_estado_prov text default null)
 returns jsonb language plpgsql as $$
 begin
   return public.billing_aplicar_evento('stripe', p_event, p_tipo, p_estado, p_cs, p_ref, p_sub, p_cus, p_cpe, p_cancel, p_ver,
-                                       p_moneda, p_monto, 'month', p_impago);
+                                       p_moneda, p_monto, 'month', p_impago, coalesce(p_estado_prov, p_estado));
+exception when others then
+  return jsonb_build_object('resultado', 'error', 'err', sqlerrm);
+end $$;
+
+-- La llamada EXACTA del servidor anterior a 20261009000000 (14 argumentos,
+-- sin inicio de impago ni status del proveedor).
+create function pg_temp.gf_evento_antiguo(p_event text, p_tipo text, p_estado text, p_cs text, p_ref text, p_sub text, p_cus text,
+                                          p_cpe timestamptz, p_cancel boolean, p_ver timestamptz, p_moneda text, p_monto bigint)
+returns jsonb language plpgsql as $$
+begin
+  return public.billing_aplicar_evento('stripe', p_event, p_tipo, p_estado, p_cs, p_ref, p_sub, p_cus, p_cpe, p_cancel, p_ver,
+                                       p_moneda, p_monto, 'month');
 exception when others then
   return jsonb_build_object('resultado', 'error', 'err', sqlerrm);
 end $$;
@@ -434,10 +447,13 @@ begin
   r := pg_temp.gf_r(r, '10', 'regresión: sin impago_desde, un current_period_end futuro NO concede gracia (falla cerrado)', not pg_temp.gf_op(u_admin_pago, t_pago), null);
   update public.suscripciones set impago_desde = now() - interval '8 days' where tenant_id = t_pago;
   -- unpaid (reintentos agotados) llega normalizado como past_due: mismo episodio, no extiende.
+  -- Aunque traiga una fecha (defensa: el servidor no la envía para unpaid), se ignora.
   v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_10u'; v_eventos := v_eventos || v_ev;
-  v := pg_temp.gf_evento(v_ev, 'customer.subscription.updated', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '27 days', false, v_ver, 'MXN', 49900, now() - interval '1 hour');
+  v := pg_temp.gf_evento(v_ev, 'customer.subscription.updated', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '27 days', false, v_ver, 'MXN', 49900, now() - interval '1 hour', 'unpaid');
   r := pg_temp.gf_r(r, '10', 'unpaid/reintentos agotados: sigue el mismo inicio de impago y bloqueado',
                     (select impago_desde from public.suscripciones where tenant_id = t_pago) = now() - interval '8 days' and not pg_temp.gf_op(u_admin_pago, t_pago), v::text);
+  r := pg_temp.gf_r(r, '10', 'unpaid: el status real del proveedor queda en el detalle del evento',
+                    (select detalle->>'estado_proveedor' from public.billing_eventos where provider_event_id = v_ev) = 'unpaid', v::text);
   v := pg_temp.gf_checkout(u_admin_pago, t_pago, 'hasta-50');
   r := pg_temp.gf_r(r, '10', 'past_due no paga un checkout nuevo (se gestiona en el portal)', v->>'err' like '%billing:estado_no_permite%', v::text);
   select count(*) into v_n from public.unidades where tenant_id = t_pago;
@@ -456,6 +472,15 @@ begin
   v := pg_temp.gf_evento(v_ev, 'invoice.payment_failed', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900, v_impago2);
   r := pg_temp.gf_r(r, '11', 'nuevo impago posterior: nuevo inicio (no hereda el anterior) y gracia nueva',
                     (select impago_desde from public.suscripciones where tenant_id = t_pago) = v_impago2 and pg_temp.gf_op(u_admin_pago, t_pago), v::text);
+  -- Webhook del episodio ANTERIOR recibido tras la recuperación y el nuevo impago.
+  v_ev := 'evt_' || v_run || '_11o'; v_eventos := v_eventos || v_ev;
+  v := pg_temp.gf_evento(v_ev, 'invoice.payment_failed', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '27 days', false, v_ver - interval '1 hour', 'MXN', 49900, v_impago);
+  r := pg_temp.gf_r(r, '11', 'webhook del episodio anterior con snapshot viejo: obsoleto, el episodio nuevo intacto',
+                    v->>'resultado' = 'obsoleto' and (select impago_desde from public.suscripciones where tenant_id = t_pago) = v_impago2, v::text);
+  v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_11p'; v_eventos := v_eventos || v_ev;
+  v := pg_temp.gf_evento(v_ev, 'invoice.payment_failed', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '27 days', false, v_ver, 'MXN', 49900, v_impago);
+  r := pg_temp.gf_r(r, '11', 'fecha del episodio anterior con snapshot nuevo: NO acorta ni mueve el episodio nuevo (inmutable)',
+                    v->>'resultado' = 'aplicado' and (select impago_desde from public.suscripciones where tenant_id = t_pago) = v_impago2 and pg_temp.gf_op(u_admin_pago, t_pago), v::text);
   -- Sin fecha fiable al entrar en past_due: falla cerrado; un evento posterior la completa.
   v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_11c'; v_eventos := v_eventos || v_ev;
   perform pg_temp.gf_evento(v_ev, 'invoice.paid', 'active', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900);
@@ -474,6 +499,26 @@ begin
   v := pg_temp.gf_evento(v_ev, 'invoice.payment_failed', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900, v_ver + interval '1 day');
   r := pg_temp.gf_r(r, '11', 'impago_desde posterior al snapshot: descartado (null, registrado en el detalle) y sin gracia',
                     v ? 'impago_desde_descartado' and (select impago_desde is null from public.suscripciones where tenant_id = t_pago) and not pg_temp.gf_op(u_admin_pago, t_pago), v::text);
+  -- unpaid sin haber visto el past_due (se perdió ese webhook): no abre gracia.
+  v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_11h'; v_eventos := v_eventos || v_ev;
+  perform pg_temp.gf_evento(v_ev, 'invoice.paid', 'active', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900);
+  v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_11u'; v_eventos := v_eventos || v_ev;
+  v := pg_temp.gf_evento(v_ev, 'customer.subscription.updated', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900, now() - interval '1 hour', 'unpaid');
+  r := pg_temp.gf_r(r, '10', 'active → unpaid directo: past_due SIN inicio de impago (no abre gracia) y bloqueado',
+                    v->>'resultado' = 'aplicado' and (select estado = 'past_due' and impago_desde is null from public.suscripciones where tenant_id = t_pago)
+                    and not pg_temp.gf_op(u_admin_pago, t_pago), v::text);
+  -- Servidor anterior durante el despliegue: su past_due (sin status del proveedor) se rechaza
+  -- sin registrar nada (500 → Stripe reintenta); el resto de sus eventos se aplica.
+  v_ver := v_ver + interval '1 second'; v_ev := 'evt_' || v_run || '_11v'; v_eventos := v_eventos || v_ev;
+  v := pg_temp.gf_evento_antiguo(v_ev, 'invoice.paid', 'active', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900);
+  r := pg_temp.gf_r(r, '11', 'llamada del servidor anterior (14 argumentos): active se aplica igual',
+                    v->>'resultado' = 'aplicado' and (select estado = 'active' and impago_desde is null from public.suscripciones where tenant_id = t_pago), v::text);
+  v_hs := pg_temp.gf_hs(t_pago);
+  v_ver := v_ver + interval '1 second';
+  v := pg_temp.gf_evento_antiguo('evt_' || v_run || '_11w', 'invoice.payment_failed', 'past_due', v_cs2, c2::text, v_sub_a, v_cus_a, now() + interval '30 days', false, v_ver, 'MXN', 49900);
+  r := pg_temp.gf_r(r, '11', 'llamada del servidor anterior con past_due: error (el proveedor reintenta), sin registrar el evento ni cambiar la suscripción',
+                    v->>'err' like '%billing:estado_proveedor_requerido%' and pg_temp.gf_hs(t_pago) = v_hs
+                    and not exists (select 1 from public.billing_eventos where provider_event_id = 'evt_' || v_run || '_11w'), v::text);
   r := pg_temp.gf_r(r, '11', 'aislamiento: los impagos de PAGO no tocan al tenant B (hash)', pg_temp.gf_hs(t_b) = v_hs_b and (select impago_desde is null from public.suscripciones where tenant_id = t_b), null);
 
   -- ═════ 12. customer.subscription.deleted ═════

@@ -31,11 +31,35 @@ aplicada en staging ni producción):
   (referencia estable: es la misma en el fallo, en cada reintento y en
   cada evento duplicado o tardío del mismo periodo). No se usa la hora de
   recepción del webhook ni se inventan fechas.
+- **Hipótesis H1 (sin confirmar con Stripe real).** Que
+  `current_period_start` sea el inicio del impago se apoya en la
+  documentación de tipos del SDK y en fixtures construidos con esa
+  suposición; eso **no** lo demuestra. H1: en los flujos soportados
+  (renovación `subscription_cycle`; y el cambio de ancla
+  `billing_cycle_anchor=now` del P6, `subscription_update`) la factura
+  impaga se crea en el `current_period_start` del ítem, su línea cubre el
+  periodo que empieza ahí y el primer cobro fallido es posterior (≈ 1 h en
+  una renovación). Si H1 es cierta, la gracia dura 7 días desde que el
+  cobro vence (unos minutos u horas menos que 7 días desde el primer
+  fallo). P3 y P6 la miden: `billing_reason`, `factura.created − cps`,
+  `línea.period.start − cps`, `primer cobro fallido − cps` y, en P6,
+  `impago_desde` guardado en staging `= cps`; fallan si no se cumple.
+  **Fuera de H1** (no soportado hoy: el portal no permite cambiar de plan y
+  la app no modifica suscripciones): una factura a mitad de periodo
+  (prorrateo, factura manual) tendría un `current_period_start` anterior
+  al impago y acortaría la gracia. Si alguna vez se habilita, hay que
+  tomar la fecha de la factura impaga.
+- Webhook de un episodio anterior recibido tarde: el servidor reconsulta la
+  suscripción (estado actual) y la base no cambia un inicio ya fijado
+  (inmutable dentro del episodio), así que nunca acorta ni reabre el
+  episodio nuevo. Cubierto en B, B2 y P3.
 - Gracia = `now < impago_desde + 7 días` en `tenant_operativo`,
   `estadoEfectivoSuscripcion`, el aviso de Admin y `/suscripcion`.
-- La RPC conserva el inicio más temprano mientras siga `past_due`
-  (reintentos, `unpaid`, duplicados y eventos fuera de orden no lo
-  extienden), lo borra en `active`/`canceled` y descarta fechas futuras.
+- La RPC no cambia el inicio mientras siga `past_due` (reintentos,
+  `unpaid`, duplicados, eventos fuera de orden o de un episodio anterior),
+  lo borra en `active`/`canceled` y descarta fechas futuras. `unpaid` y
+  `paused` nunca lo abren ni lo fijan; el status real de Stripe queda en
+  `billing_eventos.detalle.estado_proveedor`.
 - Sin fecha fiable → sin gracia (falla cerrado) hasta el siguiente evento
   que la traiga. Filas `past_due` existentes: no se rellenan (ver
   `docs/operations/BILLING.md`).
@@ -61,7 +85,7 @@ final, que luego pasa por nuestro normalizador:
 | Estado final en Stripe | Normalizado | Acceso en Gate Flow |
 |---|---|---|
 | `canceled` | `canceled` | bloqueado |
-| `unpaid` | `past_due` (mismo inicio de impago) | gracia hasta `impago_desde + 7 días`; después bloqueado |
+| `unpaid` | `past_due` sin fecha propia (`estado_proveedor = unpaid`) | conserva el inicio del episodio (gracia ya vencida tras los reintentos); sin episodio previo, bloqueado. Nunca abre ni extiende la gracia |
 | `past_due` (sin acción) | `past_due` | ídem |
 
 P3 falla si con el estado final el residencial sigue operativo.
@@ -101,7 +125,8 @@ Stripe TEST no envía correos a clientes; los correos de prueba son
      además escribir dentro de su transacción revertida).
      Permisos de la clave restringida: Test clocks, Customers, Payment
      methods, Subscriptions, Invoices, Products y Prices (escritura);
-     Checkout Sessions, Events, Webhook endpoints y Customer portal (lectura).
+     Checkout Sessions, Charges, Events, Webhook endpoints y Customer portal
+     (lectura). Charges: para fechar el primer cobro fallido (H1).
      Si la cuenta no ofrece permiso de test clocks para claves restringidas,
      usar una `sk_test_` solo en ese environment protegido.
 2. **Checkout hospedado (UI de Stripe).** La activación inicial y el rechazo

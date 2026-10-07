@@ -73,7 +73,7 @@ Transiciones que aplica `billing_aplicar_evento`:
 - trial vencido / `expired` / `canceled` → `active` (primer pago, con checkout nuestro y monto exacto);
 - `active` → `active` (renovación; nuevo `current_period_end`);
 - `active` → `past_due` (cobro fallido; abre el episodio: `impago_desde`) → `active` (recuperado; lo cierra: `impago_desde = null`);
-- `past_due` → `past_due` (reintento fallido, `unpaid`, duplicado o evento fuera de orden): `impago_desde` **nunca avanza** (se conserva el más temprano); si faltaba, el primer evento con una fecha fiable lo fija;
+- `past_due` → `past_due` (reintento fallido, `unpaid`, duplicado, evento fuera de orden o con la fecha de un episodio anterior): `impago_desde` es **inmutable** (ni avanza ni retrocede); si faltaba, el primer evento con status real `past_due` y una fecha fiable lo fija;
 - `past_due` → `canceled` (reintentos agotados, según la configuración de la cuenta): bloqueado, `impago_desde = null`;
 - `active` + `cancel_at_period_end` (cancelación pedida) → `canceled` (fin del periodo);
 - nunca vuelve a `trialing`; nunca toca `tenants.estado_servicio` (un residencial suspendido sigue suspendido aunque pague).
@@ -135,18 +135,36 @@ Resultados en `billing_eventos.resultado`: `aplicado`, `obsoleto`,
   igual que hoy. Detalle:
   - **Inicio del impago** = `current_period_start` del ítem de la
     suscripción cuando Stripe la reporta `past_due` (el inicio del periodo
-    que no se pudo cobrar). No se usa la hora de recepción del webhook ni
+    que no se pudo cobrar: el cobro vence ahí y el primer intento es
+    posterior, ≈ 1 h en una renovación). Es una **hipótesis** (H1) sobre
+    Stripe que todavía no se confirmó con Stripe real; P3/P6 la verifican
+    (ver `tests/billing/STRIPE.md`). No se usa la hora de recepción del webhook ni
     se inventa una fecha: si Stripe no la trae, `impago_desde` queda nulo
     y el residencial **no** tiene gracia hasta que un evento posterior la
     traiga. Una fecha posterior a la versión del evento + 5 min se
     descarta y queda en `billing_eventos.detalle.impago_desde_descartado`.
-  - Reintentos, duplicados y eventos fuera de orden no reinician ni
-    extienden el plazo; un pago exitoso (`active`) cierra el episodio y un
-    impago posterior abre uno nuevo con su propio inicio.
-  - Mapeo de estados finales de Stripe: `unpaid` → `past_due` con el mismo
-    inicio (bloqueado al cumplirse los 7 días); `canceled` → `canceled`
-    (bloqueado); `incomplete` / `incomplete_expired` (rechazo del **pago
-    inicial**) → `ignorar`: nunca abre un impago.
+  - Reintentos, duplicados, eventos fuera de orden y webhooks de un
+    episodio anterior no reinician, ni extienden, ni acortan el plazo (el
+    servidor reconsulta la suscripción y la base no cambia un inicio ya
+    fijado); un pago exitoso (`active`) cierra el episodio y un impago
+    posterior abre uno nuevo con su propio inicio.
+  - Mapeo de estados de Stripe (sin cambiar las reglas de producto):
+    - `unpaid` (reintentos agotados) y `paused` → `past_due` **sin fecha
+      propia**: nunca abren ni extienden la gracia. Si el episodio ya
+      estaba abierto, conserva su inicio (normalmente ya vencido, porque
+      los reintentos duran más de 7 días); si no (se perdió el `past_due`),
+      queda bloqueado. El status real queda en
+      `billing_eventos.detalle.estado_proveedor` y en la auditoría.
+    - Recuperación desde `unpaid`: cuando Stripe vuelve a `active` (pago de
+      la factura abierta), `invoice.paid` / `customer.subscription.updated`
+      → `active` y cierra el episodio. Si basta con actualizar la tarjeta en
+      el portal o hay que pagar la factura abierta es comportamiento de
+      Stripe: P3 lo registra; hasta entonces la UI (que trata `unpaid` igual
+      que un `past_due` vencido: "Actualizar método de pago") no lo
+      distingue. Distinguirlo en la UI sería una regla de producto nueva.
+    - `canceled` → `canceled` (bloqueado; cierra el episodio).
+    - `incomplete` / `incomplete_expired` (rechazo del **pago inicial**) →
+      `ignorar`: nunca abre un impago.
 
 ## Variables (solo servidor; nunca `NEXT_PUBLIC_`)
 
@@ -191,24 +209,52 @@ muestra "Pagos en línea no disponibles por ahora" y el webhook responde 503.
 ### Aplicar `20261009000000_billing_impago_desde` en staging (no aplicada)
 
 Requiere autorización explícita; solo staging (`sfuckzzqejerrifuypby`).
+Probado localmente por `tests/billing/compat/rpc-postgrest.mjs`
+(supabase-js → PostgREST real con la llamada exacta del servidor anterior).
 
-1. Precheck (solo lectura): `select count(*) from suscripciones where
-   estado = 'past_due'` (esperado 0; si no, esas filas quedan sin gracia
-   hasta su próximo evento de Stripe), hash de `suscripciones` y la firma
-   vigente de `billing_aplicar_evento` (14 argumentos) y su ACL.
+Comportamiento durante el despliegue (por qué este orden):
+
+- El código **nuevo** contra el esquema **viejo** no funciona (selecciona
+  `impago_desde`; la RPC de 16 claves no existe): la migración va primero.
+- El código **anterior** contra el esquema **migrado**: sus 14 claves
+  resuelven a la única función (2 parámetros opcionales, sin sobrecargas);
+  `active` / `canceled` / `ignorar` se aplican igual. Su `past_due` (sin
+  `p_estado_proveedor`) se **rechaza sin registrar nada** → el webhook
+  responde 500 → Stripe lo reintenta y lo aplica el servidor nuevo con su
+  inicio de impago. Así ningún impago queda sin gracia por el orden del
+  despliegue; mientras tanto la suscripción sigue en su estado anterior
+  (active, operativa), que es lo correcto dentro de la gracia.
+- La caché de esquema de PostgREST: con la caché vieja la llamada anterior
+  funciona, pero la nueva responde PGRST202 (→ 500 → reintento de Stripe).
+  Por eso se recarga la caché antes del deploy.
+
+Pasos:
+
+1. Precheck (solo lectura): número de filas `past_due` (esperado 0; si hay,
+   anotar su `provider_subscription_id`: quedarán sin gracia hasta su
+   próximo evento y se les reenvía uno en el paso 6), hash de
+   `suscripciones`, firma vigente de `billing_aplicar_evento` (14
+   argumentos) y su ACL, y que exista el event trigger de recarga de
+   PostgREST (`pgrst_ddl_watch` o equivalente).
 2. Aplicar la migración en una transacción con su registro en
    `schema_migrations` (NOTICE con el conteo de `past_due`).
-3. Desplegar Admin/Guard con el código que selecciona `impago_desde`
-   **después** de la migración. Entre ambos pasos el código anterior
-   llama la RPC sin `p_impago_desde` (opcional): un `past_due` nuevo en
-   esa ventana queda sin gracia (falla cerrado) hasta el siguiente evento.
-4. Verificar: una sola firma (15 argumentos) con EXECUTE solo para
-   `service_role`; `tenant_operativo` con `impago_desde + 7 días`; check
-   `suscripciones_impago_desde_check`; `tests/billing/staging/run-staging.sh`
-   (opt-in, revertido) con 0 FAIL y hash igual; luego P3/P6 de la capa S
-   cuando exista el runner.
-5. Rollback: `supabase/rollback/20261009000000_billing_impago_desde.down.sql`
-   tras revertir el código (el código nuevo selecciona la columna).
+3. `NOTIFY pgrst, 'reload schema'` (aunque el event trigger lo haga).
+4. Verificar en la base: una sola función de 16 argumentos (2 opcionales),
+   EXECUTE solo para `service_role`; `tenant_operativo` con
+   `impago_desde + 7 días`; check `suscripciones_impago_desde_check`.
+5. Desplegar Admin (webhook) y Guard con el código nuevo, cuanto antes.
+6. Tras el deploy: en Stripe (Developers → Webhooks → endpoint de staging)
+   revisar las entregas fallidas desde el paso 2 y reenviar las que sigan
+   pendientes (Stripe también las reintenta solo); reenviar el último
+   evento de cada `past_due` anotado en el paso 1. Comprobar que no queda
+   ningún `past_due` con `impago_desde` nulo salvo `unpaid`/`paused`
+   (`billing_eventos.detalle.estado_proveedor`).
+7. `tests/billing/staging/run-staging.sh` (opt-in, revertido) con 0 FAIL y
+   hash igual; luego P3/P6 de la capa S cuando exista el runner.
+8. Rollback: primero revertir el código (el nuevo selecciona la columna y
+   envía 16 claves), luego
+   `supabase/rollback/20261009000000_billing_impago_desde.down.sql` y
+   `NOTIFY pgrst, 'reload schema'`.
 
 ### Configuración del portal (Workbench → Shell, modo test)
 

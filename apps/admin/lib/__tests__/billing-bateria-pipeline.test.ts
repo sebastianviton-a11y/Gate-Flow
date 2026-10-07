@@ -206,6 +206,20 @@ async function main() {
   const w13 = await enviar(nuevoEvento("13"), "invoice.payment_failed", `in_${RUN}_1`);
   assert(w13.status === 200 && sql(`select estado || '/' || coalesce(impago_desde::text, 'null') from public.suscripciones where tenant_id = '${T.PIPE}'`) === "active/null", "payment_failed tardío con la suscripción ya active: sigue active, sin reabrir el impago");
 
+  // Nuevo impago (renovación siguiente) y, DESPUÉS, el webhook del episodio
+  // anterior (factura in_1): el servidor reconsulta la suscripción, así que
+  // usa el estado ACTUAL; el inicio del episodio nuevo no se mueve.
+  const inicioImpago2 = Math.floor(Date.now() / 1000) - 3600;
+  est.subs[`sub_${RUN}_PIPE`] = subImpaga(inicioImpago2);
+  est.facturas[`in_${RUN}_2`] = { id: `in_${RUN}_2`, parent: { subscription_details: { subscription: `sub_${RUN}_PIPE` } } };
+  const w13b = await enviar(nuevoEvento("13b"), "invoice.payment_failed", `in_${RUN}_2`);
+  const impago2 = () => sql(`select estado || '/' || coalesce((impago_desde = to_timestamp(${inicioImpago2}))::text, 'null') from public.suscripciones where tenant_id = '${T.PIPE}'`);
+  assert(w13b.status === 200 && impago2() === "past_due/true", "nuevo impago tras la recuperación: episodio nuevo con su propio inicio");
+  const w13c = await enviar(nuevoEvento("13c"), "invoice.payment_failed", `in_${RUN}_1`);
+  assert(w13c.status === 200 && impago2() === "past_due/true", "webhook del episodio ANTERIOR recibido después: el episodio nuevo no cambia");
+  assert(sql(`select string_agg(coalesce(detalle->>'estado_proveedor', '-'), ',' order by provider_event_id) from public.billing_eventos where provider_event_id in ('evt_${RUN}_P13b', 'evt_${RUN}_P13c')`) === "past_due,past_due",
+    "el status real del proveedor queda en el detalle de cada evento");
+
   // ── 12. customer.subscription.deleted ──
   escenario = "12";
   est.subs[`sub_${RUN}_PIPE`] = sub(`sub_${RUN}_PIPE`, "canceled");

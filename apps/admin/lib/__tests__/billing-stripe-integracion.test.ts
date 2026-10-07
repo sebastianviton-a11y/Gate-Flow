@@ -17,10 +17,14 @@
  *       de plan)
  *   P2  rechazo del PAGO INICIAL: la suscripción nace incomplete →
  *       incomplete_expired; nunca activa ni past_due
- *   P3  fallo de una FACTURA DE RENOVACIÓN: active → past_due; inicio del
- *       impago (impagoDesde = current_period_start del periodo impago) y
- *       gracia de 7 días desde ahí aunque current_period_end ya sea futuro;
- *       un reintento no lo mueve; recuperación (invoice.paid) lo cierra;
+ *   P3  fallo de una FACTURA DE RENOVACIÓN: active → past_due; verifica la
+ *       HIPÓTESIS H1 (factura subscription_cycle creada en current_period_start,
+ *       su línea cubre ese periodo, primer cobro fallido posterior ≤ 2 h);
+ *       impagoDesde = current_period_start y 7 días de gracia desde ahí
+ *       aunque current_period_end ya sea futuro; un reintento no lo mueve;
+ *       recuperación (invoice.paid) lo cierra; un segundo impago y el webhook
+ *       del episodio anterior recibido después (lleva el inicio nuevo); estado
+ *       final (unpaid/canceled/past_due) sin abrir gracia y su recuperación;
  *       reintentos hasta el estado final que dicte la configuración de la
  *       cuenta (Smart Retries / "si fallan todos los reintentos")
  *   P4  cancelación al final del periodo → canceled
@@ -154,6 +158,29 @@ async function main() {
     return precio.id as string;
   };
   const finItem = (s: any): number | null => s?.items?.data?.[0]?.current_period_end ?? null;
+  // HIPÓTESIS H1 (tests/billing/STRIPE.md): en los flujos soportados la
+  // factura impaga se crea en el current_period_start del ítem y su primer
+  // intento de cobro es posterior. Mide factura, línea, primer cobro fallido
+  // y periodo para que P3/P6 la confirmen o la refuten con Stripe real.
+  const relacionImpago = async (sub: any, facturaId: string) => {
+    const inv: any = await stripe.invoices.retrieve(facturaId);
+    const cps: number | null = sub?.items?.data?.[0]?.current_period_start ?? null;
+    const linea = (inv?.lines?.data ?? []).find((l: any) => l?.period?.start != null);
+    const cliente = typeof sub?.customer === "string" ? sub.customer : sub?.customer?.id;
+    const fallidos: number[] = [];
+    for await (const c of stripe.charges.list({ customer: cliente, limit: 100 })) {
+      if ((c as any).status === "failed" && cps !== null && (c as any).created >= cps) fallidos.push((c as any).created);
+    }
+    return {
+      cps,
+      creada: (inv?.created ?? null) as number | null,
+      motivo: (inv?.billing_reason ?? null) as string | null,
+      inicioLinea: (linea?.period?.start ?? null) as number | null,
+      primerFallo: fallidos.length ? Math.min(...fallidos) : null,
+    };
+  };
+  const describir = (r: Awaited<ReturnType<typeof relacionImpago>>) =>
+    `motivo=${r.motivo} creada−cps=${r.creada !== null && r.cps !== null ? r.creada - r.cps : "?"}s línea−cps=${r.inicioLinea !== null && r.cps !== null ? r.inicioLinea - r.cps : "?"}s primerFallo−cps=${r.primerFallo !== null && r.cps !== null ? r.primerFallo - r.cps : "?"}s`;
 
   try {
     // ── P0. Modo TEST ──
@@ -227,6 +254,19 @@ async function main() {
         estadoOk(factura?.status === "open" && (factura?.attempt_count ?? 0) >= 1, "factura de renovación abierta con ≥1 intento", `${factura?.status}/${factura?.attempt_count}`);
         const finPeriodo2 = finItem(s2) ?? 0;
         info(`current_period_end antes ${new Date(finPeriodo1 * 1000).toISOString()} → tras la renovación fallida ${new Date(finPeriodo2 * 1000).toISOString()}`);
+        // H1 con objetos reales: factura de renovación creada en el inicio del
+        // periodo impago, su línea cubre ese periodo y el primer cobro fallido
+        // es posterior (≤ 2 h) y no posterior al instante observado.
+        const h1 = await llamar("P3 relación factura / primer fallo / periodo", () => relacionImpago(s2, factura.id));
+        if (h1) {
+          info(`H1 renovación: ${describir(h1)}`);
+          estadoOk(
+            h1.motivo === "subscription_cycle" && h1.cps !== null && h1.creada !== null && Math.abs(h1.creada - h1.cps) <= 120 && h1.inicioLinea === h1.cps
+              && h1.primerFallo !== null && h1.primerFallo >= h1.cps && h1.primerFallo <= fallo && h1.primerFallo - h1.cps <= 2 * 3600,
+            "H1: factura subscription_cycle creada en current_period_start, línea del periodo impago y primer fallo posterior (≤ 2 h)",
+            describir(h1),
+          );
+        }
         const n = await normalizar("invoice.payment_failed", factura.id);
         estadoOk(n?.estado === "past_due", "nuestro normalizador: past_due", String(n?.estado));
         estadoOk(suscripcionOperativa(acceso(n, fallo + 3 * DIA) as any), "día 3 tras el fallo: operativo (gracia)", String(acceso(n, fallo + 3 * DIA)));
@@ -265,7 +305,21 @@ async function main() {
         await usarTarjeta(b.cliente.id, "pm_card_chargeCustomerFail");
         const finPeriodo3 = finItem(s3) ?? 0;
         await avanzar(b.reloj.id, finPeriodo3 + 2 * 3600);
-        let estado = (await stripe.subscriptions.retrieve(s.id)).status as string;
+        const s4: any = await stripe.subscriptions.retrieve(s.id);
+        let estado = s4.status as string;
+        // Nuevo impago y, DESPUÉS, un webhook del episodio ANTERIOR (su factura
+        // ya está pagada): se normaliza con el estado ACTUAL de la suscripción,
+        // así que trae el inicio del episodio nuevo, nunca el viejo.
+        const factura2 = typeof s4.latest_invoice === "string" ? s4.latest_invoice : s4.latest_invoice?.id;
+        const h1b = factura2 ? await llamar("P3 relación del segundo impago", () => relacionImpago(s4, factura2)) : null;
+        if (h1b) info(`H1 segundo impago: ${describir(h1b)}`);
+        const viejo = await normalizar("invoice.payment_failed", factura.id);
+        const inicio2 = s4?.items?.data?.[0]?.current_period_start ?? null;
+        estadoOk(
+          estado === "past_due" && inicio2 !== null && viejo?.impagoDesde?.getTime() === inicio2 * 1000 && viejo.impagoDesde.getTime() !== n?.impagoDesde?.getTime(),
+          "webhook del episodio anterior tras el nuevo impago: lleva el inicio del episodio NUEVO (reconsulta), nunca el viejo",
+          `${estado}/${viejo?.impagoDesde?.toISOString()} vs nuevo ${inicio2}`,
+        );
         let t = finPeriodo3 + 2 * 3600;
         const traza = [`+0d:${estado}`];
         for (let d = 3; d <= 45 && estado === "past_due"; d += 3) {
@@ -279,6 +333,27 @@ async function main() {
         const nf = await normalizar("customer.subscription.updated", s.id);
         const af = acceso(nf, t);
         estadoOk(!suscripcionOperativa(af as any), `con el estado final (${estado} → ${nf?.estado}) el residencial queda bloqueado`, `nuestra regla lo deja "${af}"`);
+        estadoOk(nf?.estadoProveedor === estado && (estado === "past_due" || nf?.impagoDesde === null),
+          `estado final ${estado}: status real conservado y, si no es past_due, sin fecha propia (no abre ni extiende la gracia)`, `${nf?.estadoProveedor}/${nf?.impagoDesde?.toISOString() ?? "null"}`);
+        // Recuperación desde el estado final (evidencia para el texto de la UI):
+        // ¿basta con actualizar la tarjeta o hay que pagar las facturas abiertas?
+        if (estado === "unpaid" || estado === "past_due") {
+          escenario = "11";
+          await usarTarjeta(b.cliente.id, "pm_card_visa");
+          await avanzar(b.reloj.id, t + DIA);
+          const tras = (await stripe.subscriptions.retrieve(s.id)).status as string;
+          info(`recuperación desde ${estado}: solo con tarjeta nueva, +1 d → ${tras}`);
+          let final = tras;
+          if (tras !== "active") {
+            const abiertas = await stripe.invoices.list({ subscription: s.id, status: "open", limit: 10 });
+            for (const inv of abiertas.data) await llamar("pagar factura abierta", () => stripe.invoices.pay(inv.id as string));
+            final = (await stripe.subscriptions.retrieve(s.id)).status as string;
+            info(`recuperación desde ${estado}: pagando ${abiertas.data.length} factura(s) abierta(s) → ${final}`);
+          }
+          const nrec = await normalizar("customer.subscription.updated", s.id);
+          estadoOk(final === "active" && nrec?.estado === "active" && nrec.impagoDesde === null,
+            `recuperación desde ${estado}: active en Stripe y en nuestro normalizador, episodio cerrado`, `${final}/${nrec?.estado}`);
+        }
       });
     }
 
@@ -351,6 +426,19 @@ async function main() {
         estadoOk(impago !== null, "P6: el webhook real llevó el residencial a past_due en staging", "no llegó a past_due en 180 s");
         if (impago !== null && !MOCK) {
           assert(impago > 0, "P6: staging guardó impago_desde (inicio del impago) desde el webhook real", "impago_desde null: sin gracia (falla cerrado)");
+          // H1 en la cadena real: la fecha guardada es exactamente el
+          // current_period_start de Stripe, la factura impaga se creó ahí (al
+          // forzar la renovación) y el primer cobro fallido es posterior.
+          const subP: any = await stripe.subscriptions.retrieve(subSintetica);
+          const facturaP = typeof subP.latest_invoice === "string" ? subP.latest_invoice : subP.latest_invoice?.id;
+          const h1 = facturaP ? await llamar("P6 relación factura / primer fallo / periodo", () => relacionImpago(subP, facturaP)) : null;
+          if (h1) info(`H1 P6: ${describir(h1)} impago_desde−cps=${h1.cps !== null ? impago - h1.cps : "?"}s cps−forzada=${h1.cps !== null ? h1.cps - forzada : "?"}s`);
+          assert(
+            !!h1 && h1.cps === impago && h1.cps >= forzada - 5 && h1.cps <= forzada + 120 && h1.creada !== null && Math.abs(h1.creada - h1.cps) <= 120
+              && h1.inicioLinea === h1.cps && h1.primerFallo !== null && h1.primerFallo >= h1.cps,
+            "P6 H1: impago_desde guardado = current_period_start; factura creada al forzar la renovación; primer fallo posterior",
+            h1 ? describir(h1) : "sin factura",
+          );
           const graciaDias = (impago + DIAS_GRACIA_PAGO * DIA - forzada) / DIA;
           info(`impago_desde guardado ${new Date(impago * 1000).toISOString()} → gracia efectiva ${graciaDias.toFixed(2)} días desde el fallo forzado`);
           assert(impago > 0 && graciaDias <= DIAS_GRACIA_PAGO + 0.1 && graciaDias > DIAS_GRACIA_PAGO - 0.1, `P6: gracia efectiva = ${DIAS_GRACIA_PAGO} días desde el inicio del impago`, `${graciaDias.toFixed(2)} días`);

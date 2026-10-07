@@ -34,6 +34,12 @@ create or replace function tests.ev(p_event text, p_estado text, p_checkout text
                                     p_ref text default null, p_version timestamptz default clock_timestamp())
 returns text language plpgsql as $$
 begin
+  -- Con 20261009000000 el servidor envía además el status del proveedor
+  -- (un past_due sin él se rechaza para que el proveedor reintente).
+  if exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'billing_aplicar_evento' and pronargs = 16) then
+    return public.billing_aplicar_evento('stripe', p_event, 'test.evento', p_estado, p_checkout, p_ref, p_sub, 'cus_test',
+                                         p_cpe, p_cancel, p_version, p_moneda, p_monto, p_intervalo, p_estado_proveedor => p_estado)->>'resultado';
+  end if;
   return public.billing_aplicar_evento('stripe', p_event, 'test.evento', p_estado, p_checkout, p_ref, p_sub, 'cus_test',
                                        p_cpe, p_cancel, p_version, p_moneda, p_monto, p_intervalo)->>'resultado';
 end $$;

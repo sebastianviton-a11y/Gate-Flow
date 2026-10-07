@@ -22,6 +22,8 @@
 //            de billing existentes)
 //   B        tests/billing/db/run-local.sh  (paquete SQL, base local, revertido)
 //   B2 / C-local  tests/billing/e2e/run-local.mjs
+//   B2-compat     tests/billing/compat/rpc-postgrest.mjs (solo --e2e): llamada del
+//                 servidor anterior contra el esquema migrado, por PostgREST
 //   C-staging     tests/billing/staging/run-staging.sh (opt-in; escribe filas
 //                 sintéticas en staging dentro de una transacción y las revierte)
 //   S             apps/admin/lib/__tests__/billing-stripe-integracion.test.ts
@@ -140,6 +142,7 @@ else {
   absorber(await correr("B · paquete SQL (base local, revertido)", "bash", ["tests/billing/db/run-local.sh"]), "B");
   if (E2E) {
     absorber(await correr("C · pila local (pipeline + HTTP + Playwright)", "node", ["tests/billing/e2e/run-local.mjs"]), "C-local");
+    absorber(await correr("B2 · compatibilidad del despliegue (RPC por PostgREST, código anterior)", "node", ["tests/billing/compat/rpc-postgrest.mjs"]), "B2-compat");
     await staging();
     await stripeTest();
   }

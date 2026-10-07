@@ -54,8 +54,10 @@ function idDe(valor: string | { id: string } | null | undefined): string | null 
  * incomplete / incomplete_expired / trialing se ignoran (no usamos
  * trials de Stripe: el trial de 30 días es nuestro y ya terminó; un
  * rechazo del PAGO INICIAL deja la suscripción incomplete → ignorada).
- * unpaid (reintentos agotados) sigue siendo un impago: past_due con la
- * misma gracia, contada desde el inicio del impago, que no se extiende.
+ * unpaid (reintentos agotados) y paused siguen siendo un impago: past_due,
+ * pero NUNCA abren ni extienden la gracia (impagoDesde null; si ya había un
+ * episodio, la base conserva su inicio). El status real viaja aparte
+ * (estadoProveedor) y queda en el detalle del evento.
  */
 export function estadoDeSuscripcionStripe(status: string): EstadoNormalizado {
   switch (status) {
@@ -146,6 +148,7 @@ export class StripeBillingProvider implements BillingProvider {
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       impagoDesde: null,
+      estadoProveedor: null,
       versionAt,
       moneda: null,
       monto: null,
@@ -201,6 +204,9 @@ export class StripeBillingProvider implements BillingProvider {
     const estado = estadoDeSuscripcionStripe(suscripcion.status);
     // Inicio del impago: el inicio del periodo que no se pudo cobrar. Lo
     // fija Stripe (no la hora de recepción) y no cambia con los reintentos.
+    // Hipótesis (tests/billing/STRIPE.md, verificada por P3/P6): la factura
+    // impaga se crea en ese instante y su primer cobro es posterior. Solo
+    // con status past_due: unpaid/paused nunca abren gracia.
     const inicioPeriodo = item?.current_period_start ?? null;
     return {
       ...base,
@@ -209,7 +215,8 @@ export class StripeBillingProvider implements BillingProvider {
       customerId: idDe(suscripcion.customer as string | { id: string } | null) ?? idDe(sesion?.customer as string | { id: string } | null),
       currentPeriodEnd: finEfectivo ? new Date(finEfectivo * 1000) : null,
       cancelAtPeriodEnd: suscripcion.status === "active" && (suscripcion.cancel_at_period_end || suscripcion.cancel_at !== null),
-      impagoDesde: estado === "past_due" && inicioPeriodo ? new Date(inicioPeriodo * 1000) : null,
+      impagoDesde: suscripcion.status === "past_due" && inicioPeriodo ? new Date(inicioPeriodo * 1000) : null,
+      estadoProveedor: suscripcion.status,
       // Una sola línea con cantidad 1; si no, el monto no se puede
       // comparar con el checkout y la activación se rechaza.
       moneda: precio?.currency ? precio.currency.toUpperCase() : null,

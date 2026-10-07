@@ -28,7 +28,12 @@ createdb "$DB"
 sql -f "$SUPA/tests/security/harness/supabase_stub.sql"
 sql -f "$SUPA/tests/grants/harness/acl_staging.sql"
 sql -f "$SUPA/tests/grants/harness/extensions_supabase.sql"
-for m in "$SUPA"/migrations/*.sql; do sql -f "$m"; done
+# GF_BILLING_OMITIR_MIGRACION=<archivo.sql>: base en el estado ANTERIOR a esa
+# migración (prueba de compatibilidad del despliegue; la aplica el que llama).
+for m in "$SUPA"/migrations/*.sql; do
+  [[ -n "${GF_BILLING_OMITIR_MIGRACION:-}" && "$(basename "$m")" == "$GF_BILLING_OMITIR_MIGRACION" ]] && continue
+  sql -f "$m"
+done
 sql -f "$SUPA/seed.sql"
 # Rol de conexión de PostgREST (solo para la capa C local).
 PGOPTIONS="-c client_min_messages=warning" psql -X -q -d "$DB" -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'authenticator') then create role authenticator login noinherit; end if; end \$\$; grant anon, authenticated, service_role to authenticator;" >/dev/null

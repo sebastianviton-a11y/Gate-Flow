@@ -317,12 +317,12 @@ async function flujos(navegador, { run, T, U, email, secreto, eventos, bloqueos 
   let n = 0;
   // impago: expresión SQL del inicio del impago (solo past_due), como la
   // normaliza el servidor desde current_period_start; null = sin fecha.
-  const evento = (tenantKey, tipo, estado, cpe, cancel, cs, ref, sub, impago = "null") => {
+  const evento = (tenantKey, tipo, estado, cpe, cancel, cs, ref, sub, impago = "null", estadoProveedor = estado) => {
     const id = `evt_${run}_C${++n}`;
     eventos.push(id);
     return JSON.parse(
       sql(`select public.billing_aplicar_evento('stripe', '${id}', '${tipo}', '${estado}', ${cs ? `'${cs}'` : "null"}, ${ref ? `'${ref}'` : "null"},
-        '${sub}', 'cus_${run}_${tenantKey}', ${cpe}, ${cancel}, clock_timestamp(), 'MXN', 49900, 'month', ${impago})`),
+        '${sub}', 'cus_${run}_${tenantKey}', ${cpe}, ${cancel}, clock_timestamp(), 'MXN', 49900, 'month', ${impago}, '${estadoProveedor}')`),
     );
   };
   const fechaMx = (ms, conAnio) =>

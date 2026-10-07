@@ -12,13 +12,23 @@
 --   suscripciones.impago_desde  inicio del episodio de impago vigente: el
 --       current_period_start del periodo impago, tal como lo devuelve Stripe
 --       (lo normaliza el servidor; nunca la hora de recepción del webhook).
---       Solo con estado past_due (check). Se abre al entrar en past_due, se
---       conserva (el más temprano) mientras siga en past_due —reintentos,
---       duplicados, eventos fuera de orden o un periodo nuevo impago no lo
---       reinician ni lo extienden— y se cierra (null) al volver a active o
---       pasar a canceled.
---   billing_aplicar_evento  nuevo parámetro p_impago_desde (default null:
---       el servidor anterior sigue funcionando durante el despliegue).
+--       HIPÓTESIS (pendiente de confirmar con Stripe TEST real, capa S P3/P6):
+--       en los flujos soportados (renovación subscription_cycle y el cambio
+--       de ancla del P6) la factura impaga se crea en ese instante y su
+--       primer intento de cobro es posterior. Ver tests/billing/STRIPE.md.
+--       Solo con estado past_due (check). Se abre al entrar en past_due SOLO
+--       si Stripe reporta status = past_due (unpaid/paused nunca abren ni
+--       extienden la gracia), es INMUTABLE mientras siga en past_due
+--       —reintentos, duplicados, eventos fuera de orden, un periodo nuevo
+--       impago o una fecha de un episodio anterior no lo cambian— y se cierra
+--       (null) al volver a active o pasar a canceled.
+--   billing_aplicar_evento  nuevos parámetros opcionales p_impago_desde y
+--       p_estado_proveedor (status real del proveedor; queda en el detalle
+--       del evento y en la auditoría). Llamadas sin ellos siguen resolviendo
+--       a esta función, salvo un past_due sin p_estado_proveedor (solo lo
+--       envía el servidor anterior): se rechaza con error para que el
+--       webhook responda 500 y Stripe lo reintente cuando ya esté el
+--       servidor nuevo, en vez de aplicar un past_due sin gracia.
 --   tenant_operativo  past_due: now() < impago_desde + 7 días. Sin
 --       impago_desde → no operativo (falla cerrado).
 --
@@ -63,7 +73,8 @@ create function public.billing_aplicar_evento(
   p_moneda text,
   p_monto bigint,
   p_intervalo text,
-  p_impago_desde timestamptz default null
+  p_impago_desde timestamptz default null,
+  p_estado_proveedor text default null
 )
 returns jsonb
 language plpgsql
@@ -89,10 +100,19 @@ begin
      or p_estado is null or p_estado not in ('active', 'past_due', 'canceled', 'checkout_expirado', 'ignorar') then
     raise exception 'billing:parametros' using errcode = '22023';
   end if;
+  -- past_due sin el status real del proveedor = servidor anterior a esta
+  -- migración (no sabe enviar el inicio del impago). Error antes de
+  -- registrar nada: el webhook responde 500 y el proveedor reintenta; el
+  -- servidor nuevo lo aplicará con su fecha. Nunca un past_due sin gracia
+  -- por el orden del despliegue.
+  if p_estado = 'past_due' and p_estado_proveedor is null then
+    raise exception 'billing:estado_proveedor_requerido' using errcode = '22023';
+  end if;
   -- Inicio del episodio de impago (Stripe: current_period_start del periodo
-  -- impago). Solo cuenta en past_due y si no es posterior al snapshot: una
-  -- fecha que no es fiable no se usa (y nunca se inventa una).
-  v_impago := case when p_estado = 'past_due' and p_impago_desde is not null
+  -- impago). Solo con status real past_due (unpaid/paused nunca abren la
+  -- gracia) y si no es posterior al snapshot: una fecha que no es fiable no
+  -- se usa (y nunca se inventa una).
+  v_impago := case when p_estado = 'past_due' and p_estado_proveedor = 'past_due' and p_impago_desde is not null
                         and p_impago_desde <= p_version_at + interval '5 minutes'
                    then p_impago_desde end;
 
@@ -243,15 +263,16 @@ begin
     end if;
 
     v_nuevo := p_estado;
-    -- Episodio de impago: se abre al entrar en past_due y conserva su inicio
-    -- (reintentos, duplicados o un periodo nuevo todavía impago nunca lo
-    -- reinician ni lo extienden: se queda el más temprano). Un pago que
-    -- vuelve a active, o canceled, lo cierra. Sin fecha fiable queda null y
+    -- Episodio de impago: se abre al entrar en past_due y su inicio es
+    -- INMUTABLE mientras siga en past_due (reintentos, duplicados, un periodo
+    -- nuevo todavía impago o la fecha de un episodio anterior no lo mueven:
+    -- ni lo reinician, ni lo extienden, ni lo acortan). Un pago que vuelve a
+    -- active, o canceled, lo cierra. Sin fecha fiable queda null y
     -- tenant_operativo no concede gracia (falla cerrado) hasta que un evento
-    -- posterior la traiga.
+    -- posterior con status past_due la traiga.
     v_impago_nuevo := case
       when v_nuevo <> 'past_due' then null
-      when v_s.estado = 'past_due' and v_s.impago_desde is not null then least(v_s.impago_desde, coalesce(v_impago, v_s.impago_desde))
+      when v_s.estado = 'past_due' and v_s.impago_desde is not null then v_s.impago_desde
       else v_impago
     end;
     update public.suscripciones s set
@@ -289,7 +310,8 @@ begin
               jsonb_build_object('estado', v_nuevo, 'plan', coalesce(v_checkout.plan, v_s.plan), 'current_period_end',
                                  coalesce(p_current_period_end, v_s.current_period_end),
                                  'cancel_at_period_end', coalesce(p_cancel_at_period_end, false), 'provider', p_provider,
-                                 'viviendas_exceden_plan', v_exceso, 'impago_desde', v_impago_nuevo));
+                                 'viviendas_exceden_plan', v_exceso, 'impago_desde', v_impago_nuevo,
+                                 'estado_proveedor', p_estado_proveedor));
     end if;
 
     v_resultado := 'aplicado';
@@ -299,6 +321,12 @@ begin
       v_detalle := v_detalle || jsonb_build_object('impago_desde_descartado', p_impago_desde);
     end if;
   end proceso;
+
+  -- Status real del proveedor (p. ej. unpaid normalizado a past_due), en
+  -- cualquier resultado: distingue el estado de Stripe sin otra columna.
+  if p_estado_proveedor is not null then
+    v_detalle := v_detalle || jsonb_build_object('estado_proveedor', p_estado_proveedor);
+  end if;
 
   update public.billing_eventos e set
     resultado = v_resultado,
@@ -311,8 +339,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz) from public, anon, authenticated;
-grant execute on function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz) to service_role;
+revoke execute on function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz, text) from public, anon, authenticated;
+grant execute on function public.billing_aplicar_evento(text, text, text, text, text, text, text, text, timestamptz, boolean, timestamptz, text, bigint, text, timestamptz, text) to service_role;
 
 -- ── 3. tenant_operativo: gracia desde impago_desde ────────────
 create or replace function public.tenant_operativo(p_tenant_id uuid)

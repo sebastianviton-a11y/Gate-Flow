@@ -338,9 +338,10 @@ async function main() {
     assert(estadoEfectivoSuscripcion(impagada(null), AHORA) === "inactiva", "past_due sin inicio de impago fiable: bloqueado (falla cerrado, no se inventa fecha)");
     // REGRESIÓN (antes PENDIENTE): renovación fallida con la semántica de
     // Stripe. Al renovar, Stripe ya avanzó el periodo: current_period_start =
-    // inicio del periodo impago (el fallo) y current_period_end = un mes
-    // DESPUÉS. La gracia son 7 días desde el inicio del impago, no desde
-    // current_period_end. Confirmación contra Stripe real: capa S (P3/P6).
+    // inicio del periodo impago (el cobro vence ahí; el primer intento es
+    // posterior) y current_period_end = un mes DESPUÉS. La gracia son 7 días
+    // desde el inicio del impago, no desde current_period_end. Este fixture
+    // ASUME esa relación (hipótesis); la verifican contra Stripe real P3/P6.
     const falloSeg = Math.floor(AHORA.getTime() / 1000);
     const r10 = await renovacionFallida(falloSeg);
     const d10 = datosDe(r10);
@@ -354,10 +355,16 @@ async function main() {
     // Reintentos (más eventos del mismo periodo impago): mismo inicio, no extienden.
     const reintento = await renovacionFallida(falloSeg, "past_due", "customer.subscription.updated");
     assert(reintento?.impagoDesde?.getTime() === falloSeg * 1000, "reintento/actualización del mismo periodo impago: mismo inicio de impago (no reinicia)");
-    // Reintentos agotados: unpaid sigue siendo impago, misma ventana, sin extenderla.
+    // Reintentos agotados: unpaid sigue siendo impago (past_due) pero NUNCA
+    // abre ni extiende la gracia: el normalizador no envía fecha y conserva el
+    // status real; la base mantiene el inicio del episodio ya abierto.
     const unpaid = await renovacionFallida(falloSeg, "unpaid", "customer.subscription.updated");
-    assert(unpaid?.estado === "past_due" && unpaid.impagoDesde?.getTime() === falloSeg * 1000, "unpaid → past_due con el mismo inicio de impago");
-    assert(estadoEfectivoSuscripcion(datosDe(unpaid), new Date(AHORA.getTime() + 7 * DIA)) === "inactiva", "unpaid: bloqueado al cumplirse los 7 días (no extiende)");
+    assert(unpaid?.estado === "past_due" && unpaid.impagoDesde === null && unpaid.estadoProveedor === "unpaid", "unpaid → past_due sin fecha propia y con el status real (unpaid)");
+    assert(estadoEfectivoSuscripcion(datosDe(unpaid), AHORA) === "inactiva", "unpaid sin episodio previo (se perdió el past_due): bloqueado, no abre gracia");
+    assert(estadoEfectivoSuscripcion({ ...datosDe(unpaid), impago_desde: d10.impago_desde }, new Date(AHORA.getTime() + 7 * DIA)) === "inactiva", "unpaid con el episodio abierto: bloqueado al cumplirse los 7 días del inicio original");
+    const pausada = await renovacionFallida(falloSeg, "paused", "customer.subscription.updated");
+    assert(pausada?.estado === "past_due" && pausada.impagoDesde === null && pausada.estadoProveedor === "paused", "paused → past_due sin fecha (no abre gracia)");
+    assert(r10?.estadoProveedor === "past_due" && reintento?.estadoProveedor === "past_due", "past_due: el status real viaja con el evento");
     // canceled: cierra el episodio y bloquea.
     const cancelada = await renovacionFallida(falloSeg, "canceled", "customer.subscription.deleted");
     assert(cancelada?.estado === "canceled" && cancelada.impagoDesde === null && estadoEfectivoSuscripcion(datosDe(cancelada), AHORA) === "inactiva", "canceled: sin impago_desde y bloqueado");
