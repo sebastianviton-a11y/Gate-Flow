@@ -9,20 +9,27 @@ import { listarUbicacionesActivas } from "./ubicaciones";
  * distintas hacia `users` usando el nombre de constraint que Postgres
  * genera automáticamente (`paquetes_<columna>_fkey`) — ver advertencia
  * en mappers.ts si esto no resuelve tal cual contra el proyecto real.
+ *
+ * `unidades` y `ubicaciones` también llevan su FK explícita: la
+ * integridad multitenant (20261007100000) añadió FKs compuestas
+ * (x_id, tenant_id) junto a las simples y, con dos caminos, PostgREST
+ * responde 300 / PGRST201 a un embed sin FK. Se usan las simples, que
+ * existen antes y después de esa migración (contrato_selects.py lo
+ * comprueba).
  */
 const PAQUETE_SELECT = `
   id, codigo_gateflow, tenant_id, unidad_id, residente_id, remitente,
   empresa_paqueteria_id, estado_id, tamano_id, prioridad_id, ubicacion_id,
   numero_guia, notas, recibido_por, entregado_por, entregado_a_nombre,
   fecha_recepcion, fecha_entrega, pickup_token, grupo_entrega_id,
-  unidades ( identificador, contacto_telefono ),
+  unidades!paquetes_unidad_id_fkey ( identificador, contacto_telefono ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo, telefono ),
   recibido:users!paquetes_recibido_por_fkey ( nombre_completo ),
   entregado:users!paquetes_entregado_por_fkey ( nombre_completo ),
   empresas_paqueteria ( nombre ),
   tamanos_paquete ( clave ),
   prioridades_paquete ( clave ),
-  ubicaciones ( nombre )
+  ubicaciones!paquetes_ubicacion_id_fkey ( nombre )
 `;
 
 /**
@@ -36,9 +43,9 @@ const PAQUETE_SELECT = `
  */
 const PAQUETE_RESUMEN_SELECT = `
   id, codigo_gateflow, tenant_id, unidad_id, residente_id, estado_id, ubicacion_id, fecha_recepcion,
-  unidades ( identificador ),
+  unidades!paquetes_unidad_id_fkey ( identificador ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo ),
-  ubicaciones ( nombre )
+  ubicaciones!paquetes_ubicacion_id_fkey ( nombre )
 `;
 
 export interface ListarPaquetesResultado {
@@ -341,7 +348,7 @@ export async function buscarUnidades(
   const { data, error } = await supabase
     .from("unidades")
     .select(
-      "id, identificador, contacto_nombre, contacto_telefono, residentes_unidades ( fecha_fin, users ( id, nombre_completo ) )",
+      "id, identificador, contacto_nombre, contacto_telefono, residentes_unidades!residentes_unidades_unidad_id_fkey ( fecha_fin, users ( id, nombre_completo ) )",
     )
     .eq("tenant_id", tenantId)
     // Busca por identificador de unidad O por nombre del contacto informal
@@ -542,15 +549,24 @@ export interface ActividadRecienteItem {
   creadoEn: string;
 }
 
+/** Widget del dashboard: si la consulta falla, el dashboard se muestra
+ * sin actividad reciente en vez de caer entero (mismo criterio que
+ * obtenerVolumen30Dias). La tolerancia es SOLO de este widget: el resto
+ * de consultas sigue lanzando el error. */
 export async function obtenerActividadReciente(supabase: SupabaseClient, tenantId: string): Promise<ActividadRecienteItem[]> {
   const { data, error } = await supabase
     .from("paquete_historial")
-    .select("id, estado_nuevo_id, created_at, paquetes!inner ( codigo_gateflow, tenant_id, unidades ( identificador ) )")
+    .select(
+      "id, estado_nuevo_id, created_at, paquetes!paquete_historial_paquete_id_fkey!inner ( codigo_gateflow, tenant_id, unidades!paquetes_unidad_id_fkey ( identificador ) )",
+    )
     .eq("paquetes.tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(8);
 
-  if (error) throw error;
+  if (error) {
+    console.error("[GateFlow] Actividad reciente no disponible:", error.code ?? "", error.message);
+    return [];
+  }
 
   return ((data ?? []) as unknown as Array<{
     id: string;

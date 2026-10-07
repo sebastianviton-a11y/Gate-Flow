@@ -32,7 +32,9 @@
 #        rollback O = GRACT
 #        rollback T = GRAC
 #        rollback C = GRA
-#   Contrato: los select(...) del código contra el esquema GRA.
+#   Contrato: los select(...) del código contra el esquema completo;
+#   solo embebidos (FKs nombradas, sin ambigüedad) también en GRACTO,
+#   antes de la integridad multitenant; autoprueba de embeds ambiguos.
 # Los casos PENDIENTE son fallos conocidos con corrección por aprobar:
 # se listan, no cuentan como FAIL.
 # ============================================================
@@ -217,6 +219,15 @@ sql_file "$SUPA/migrations/$MIG_O"
 run_suites GRACTO "… + T + tenant_operativo"
 snapshot "$OUT/snap_GRACTO.txt"
 
+# Antes de la integridad multitenant (como producción hoy): las FKs que
+# nombran los embeds existen y ningún embed es ambiguo.
+echo "Contrato de embebidos sin integridad multitenant:"
+if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" --solo-embebidos > "$OUT/contrato_pre_I.log" 2>&1; then
+  tail -n 1 "$OUT/contrato_pre_I.log" | sed 's/^/  /'
+else
+  sed 's/^/    /' "$OUT/contrato_pre_I.log"; FALLAS=$((FALLAS + 1))
+fi
+
 sql_file "$SUPA/migrations/$MIG_I"
 run_suites GRACTOI "… + O + integridad"
 snapshot "$OUT/snap_GRACTOI.txt"
@@ -243,6 +254,21 @@ if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" > "$OUT/contrato
   tail -n 1 "$OUT/contrato.log" | sed 's/^/  /'
 else
   sed 's/^/    /' "$OUT/contrato.log"; FALLAS=$((FALLAS + 1))
+fi
+
+# Autoprueba: el contrato DEBE detectar embeds ambiguos (PGRST201) y FKs
+# inexistentes o que no unen el par (contrato_autoprueba/: 4 errores).
+echo "Autoprueba del contrato (embeds ambiguos):"
+python3 "$DIR/contrato_selects.py" --repo "$DIR/contrato_autoprueba" --db "$DB" > "$OUT/contrato_autoprueba.log" 2>&1 && AUTO=0 || AUTO=$?
+if [[ "$AUTO" == "1" ]] \
+   && grep -q 'embeds.ts:8: embed ambiguo (PGRST201) paquetes → unidades' "$OUT/contrato_autoprueba.log" \
+   && grep -q 'embeds.ts:10: embed ambiguo (PGRST201) paquete_historial → paquetes!inner' "$OUT/contrato_autoprueba.log" \
+   && grep -q 'embeds.ts:12: FK inexistente en el embed paquetes → unidades!no_existe_fkey' "$OUT/contrato_autoprueba.log" \
+   && grep -q 'embeds.ts:14: FK incidencias_paquete_id_fkey no une paquetes con unidades' "$OUT/contrato_autoprueba.log" \
+   && [[ "$(grep -c '^FAIL|' "$OUT/contrato_autoprueba.log")" == "4" ]]; then
+  echo "  detecta los 4 embeds incorrectos y acepta el correcto"
+else
+  echo "  la autoprueba NO detecta lo esperado:"; sed 's/^/    /' "$OUT/contrato_autoprueba.log"; FALLAS=$((FALLAS + 1))
 fi
 
 sql_file "$DOWN_BF";                   snapshot "$OUT/snap_GRACTOIPBOb.txt"; igual "$OUT/snap_GRACTOIPBO.txt" "$OUT/snap_GRACTOIPBOb.txt" rollback_BF
