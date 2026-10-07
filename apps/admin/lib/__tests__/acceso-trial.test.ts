@@ -171,7 +171,7 @@ seccion("13–14. past_due y canceled → operación bloqueada (inactiva)", () =
     assert(guard(m("guardia", { sus })).tipo === "suscripcion", `${estado}: Guard servicio inactivo`);
   }
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-  assert(pagina.includes('titulo: "Tu suscripción no está activa"') && pagina.includes('titulo: "Tu prueba gratuita terminó"'), "texto neutro para inactiva; 'prueba terminó' solo para vencida");
+  assert(pagina.includes('inactiva: { etiqueta: "Tu suscripción no está activa" }') && pagina.includes('vencida: { etiqueta: "Tu prueba gratuita de 30 días terminó" }'), "texto neutro para inactiva; 'prueba terminó' solo para vencida");
 });
 
 seccion("15. tenant suspendido sigue teniendo prioridad", () => {
@@ -308,13 +308,34 @@ seccion("/suscripcion con billing V1: solo planId, sin secretos ni activación d
   const contacto = PLANES.find((p) => p.id === "mas-150")!.accion;
   assert(contacto.tipo === "contacto" && contacto.href.startsWith("mailto:soporte@gateflow.mx"), "más de 150 → mailto:soporte@gateflow.mx (sin checkout)");
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-  assert(pagina.includes("<form action={elegirPlanAction}>") && pagina.includes('<input type="hidden" name="plan" value={plan.accion.planId} />') && pagina.includes("Elegir plan"), "Elegir plan envía solo planId a la server action");
+  assert(pagina.includes("<form action={elegirPlanAction}>") && pagina.includes('<input type="hidden" name="plan" value={plan.accion.planId} />') && pagina.includes("Activar plan"), "Activar plan envía solo planId a la server action");
   assert(!/name="(monto|moneda|precio|tenant|tenant_id)"/.test(pagina), "el formulario no envía monto, moneda ni tenant");
   assert(!/from "stripe"|STRIPE_|NEXT_PUBLIC_STRIPE/.test(pagina), "la página no importa el SDK ni lee secretos");
-  for (const enlace of ["<CerrarSesionButton />", 'href="/terminos"', 'href="/privacidad"', "Soporte"]) {
+  for (const enlace of ["<CerrarSesionButton", 'href="/terminos"', 'href="/privacidad"', "Soporte"]) {
     assert(pagina.includes(enlace), `siempre disponible: ${enlace}`);
   }
   assert(!/eliminad|perdid|definitiv/i.test(pagina), "sin mensajes alarmistas");
+});
+
+seccion("/suscripcion — diseño aprobado (variante B: beneficios compartidos)", () => {
+  const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
+  assert(pagina.includes("Elige el plan para seguir usando Gate Flow") && pagina.includes("Tu información sigue aquí. Activa tu suscripción y continúa donde lo dejaste."), "cabecera de continuidad");
+  // Los beneficios se escriben una sola vez y se muestran en el bloque compartido.
+  assert((pagina.match(/"Administradores y guardias ilimitados"/g) ?? []).length === 1 && pagina.includes("Todos los planes de Gate Flow incluyen:"), "beneficios compartidos, no repetidos por tarjeta");
+  assert(pagina.includes('const destacado = plan.id === "hasta-150";') && pagina.includes("Más elegido"), "badge solo en Hasta 150");
+  // Precio del catálogo, nunca escrito a mano.
+  assert(pagina.includes("{plan.precio.texto}") && !/\$\s?\d/.test(pagina), "precio desde el catálogo");
+  // Plan no elegible: misma regla, sin mostrar las viviendas del residencial, sin rojo ni ámbar.
+  assert(pagina.includes("const noCubre = plan.limiteViviendas !== null && viviendas > plan.limiteViviendas;"), "elegibilidad sin cambios");
+  assert(pagina.includes("Tu residencial supera este plan.") && pagina.includes("Este plan cubre hasta {plan.limiteViviendas} viviendas."), "mensaje de plan no elegible");
+  assert(!/tiene \{viviendas\}/.test(pagina), "no muestra la cantidad del residencial");
+  const tarjeta = pagina.slice(pagina.indexOf("function TarjetaPlan"), pagina.indexOf("function Aviso"));
+  assert(!/destructive|warn|red-|amber|yellow/.test(tarjeta), "tarjeta no elegible sin rojo ni ámbar");
+  assert(/disabled aria-describedby=\{motivo\}/.test(tarjeta), "CTA deshabilitado explica el motivo");
+  // Verde Flujo (primary) es el único verde funcional.
+  assert(!/#10B981|emerald|green-/i.test(pagina), "sin un segundo verde en la interfaz");
+  assert(pagina.includes("Más de 150 viviendas") === false && pagina.includes("{contacto.nombre}") && pagina.includes("Hablemos") && pagina.includes("Contactar"), "franja >150 desde PLANES (mailto)");
+  assert(pagina.includes("Activación inmediata · Pago mensual") && pagina.includes("Pago seguro procesado por Stripe"), "garantías al pie de los planes");
 });
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
