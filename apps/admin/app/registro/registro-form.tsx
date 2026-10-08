@@ -137,7 +137,11 @@ export function RegistroForm({ tokenTiempo }: { tokenTiempo: string }) {
 
         <div className="grid grid-cols-2 gap-3">
           <Campo id="pais" etiqueta="País" error={errores.pais}>
-            <select id="pais" name="pais" required defaultValue="MX" className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
+            {/* Sin preselección: el país define cómo se cobra la suscripción y el formato de los teléfonos. */}
+            <select id="pais" name="pais" required defaultValue="" className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
+              <option value="" disabled>
+                Selecciona
+              </option>
               {PAISES_REGISTRO.map((p) => (
                 <option key={p.codigo} value={p.codigo}>
                   {p.nombre}

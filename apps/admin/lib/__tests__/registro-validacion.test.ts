@@ -78,6 +78,9 @@ seccion("6. País no permitido", () => {
     const r = validarRegistro(campos({ pais: p }));
     assert(!r.ok && r.tipo === "campos" && !!r.errores.pais, `país ${JSON.stringify(p)} → error`);
   }
+  // Sin preselección: elegir el país es obligatorio y el mensaje lo dice.
+  const sinPais = validarRegistro(campos({ pais: "  " }));
+  assert(!sinPais.ok && sinPais.tipo === "campos" && sinPais.errores.pais === "Elige el país del residencial.", "sin país → \"Elige el país del residencial.\"");
 });
 
 seccion("24. Términos no aceptados", () => {
