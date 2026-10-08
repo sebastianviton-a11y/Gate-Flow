@@ -19,9 +19,11 @@ export default function GateFlowV2() {
   const mobile = useGateFlowV2("m");
   const [videoOpen, setVideoOpen] = useState(false);
   const [owner, setOwner] = useState<"d" | "m" | null>(null);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
 
-  function openVideo(which: "d" | "m") {
+  function openVideo(which: "d" | "m", from: HTMLElement) {
     setOwner(which);
+    setOpener(from);
     setVideoOpen(true);
   }
 
@@ -36,9 +38,9 @@ export default function GateFlowV2() {
 
   return (
     <>
-      <DesktopLandingV2 v={desktop.v} onOpenVideo={() => openVideo("d")} />
-      <MobileLandingV2 v={mobile.v} onOpenVideo={() => openVideo("m")} />
-      <VideoModal open={videoOpen} onClose={closeVideo} onTimeSync={syncFromVideo} />
+      <DesktopLandingV2 v={desktop.v} onOpenVideo={(from) => openVideo("d", from)} />
+      <MobileLandingV2 v={mobile.v} onOpenVideo={(from) => openVideo("m", from)} />
+      <VideoModal open={videoOpen} opener={opener} onClose={closeVideo} onTimeSync={syncFromVideo} />
     </>
   );
 }

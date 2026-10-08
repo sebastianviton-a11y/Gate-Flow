@@ -27,6 +27,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { firmarJwt, iniciarGateway } from "../billing/e2e/gateway.mjs";
+import { navegacionLanding } from "./landing-navegacion.mjs";
 import { enlaces, iniciarSmtpLocal } from "./smtp-local.mjs";
 
 const CAPA = "C-prueba";
@@ -301,6 +302,9 @@ async function main() {
       await recorrido(navegador, perfil, { run, correo, servicio, desde, tenants });
     }
     await entornoClientes(navegador, { run, correo, servicio, tenants });
+    // 38 · landing: anclas, Atrás y video sin cortar el comienzo (iPad, móvil, desktop)
+    if (LANDING) await navegacionLanding({ playwright, url: URL_WEB, executablePath: process.env.GF_CHROMIUM, res, ok, captura });
+    else res("38", "SKIP", "landing no incluida (GF_LANDING_DIR)");
   } catch (e) {
     res("--", "FAIL", `excepción en el recorrido: ${String(e?.stack ?? e).split("\n").slice(0, 3).join(" ")}`);
   } finally {

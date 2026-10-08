@@ -25,7 +25,12 @@
   font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  /* clip y no hidden: hidden convierte el bloque en contenedor de scroll
+     (la referencia lo pone en <body>, que lo pasa a la ventana) y el
+     encabezado sticky del móvil deja de quedar fijo. hidden queda solo
+     para navegadores sin clip (Safari < 16). */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ===== Corte único 960px: mismo mecanismo de escala que V1 (.gf-scale),
@@ -62,12 +67,23 @@
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
+  /* El lienzo de 1440 × 4252 se escala con transform, que no cambia su
+     tamaño de layout: con overflow hidden este bloque era un contenedor de
+     scroll con área sobrante, y una ancla o el foco lo desplazaban por
+     dentro sin que el usuario pudiera volver (corte superior en iPad).
+     clip recorta igual y no admite scroll. min-height: 0 mantiene el alto
+     del aspect-ratio: sin contenedor de scroll, el mínimo automático sería
+     el alto de layout del lienzo (4252 px) y sobraría espacio al final. */
   overflow: hidden;
+  overflow: clip;
+  min-height: 0;
   position: relative;
 }
 .gfv2-scale-inner {
   transform-origin: top left;
   transform: scale(calc(100cqw / 1440px));
+  overflow: hidden;
+  overflow: clip;
 }
 
 @keyframes v-up {
@@ -920,6 +936,8 @@
   position: fixed;
   inset: 0;
   z-index: 100;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   align-items: center;
   justify-content: center;

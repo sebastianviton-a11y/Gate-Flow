@@ -62,6 +62,26 @@ Argentina que no paga nada:
     - una suscripción existente con proveedor conserva el acceso y la
       gestión, sin montos.
 
+11. Landing: navegación y desplazamiento (`landing-navegacion.mjs`,
+    escenario 38). Perfiles iPad horizontal y vertical, iPad Pro 11
+    horizontal, iPhone 13 y desktop 1366:
+    - "Ver cómo funciona" y Planes llevan a su sección sin desplazar
+      ningún contenedor interno; el logo vuelve al comienzo completo
+      (encabezado y título);
+    - Atrás, tras ir a una sección o tras salir de la landing
+      (Ingresar): se puede subir hasta el comienzo y bajar hasta el pie;
+    - video: con el modal abierto la página de fondo no se desplaza; al
+      cerrar (Cerrar o Esc) queda donde estaba, sin bloqueo de scroll y
+      con el foco en el botón que lo abrió;
+    - móvil: el encabezado queda fijo arriba al desplazar.
+
+    También corre sola contra una landing ya levantada:
+    `GF_LANDING_URL=http://localhost:3965 GF_PLAYWRIGHT_CORE_DIR=… GF_CHROMIUM=… node tests/recorrido/landing-navegacion.mjs`.
+    Es **emulación** (viewport, toque y user agent de iPad sobre
+    Chromium). Con WebKit de Playwright instalado corre también en WebKit;
+    si no, queda SKIP. Ninguna de las dos reemplaza probar en un iPad real
+    con Safari.
+
 México se valida además en la capa C-local (`tests/billing/e2e/run-local.mjs`):
 planes, "Activar plan" y el checkout de Stripe en MXN siguen igual.
 
@@ -72,7 +92,7 @@ planes, "Activar plan" y el checkout de Stripe en MXN siguen igual.
 | Auth (registro, confirmación, invitación, contraseñas, sesiones) | **Real**: GoTrue, el servidor de Auth de Supabase, compilado localmente. Registro público desactivado, confirmación obligatoria, lista de redirecciones Admin/Guard |
 | Base de datos y RLS | **Real**: Postgres 17 local con las migraciones del repo y los permisos tipo staging; PostgREST real |
 | Admin, Guard y landing | **Reales**: `next build` + `next start` del código de la rama |
-| Navegador | **Real**: Chromium (Playwright) en perfiles desktop y móvil |
+| Navegador | **Real**: Chromium (Playwright) en perfiles desktop y móvil. Los perfiles de iPad e iPhone son **emulados** (viewport, toque, user agent): no es Safari ni un dispositivo real |
 | Correo | **Simulado**: buzón SMTP local (`smtp-local.mjs`) que solo acepta `@gateflow.invalid`; cualquier otro destinatario se rechaza con 550 |
 | Stripe | **Simulado**: configurado con claves ficticias (`sk_test_ZZ…`), salida a `stripe.com` bloqueada y registrada (`sin-red-stripe.cjs`) |
 | WhatsApp | **Simulado**: `wa.me` interceptado en el navegador; solo se lee la URL |
@@ -102,7 +122,7 @@ node tests/recorrido/run-local.mjs
   las posteriores.
 - Sin Postgres, PostgREST o GoTrue, la capa queda en SKIP (nunca en PASS).
 - También corre como capa `C-prueba` de `node tests/billing/run.mjs --e2e`
-  (escenarios 31–37).
+  (escenarios 31–38).
 
 GoTrue: `go build` del módulo `github.com/supabase/auth`; sus
 migraciones están en `migrations/`. `construir-base-auth.sh` crea la base,

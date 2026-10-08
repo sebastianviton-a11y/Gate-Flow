@@ -87,6 +87,7 @@ const ESCENARIOS = {
   "35": "Prueba · ningún correo a dominios reales",
   "36": "Prueba · anti-bot Turnstile (formulario y servidor)",
   "37": "Prueba · entorno de clientes (sin claves de prueba ni precios sin aprobar)",
+  "38": "Landing · anclas, Atrás y video sin cortar el comienzo",
 };
 
 // Entorno limpio para las suites TS: sin URLs públicas del shell que cambian resultados.

@@ -11,10 +11,13 @@ const MARKS = [14.5, 16, 24, 40];
 
 export default function VideoModal({
   open,
+  opener,
   onClose,
   onTimeSync,
 }: {
   open: boolean;
+  /** Botón que abrió el modal: recibe el foco al cerrar. */
+  opener: HTMLElement | null;
   onClose: () => void;
   onTimeSync: (step: number) => void;
 }) {
@@ -34,8 +37,28 @@ export default function VideoModal({
       const p = video.play();
       if (p && typeof p.catch === "function") p.catch(() => {});
     }
-    closeRef.current?.focus();
+    closeRef.current?.focus({ preventScroll: true });
   }, [open]);
+
+  // Mientras está abierto, la página de fondo no se desplaza (rueda o gesto
+  // sobre el fondo oscuro). Al cerrar, o si el modal se desmonta, se quita
+  // el bloqueo, la página vuelve a donde estaba si algo la movió (Safari
+  // < 16 ignora overflow en el gesto) y el foco vuelve al botón.
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    const previo = { overflow: html.style.overflow, gutter: html.style.scrollbarGutter };
+    const x = window.scrollX;
+    const y = window.scrollY;
+    html.style.overflow = "hidden";
+    html.style.scrollbarGutter = "stable";
+    return () => {
+      html.style.overflow = previo.overflow;
+      html.style.scrollbarGutter = previo.gutter;
+      if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [open, opener]);
 
   useEffect(() => {
     if (!open) return;

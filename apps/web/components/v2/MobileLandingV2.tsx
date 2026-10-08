@@ -13,11 +13,11 @@ export default function MobileLandingV2({
   onOpenVideo,
 }: {
   v: GateFlowV2Vals;
-  onOpenVideo: () => void;
+  onOpenVideo: (opener: HTMLElement) => void;
 }) {
-  const openVideoClick = (e: MouseEvent) => {
+  const openVideoClick = (e: MouseEvent<HTMLElement>) => {
     e.preventDefault();
-    onOpenVideo();
+    onOpenVideo(e.currentTarget);
   };
 
   return (
