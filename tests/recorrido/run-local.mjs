@@ -33,21 +33,32 @@ const CAPA = "C-prueba";
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "../..");
 const DB = process.env.GF_RECORRIDO_DB ?? "gf_recorrido_e2e";
-const P = { postgrest: 3961, gateway: 3962, admin: 3963, guard: 3964, web: 3965, auth: 3966, smtp: 3967 };
+const P = { postgrest: 3961, gateway: 3962, admin: 3963, guard: 3964, web: 3965, auth: 3966, smtp: 3967, adminClientes: 3968 };
 const URL_SUPABASE = `http://localhost:${P.gateway}`;
 const URL_ADMIN = `http://localhost:${P.admin}`;
+// El MISMO build de Admin, arrancado como en el entorno de clientes
+// (NEXT_PUBLIC_ADMIN_APP_URL=https://gateflow.mx en tiempo de ejecución).
+const URL_ADMIN_CLIENTES = `http://localhost:${P.adminClientes}`;
 const URL_GUARD = `http://localhost:${P.guard}`;
 const URL_WEB = `http://localhost:${P.web}`;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "gf-recorrido-"));
 const BLOQUEOS_STRIPE = path.join(TMP, "stripe-bloqueos.txt");
 const intentosStripe = () => (fs.existsSync(BLOQUEOS_STRIPE) ? fs.readFileSync(BLOQUEOS_STRIPE, "utf8").split("\n").filter(Boolean).length : 0);
-/** Id de la server action elegirPlanAction en el build de Admin (para llamarla como lo haría un formulario). */
-function idElegirPlan() {
-  const pagina = path.join(RAIZ, "apps/admin/.next/server/app/suscripcion/page.js");
+// Turnstile con las claves de PRUEBA de Cloudflare (solo válidas en
+// entornos de pruebas): widget y siteverify emulados en local.
+const TURNSTILE_SITE_KEY_PRUEBA = "1x00000000000000000000AA";
+const TURNSTILE_SECRETO_PRUEBA = "1x0000000000000000000000000000000AA";
+const LLAMADAS_TURNSTILE = path.join(TMP, "turnstile-siteverify.txt");
+const llamadasTurnstile = () => (fs.existsSync(LLAMADAS_TURNSTILE) ? fs.readFileSync(LLAMADAS_TURNSTILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
+const WIDGET_TURNSTILE_LOCAL = fs.readFileSync(path.join(AQUI, "turnstile-widget-local.js"), "utf8");
+/** Id de una server action en el build de Admin (para llamarla como lo haría un formulario). */
+function idAccion(ruta, nombre) {
+  const pagina = path.join(RAIZ, `apps/admin/.next/server/app/${ruta}/page.js`);
   if (!fs.existsSync(pagina)) return null;
   // La clave va entre comillas o no, según el minificador ("01af…" / ce8e…).
-  return /[{,]"?([0-9a-f]{40})"?:\(\)=>Promise\.resolve\(\)\.then\([^)]*\)\)\.then\(\w+=>\w+\.elegirPlanAction\)/.exec(fs.readFileSync(pagina, "utf8"))?.[1] ?? null;
+  return new RegExp(`[{,]"?([0-9a-f]{40})"?:\\(\\)=>Promise\\.resolve\\(\\)\\.then\\([^)]*\\)\\)\\.then\\(\\w+=>\\w+\\.${nombre}\\)`).exec(fs.readFileSync(pagina, "utf8"))?.[1] ?? null;
 }
+const idElegirPlan = () => idAccion("suscripcion", "elegirPlanAction");
 const LANDING = process.env.GF_LANDING_DIR
   ? path.resolve(process.env.GF_LANDING_DIR)
   : fs.existsSync(path.join(RAIZ, "apps/web/package.json"))
@@ -253,18 +264,25 @@ async function main() {
   // de verdad. Ninguna petición sale a stripe.com: sin-red-stripe.cjs la
   // rechaza y la anota en BLOQUEOS_STRIPE (debe quedar vacío).
   fs.writeFileSync(BLOQUEOS_STRIPE, "");
+  fs.writeFileSync(LLAMADAS_TURNSTILE, "");
   const envAdmin = {
     ...envServidor,
     STRIPE_SECRET_KEY: "sk_test_" + "ZZAUTOTEST".repeat(3),
     STRIPE_WEBHOOK_SECRET: "whsec_test_" + crypto.randomBytes(12).toString("hex"),
     STRIPE_PORTAL_CONFIGURATION_ID: "bpc_test_ZZAUTOTEST",
-    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --require ${path.join(RAIZ, "tests/billing/e2e/sin-red-stripe.cjs")}`.trim(),
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --require ${path.join(RAIZ, "tests/billing/e2e/sin-red-stripe.cjs")} --require ${path.join(AQUI, "turnstile-local.cjs")}`.trim(),
     GF_STRIPE_BLOQUEOS: BLOQUEOS_STRIPE,
+    TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY_PRUEBA,
+    TURNSTILE_SECRET_KEY: TURNSTILE_SECRETO_PRUEBA,
+    GF_TURNSTILE_LLAMADAS: LLAMADAS_TURNSTILE,
   };
   iniciar("admin", "npx", ["next", "start", "-p", String(P.admin)], { cwd: path.join(RAIZ, "apps/admin"), env: envAdmin });
   iniciar("guard", "npx", ["next", "start", "-p", String(P.guard)], { cwd: path.join(RAIZ, "apps/guard"), env: envServidor });
+  // Mismo build, entorno de clientes: con claves de prueba de Turnstile el
+  // registro debe quedar cerrado y, con montos sin aprobar, sin precios.
+  iniciar("admin-clientes", "npx", ["next", "start", "-p", String(P.adminClientes)], { cwd: path.join(RAIZ, "apps/admin"), env: { ...envAdmin, NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow.mx" } });
   if (LANDING) iniciar("web", "npx", ["next", "start", "-p", String(P.web)], { cwd: path.join(LANDING, "apps/web"), env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
-  for (const u of [`${URL_ADMIN}/login`, `${URL_GUARD}/login`, ...(LANDING ? [`${URL_WEB}/`] : [])]) {
+  for (const u of [`${URL_ADMIN}/login`, `${URL_ADMIN_CLIENTES}/login`, `${URL_GUARD}/login`, ...(LANDING ? [`${URL_WEB}/`] : [])]) {
     if (!(await esperar(u, 90_000))) return res("--", "FAIL", `no arrancó ${u}`);
   }
   if (!LANDING) res("31", "SKIP", "landing no incluida (GF_LANDING_DIR): el recorrido empieza en /registro");
@@ -282,6 +300,7 @@ async function main() {
     for (const perfil of perfiles) {
       await recorrido(navegador, perfil, { run, correo, servicio, desde, tenants });
     }
+    await entornoClientes(navegador, { run, correo, servicio, tenants });
   } catch (e) {
     res("--", "FAIL", `excepción en el recorrido: ${String(e?.stack ?? e).split("\n").slice(0, 3).join(" ")}`);
   } finally {
@@ -336,6 +355,100 @@ async function main() {
   }
 }
 
+// ── Entorno de clientes (37): el mismo build de Admin con
+// NEXT_PUBLIC_ADMIN_APP_URL=https://gateflow.mx en tiempo de ejecución.
+//   · Turnstile con claves de PRUEBA → /registro cerrado (formulario y servidor).
+//   · Montos MXN sin aprobación comercial → México sin planes ni precios
+//     (y el servidor rechaza el checkout); en local/staging, igual que antes.
+//   · Una suscripción existente conserva acceso y gestión, sin montos.
+async function entornoClientes(navegador, { run, correo, servicio, tenants }) {
+  const e = () => "37";
+  const texto = async (page) => (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  const ctx = await navegador.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-MX", timezoneId: "America/Mexico_City" });
+  await ctx.route("https://challenges.cloudflare.com/turnstile/v0/api.js**", (r) => r.fulfill({ status: 200, contentType: "application/javascript", body: WIDGET_TURNSTILE_LOCAL }));
+  const page = await ctx.newPage();
+  try {
+    // Registro: con claves de prueba, en el entorno de clientes no hay formulario.
+    await page.goto(`${URL_ADMIN_CLIENTES}/registro`, { waitUntil: "networkidle" });
+    let t = await texto(page);
+    ok(e(), /El registro no está disponible por ahora/.test(t) && (await page.locator("#email").count()) === 0 && (await page.locator('[data-turnstile="registro"]').count()) === 0,
+      "clientes + claves de prueba de Turnstile → /registro cerrado (sin formulario)", t.slice(0, 160));
+    // …y el servidor tampoco registra aunque se invoque la acción directamente.
+    const idRegistro = idAccion("registro", "registrarCuentaPrueba");
+    const emailBot = correo("clientes", "bot");
+    const llamadasAntes = llamadasTurnstile().length;
+    const respuesta = idRegistro
+      ? await page.evaluate(async ({ id, email }) => {
+          const datos = new FormData();
+          for (const [k, v] of Object.entries({ nombreCompleto: "Bot", email, password: "Zz-123456789", nombreResidencial: "ZZ Bot", pais: "AR", viviendas: "10", aceptaTerminos: "on", timezone: "America/Argentina/Buenos_Aires", t: "x", sitio_web: "", "cf-turnstile-response": "XXXX.DUMMY.TOKEN.XXXX" })) datos.append(`1_${k}`, v);
+          datos.append("0", JSON.stringify(["$K1"]));
+          const r = await fetch("/registro", { method: "POST", headers: { "Next-Action": id, Accept: "text/x-component" }, body: datos });
+          return { status: r.status, cuerpo: (await r.text()).slice(0, 400) };
+        }, { id: idRegistro, email: emailBot })
+      : null;
+    ok(e(), Boolean(respuesta?.cuerpo.includes("El registro no está disponible por ahora.")) && sql(`select count(*) from auth.users where email = '${emailBot}'`) === "0" && llamadasTurnstile().length === llamadasAntes,
+      "clientes: la acción de registro invocada directamente se rechaza (sin usuario, sin verificar el token de prueba)", `${idRegistro ?? "sin id"} ${JSON.stringify(respuesta)}`);
+
+    // México: residencial sintético con la prueba vencida.
+    const admin = { email: correo("mx", "admin"), password: `Zz-${crypto.randomBytes(6).toString("hex")}` };
+    // Con la clave de servicio, como /registro (API de administración de Auth + RPC).
+    const cab = { apikey: servicio, Authorization: `Bearer ${servicio}`, "Content-Type": "application/json" };
+    const rUsuario = await fetch(`${URL_SUPABASE}/auth/v1/admin/users`, { method: "POST", headers: cab, body: JSON.stringify({ email: admin.email, password: admin.password, email_confirm: true, user_metadata: { nombre_completo: "ZZ Admin MX" } }) });
+    const usuario = await rUsuario.json().catch(() => ({}));
+    if (!rUsuario.ok || !usuario?.id) return res(e(), "FAIL", `no se pudo crear el usuario MX: ${rUsuario.status} ${JSON.stringify(usuario).slice(0, 200)}`);
+    const rCuenta = await fetch(`${URL_SUPABASE}/rest/v1/rpc/crear_cuenta_prueba`, { method: "POST", headers: cab, body: JSON.stringify({ p_user_id: usuario.id, p_nombre_residencial: `${run}_mx`, p_pais: "MX", p_viviendas: 40, p_timezone: "America/Mexico_City", p_acepta_terminos: true }) });
+    const cuenta = await rCuenta.json().catch(() => ({}));
+    const tenantMx = cuenta?.tenant_id;
+    if (!rCuenta.ok || !tenantMx) return res(e(), "FAIL", `no se pudo crear el residencial MX: ${rCuenta.status} ${JSON.stringify(cuenta).slice(0, 200)}`);
+    tenants.push(tenantMx);
+    sql(`update public.suscripciones set trial_started_at = now() - interval '31 days', trial_ends_at = now() - interval '1 hour' where tenant_id = '${tenantMx}'`);
+
+    // Local (entorno de pruebas): México ve sus planes en MXN, como siempre.
+    await page.goto(`${URL_ADMIN}/login`, { waitUntil: "networkidle" });
+    await page.locator("#email").fill(admin.email);
+    await page.locator("#password").fill(admin.password);
+    await Promise.all([page.waitForURL(/\/(suscripcion|dashboard)/, { timeout: 30_000 }).catch(() => null), page.locator('button[type="submit"]').click()]);
+    await page.goto(`${URL_ADMIN}/suscripcion`, { waitUntil: "networkidle" });
+    t = await texto(page);
+    ok(e(), t.includes("MXN") && (await page.locator('button:has-text("Activar plan")').count()) >= 1, "entorno de pruebas: México sigue viendo planes en MXN y \"Activar plan\" (sin cambios)", t.slice(0, 200));
+
+    // Clientes (misma sesión: la cookie es de localhost): sin precios ni planes.
+    await page.goto(`${URL_ADMIN_CLIENTES}/suscripcion`, { waitUntil: "networkidle" });
+    t = await texto(page);
+    await captura(page, "clientes-mx-suscripcion-vencida");
+    ok(e(), new URL(page.url()).pathname === "/suscripcion" && !/MXN|\$\s?\d/.test(t) && (await page.locator('button:has-text("Activar plan")').count()) === 0 && t.includes("La contratación en línea todavía no está disponible") && t.includes("Tu información se conserva"),
+      "clientes: México con montos sin aprobar → sin precios ni planes, con aviso honesto", t.slice(0, 220));
+    const idPlan = idElegirPlan();
+    const intentosAntes = intentosStripe();
+    const llamada = idPlan
+      ? await page.evaluate(async (id) => {
+          const datos = new FormData();
+          datos.append("1_plan", "hasta-50");
+          datos.append("0", JSON.stringify(["$K1"]));
+          const r = await fetch("/suscripcion", { method: "POST", headers: { "Next-Action": id, Accept: "text/x-component" }, body: datos });
+          return { status: r.status, redireccion: r.headers.get("x-action-redirect") ?? (r.redirected ? new URL(r.url).pathname + new URL(r.url).search : null) };
+        }, idPlan)
+      : null;
+    ok(e(), Boolean(llamada?.redireccion?.includes("error=precios")) && sql(`select count(*) from public.billing_checkouts where tenant_id = '${tenantMx}'`) === "0" && intentosStripe() === intentosAntes,
+      "clientes: el servidor rechaza el checkout de México (error=precios, sin billing_checkout ni llamada a Stripe)", `${idPlan ?? "sin id"} ${JSON.stringify(llamada)}`);
+
+    // Suscripción existente (pagada, con proveedor): acceso y gestión intactos, sin montos.
+    sql(`update public.suscripciones set estado = 'active', plan = 'hasta-50', provider = 'stripe', provider_customer_id = 'cus_${run}', provider_subscription_id = 'sub_${run}',
+         current_period_end = now() + interval '20 days', cancel_at_period_end = false, provider_version_at = now() where tenant_id = '${tenantMx}'`);
+    // Como un residencial que ya opera: onboarding terminado.
+    sql(`update public.tenants set onboarding_completado = true where id = '${tenantMx}'`);
+    await page.goto(`${URL_ADMIN_CLIENTES}/dashboard`, { waitUntil: "networkidle" });
+    const enDashboard = new URL(page.url()).pathname === "/dashboard";
+    await page.goto(`${URL_ADMIN_CLIENTES}/suscripcion`, { waitUntil: "networkidle" });
+    t = await texto(page);
+    await captura(page, "clientes-mx-suscripcion-activa");
+    ok(e(), enDashboard && t.includes("Tu suscripción está activa") && (await page.locator('button:has-text("Administrar suscripción"), a:has-text("Administrar suscripción")').count()) >= 1 && !/MXN|\$\s?\d/.test(t),
+      "clientes: una suscripción existente conserva el acceso y la gestión, sin mostrar montos", `${enDashboard} ${t.slice(0, 220)}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
 // ── Un recorrido completo (un dispositivo) ──
 async function recorrido(navegador, perfil, { run, correo, servicio, desde, tenants }) {
   const p = perfil.id;
@@ -344,8 +457,18 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     const ctx = await navegador.newContext(perfil.contexto);
     // WhatsApp: se captura el enlace sin salir a internet.
     await ctx.route("https://wa.me/**", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<html>wa</html>" }));
+    // Turnstile: el script de Cloudflare se sirve emulado (claves de prueba);
+    // el token llega cuando la prueba lo pide (window.__zzTurnstile.emitir()).
+    await ctx.addInitScript(() => {
+      window.__zzTurnstileManual = true;
+    });
+    await ctx.route("https://challenges.cloudflare.com/turnstile/v0/api.js**", (r) => {
+      scriptsTurnstile.push(r.request().url());
+      return r.fulfill({ status: 200, contentType: "application/javascript", body: WIDGET_TURNSTILE_LOCAL });
+    });
     return ctx;
   };
+  const scriptsTurnstile = [];
   const texto = async (page) => (await page.locator("body").innerText()).replace(/\s+/g, " ");
   const admin = { email: correo(p, "admin"), password: `Zz-${crypto.randomBytes(6).toString("hex")}` };
   const guardia = { email: correo(p, "guardia"), password: `Zz-${crypto.randomBytes(6).toString("hex")}` };
@@ -390,16 +513,54 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   await page.locator("#nombreResidencial").fill(nombreResidencial);
   await page.locator("#viviendas").fill("40");
   await page.locator('input[name="aceptaTerminos"]').check();
+  const enviar = page.locator('button[type="submit"]');
+  const nuevoTenant = () => Number(sql(`select count(*) from public.tenants where nombre = '${nombreResidencial}'`));
+  const llamadasAntes = llamadasTurnstile().length;
+
+  // 36 · Turnstile: el widget está y, sin token, no se puede enviar.
+  const widget = page.locator('[data-turnstile="registro"]');
+  ok(e("36"), (await widget.count()) === 1 && (await widget.getAttribute("data-zz-sitekey")) === TURNSTILE_SITE_KEY_PRUEBA && (await widget.getAttribute("data-zz-action")) === "registro" && scriptsTurnstile.some((u) => u.startsWith("https://challenges.cloudflare.com/turnstile/v0/api.js")),
+    `[${p}] /registro carga el widget de Turnstile (script de Cloudflare, clave pública, action "registro")`, `${await widget.count()} ${scriptsTurnstile.join(",")}`);
+  ok(e("36"), (await enviar.isDisabled()) && /Comprobando que no eres un robot/.test(await texto(page)) && (await page.locator('input[name="cf-turnstile-response"]').inputValue()) === "",
+    `[${p}] sin token del desafío el botón está deshabilitado`);
+  // Saltándose el formulario (como un bot: la acción del servidor sin
+  // token, con todos los campos válidos): el servidor rechaza.
+  const idRegistro = idAccion("registro", "registrarCuentaPrueba");
+  const sinToken = idRegistro
+    ? await page.evaluate(async ({ id, email, password, nombre }) => {
+        const datos = new FormData();
+        for (const [k, v] of Object.entries({ nombreCompleto: "Ana Prueba Sintética", email, password, nombreResidencial: nombre, pais: "AR", viviendas: "40", aceptaTerminos: "on", timezone: "America/Argentina/Buenos_Aires", t: document.querySelector('input[name="t"]')?.value ?? "", sitio_web: "" })) datos.append(`1_${k}`, v);
+        datos.append("0", JSON.stringify(["$K1"]));
+        const r = await fetch(location.pathname, { method: "POST", headers: { "Next-Action": id, Accept: "text/x-component" }, body: datos });
+        return (await r.text()).slice(0, 400);
+      }, { id: idRegistro, email: admin.email, password: admin.password, nombre: nombreResidencial })
+    : null;
+  ok(e("36"), Boolean(sinToken?.includes("No pudimos comprobar que no eres un robot")) && nuevoTenant() === 0 && sql(`select count(*) from auth.users where email = '${admin.email}'`) === "0" && llamadasTurnstile().length === llamadasAntes,
+    `[${p}] la acción del servidor sin token se rechaza antes de verificar o crear nada`, `${idRegistro ?? "sin id"} ${sinToken}`);
+  // El desafío se resuelve (token de prueba) → el botón se habilita.
+  await page.evaluate(() => window.__zzTurnstile.emitir());
+  await page.waitForFunction(() => !document.querySelector('button[type="submit"]')?.disabled, null, { timeout: 10_000 }).catch(() => null);
+  const habilitado = !(await enviar.isDisabled()) && (await page.locator('input[name="cf-turnstile-response"]').inputValue()) === "XXXX.DUMMY.TOKEN.XXXX";
+  if (!habilitado) await captura(page, `${p}-36-desafio-no-resuelto`);
+  ok(e("36"), habilitado, `[${p}] con el desafío resuelto se puede enviar`, (await texto(page)).slice(0, 300));
+
   // Sin país: el servidor (y el navegador) no dejan avanzar.
   await page.waitForTimeout(4_500); // tiempo mínimo antibot del formulario
-  await page.locator('button[type="submit"]').click();
+  await enviar.click();
   await page.waitForTimeout(1_500);
-  ok(e("32"), Number(sql(`select count(*) from public.tenants where nombre = '${nombreResidencial}'`)) === 0, `[${p}] sin elegir país no se crea nada`);
+  ok(e("32"), nuevoTenant() === 0, `[${p}] sin elegir país no se crea nada`);
   await page.locator("select#pais").selectOption("AR");
-  await page.locator('button[type="submit"]').click();
+  // El token ya se usó: el formulario pide otro antes de reenviar.
+  await page.waitForFunction(() => !document.querySelector('button[type="submit"]')?.disabled && document.querySelector('input[name="cf-turnstile-response"]')?.value, null, { timeout: 10_000 }).catch(() => null);
+  const estadoWidget = await page.evaluate(() => window.__zzTurnstile.estado);
+  ok(e("36"), estadoWidget.resets >= 1 && estadoWidget.emitidos >= 2 && (await page.locator('input[name="cf-turnstile-response"]').inputValue()) === "XXXX.DUMMY.TOKEN.XXXX", `[${p}] tras un rechazo el widget se reinicia y entrega un token nuevo (un solo uso)`, JSON.stringify(estadoWidget));
+  await enviar.click();
   await page.waitForFunction(() => /Revisa tu correo/i.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => null);
   let t = await texto(page);
   ok(e("32"), /Revisa tu correo/i.test(t), `[${p}] alta enviada → "Revisa tu correo"`, t.slice(0, 200));
+  const verificaciones = llamadasTurnstile().slice(llamadasAntes);
+  ok(e("36"), verificaciones.length === 2 && verificaciones.every((v) => v.secreto === "1x" && v.token === "XXXX.DUMMY.TOKEN.XXXX"),
+    `[${p}] el servidor verificó el token en siteverify en cada envío (2), con la clave secreta de prueba`, JSON.stringify(verificaciones));
   await captura(page, `${p}-01-registro-enviado`);
   const fila = sql(`select concat_ws('|', t.id, t.pais, t.timezone, s.estado, s.origen, (s.trial_ends_at - s.trial_started_at) = interval '30 days', s.provider is null, u.email_confirmed_at is null)
     from public.tenants t join public.suscripciones s on s.tenant_id = t.id join public.user_tenants ut on ut.tenant_id = t.id join auth.users u on u.id = ut.user_id
@@ -551,9 +712,9 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   // Servidor: la server action del checkout, invocada como la invoca un
   // formulario ("Next-Action"), rechaza Argentina aunque Stripe esté
   // configurado: ni billing_checkout ni petición a Stripe.
-  const idAccion = idElegirPlan();
+  const idCheckout = idElegirPlan();
   const intentosAntes = intentosStripe();
-  const llamada = idAccion
+  const llamada = idCheckout
     ? await page.evaluate(async (id) => {
         const datos = new FormData();
         datos.append("1_plan", "hasta-50");
@@ -561,13 +722,13 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
         // El servidor responde 303 a /suscripcion?error=…; se sigue la redirección.
         const r = await fetch("/suscripcion", { method: "POST", headers: { "Next-Action": id, Accept: "text/x-component" }, body: datos });
         return { status: r.status, redireccion: r.headers.get("x-action-redirect") ?? (r.redirected ? new URL(r.url).pathname + new URL(r.url).search : null) };
-      }, idAccion)
+      }, idCheckout)
     : null;
   ok(
     e("34"),
     Boolean(llamada?.redireccion?.includes("error=pais")) && sql(`select count(*) from public.billing_checkouts where tenant_id = '${tenantId}'`) === "0" && intentosStripe() === intentosAntes,
     `[${p}] servidor: checkout de Stripe rechazado para Argentina (sin billing_checkout ni llamada a Stripe)`,
-    `${idAccion ?? "sin id de acción"} ${JSON.stringify(llamada)} intentos=${intentosStripe() - intentosAntes}`,
+    `${idCheckout ?? "sin id de acción"} ${JSON.stringify(llamada)} intentos=${intentosStripe() - intentosAntes}`,
   );
   await page.goto(`${URL_ADMIN}/suscripcion?error=pais`, { waitUntil: "domcontentloaded" });
   t = await texto(page);

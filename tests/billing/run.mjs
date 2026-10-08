@@ -85,6 +85,8 @@ const ESCENARIOS = {
   "33": "Prueba · residentes y guardias",
   "34": "Prueba · AR sin contratación paga (interfaz y servidor)",
   "35": "Prueba · ningún correo a dominios reales",
+  "36": "Prueba · anti-bot Turnstile (formulario y servidor)",
+  "37": "Prueba · entorno de clientes (sin claves de prueba ni precios sin aprobar)",
 };
 
 // Entorno limpio para las suites TS: sin URLs públicas del shell que cambian resultados.
