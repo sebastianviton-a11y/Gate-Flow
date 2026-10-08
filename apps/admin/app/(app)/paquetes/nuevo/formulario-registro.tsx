@@ -107,7 +107,7 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
     const urlVerQr = paquete.pickupToken && baseUrl ? construirUrlVerQr(paquete.pickupToken, baseUrl) : undefined;
     const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr);
     const enlaceWhatsApp = notificacion
-      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr)
+      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr, session.tenant.pais ?? null)
       : null;
 
     return (

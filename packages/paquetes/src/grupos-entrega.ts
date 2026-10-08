@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizarTelefonoWhatsApp } from "./whatsapp";
 
 export type EstadoGrupoEntrega = "pendiente" | "parcial" | "completado" | "cancelado";
 
@@ -307,8 +308,11 @@ export function construirMensajeNotificacionGrupo(
 export function construirEnlaceWhatsAppGrupo(
   telefonoDestinatario: string | null,
   mensaje: string,
+  /** País del residencial (tenants.pais): wa.me exige el código de país. */
+  pais: string | null = "MX",
 ): { url: string } | null {
   if (!telefonoDestinatario) return null;
-  const telefonoLimpio = telefonoDestinatario.replace(/\D/g, "");
-  return { url: `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}` };
+  const telefono = normalizarTelefonoWhatsApp(telefonoDestinatario, pais);
+  if (!telefono) return null;
+  return { url: `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}` };
 }

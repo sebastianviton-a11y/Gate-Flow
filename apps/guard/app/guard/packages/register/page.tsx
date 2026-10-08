@@ -253,7 +253,7 @@ export default function RegisterPackagePage() {
         grupoActivo.codigoGrupo ?? grupoActivo.token,
         urlVerQr,
       );
-      const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje);
+      const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje, session.tenant.pais ?? null);
       if (enlace) window.open(enlace.url, "_blank");
       await marcarWhatsappGrupoEnviado(supabase, grupoActivo.id);
       setGrupoActivo({ ...grupoActivo, whatsappEnviado: true });
@@ -284,7 +284,7 @@ export default function RegisterPackagePage() {
       grupoActivo.codigoGrupo ?? grupoActivo.token,
       urlVerQr,
     );
-    const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje);
+    const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje, session.tenant.pais ?? null);
 
     return (
       <div className="flex h-full flex-col">
