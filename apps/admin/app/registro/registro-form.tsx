@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, MailCheck } from "lucide-react";
 import { Button, GateFlowLogo, Input, Label, PasswordInput } from "@gateflow/ui";
 import type { ResultadoAlta } from "@/lib/registro/alta";
 import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro } from "@/lib/registro/validacion";
 import { registrarCuentaPrueba } from "./actions";
+import { TurnstileWidget, type TurnstileHandle } from "./turnstile-widget";
 
 type Pantalla = "formulario" | "revisa_correo" | "contacto";
 
 const CLASE_CAMPO = "border-white/10 bg-ink-950 text-white placeholder:text-white/30";
 
-export function RegistroForm({ tokenTiempo }: { tokenTiempo: string }) {
+export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: string; turnstileSiteKey: string | null }) {
   const [pantalla, setPantalla] = useState<Pantalla>("formulario");
   const [enviando, setEnviando] = useState(false);
   const [errores, setErrores] = useState<ErroresRegistro>({});
@@ -20,6 +21,11 @@ export function RegistroForm({ tokenTiempo }: { tokenTiempo: string }) {
   const [mensajeFinal, setMensajeFinal] = useState("");
   const [timezone, setTimezone] = useState("");
   const [viviendas, setViviendas] = useState("");
+  // Turnstile: sin token no se puede enviar; cada token sirve una vez.
+  const [tokenDesafio, setTokenDesafio] = useState<string | null>(null);
+  const [errorDesafio, setErrorDesafio] = useState(false);
+  const desafio = useRef<TurnstileHandle>(null);
+  const faltaDesafio = turnstileSiteKey !== null && !tokenDesafio;
 
   // Zona horaria del navegador: se manda oculta y el servidor la valida.
   useEffect(() => {
@@ -51,6 +57,8 @@ export function RegistroForm({ tokenTiempo }: { tokenTiempo: string }) {
       resultado = { tipo: "error", mensaje: "No pudimos procesar tu registro. Inténtalo de nuevo." };
     }
     setEnviando(false);
+    // El token ya se usó: si hay que reenviar, se pide uno nuevo.
+    if (resultado.tipo === "campos" || resultado.tipo === "error") desafio.current?.reset();
 
     switch (resultado.tipo) {
       case "revisa_correo":
@@ -193,13 +201,35 @@ export function RegistroForm({ tokenTiempo }: { tokenTiempo: string }) {
           <input id="sitio_web" name="sitio_web" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
         </div>
 
+        {turnstileSiteKey && (
+          <div className="space-y-1.5">
+            <input type="hidden" name="cf-turnstile-response" value={tokenDesafio ?? ""} />
+            <TurnstileWidget
+              ref={desafio}
+              siteKey={turnstileSiteKey}
+              onToken={(token) => {
+                setTokenDesafio(token);
+                if (token) setErrorDesafio(false);
+              }}
+              onError={() => setErrorDesafio(true)}
+            />
+            {errorDesafio ? (
+              <p role="alert" className="text-center text-xs text-destructive">
+                No pudimos cargar la verificación anti-robots. Recarga la página e inténtalo de nuevo.
+              </p>
+            ) : (
+              faltaDesafio && <p className="text-center text-xs text-white/50">Comprobando que no eres un robot…</p>
+            )}
+          </div>
+        )}
+
         {errorGeneral && (
           <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorGeneral}
           </p>
         )}
 
-        <Button type="submit" disabled={enviando} className="w-full">
+        <Button type="submit" disabled={enviando || faltaDesafio} className="w-full">
           {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
           {enviando ? "Creando tu cuenta…" : "Empezar prueba gratis"}
         </Button>

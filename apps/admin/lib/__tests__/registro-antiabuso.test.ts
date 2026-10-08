@@ -2,7 +2,8 @@
  * Hashes, token de tiempo, IP y desafío anti-bot de /registro.
  *   npx tsx apps/admin/lib/__tests__/registro-antiabuso.test.ts
  */
-import { verificarDesafio } from "../registro/antibot";
+import { configuracionAntibot, esClaveDePruebaTurnstile, verificarDesafio } from "../registro/antibot";
+import { esEntornoDePruebas } from "../entorno";
 import { emitirTokenTiempo, hashEmail, hashIp, ipDesdeHeaders, TIEMPO_MAXIMO_MS, TIEMPO_MINIMO_MS, verificarTokenTiempo } from "../registro/hash";
 
 let pasadas = 0;
@@ -84,6 +85,60 @@ async function main() {
     }) as unknown as typeof fetch;
     const caido = await verificarDesafio("token", { secreto: "clave", fetchFn: fetchCae });
     assert(!caido.ok && caido.motivo === "verificador_no_disponible", "verificador caído → falla cerrado");
+  });
+
+  seccion("Turnstile por entorno: claves de prueba solo en pruebas; clientes, siempre con desafío real", () => {
+    const SITE_PRUEBA = "1x00000000000000000000AA";
+    const SECRETO_PRUEBA = "1x0000000000000000000000000000000AA";
+    for (const k of [SITE_PRUEBA, "2x00000000000000000000AB", "1x00000000000000000000BB", "3x00000000000000000000FF", SECRETO_PRUEBA, "2x0000000000000000000000000000000AA", "3x0000000000000000000000000000000AA"]) {
+      assert(esClaveDePruebaTurnstile(k), `clave de prueba de Cloudflare reconocida: ${k.slice(0, 4)}…`);
+    }
+    assert(!esClaveDePruebaTurnstile("0x4AAAAAAAzZzZzZzZzZzZzZ") && !esClaveDePruebaTurnstile("0x4AAAAAAAzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZ"), "una clave real (0x4AAA…) no es de prueba");
+
+    assert(esEntornoDePruebas("http://localhost:3963") && esEntornoDePruebas("https://gateflow-admin-staging.netlify.app") && esEntornoDePruebas("https://deploy-preview-2--gateflow-admin-staging.netlify.app") && esEntornoDePruebas("https://staging--gateflow-admin-staging.netlify.app"), "localhost, staging y previews son entornos de pruebas");
+    assert(!esEntornoDePruebas("https://gateflow.mx") && !esEntornoDePruebas("https://app.gateflow.mx") && !esEntornoDePruebas(undefined) && !esEntornoDePruebas("") && !esEntornoDePruebas("no-es-url"), "gateflow.mx, sin URL o URL inválida → entorno de clientes");
+
+    const PROD = { NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow.mx" };
+    const STG = { NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow-admin-staging.netlify.app" };
+    const REAL = { TURNSTILE_SITE_KEY: "0x4AAAAAAAsitekeyReal", TURNSTILE_SECRET_KEY: "0x4AAAAAAAsecretoReal" };
+    const PRUEBA = { TURNSTILE_SITE_KEY: SITE_PRUEBA, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA };
+
+    const c1 = configuracionAntibot({ ...PROD });
+    assert(c1.modo === "deshabilitado" && c1.motivo === "sin_claves", "clientes sin claves → registro DESHABILITADO (nunca abierto sin desafío)");
+    const c2 = configuracionAntibot({ ...PROD, ...PRUEBA });
+    assert(c2.modo === "deshabilitado" && c2.motivo === "claves_de_prueba_fuera_de_pruebas", "clientes con claves de prueba → registro DESHABILITADO");
+    const c3 = configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA });
+    assert(c3.modo === "deshabilitado", "clientes con un secreto de prueba (aunque el sitekey sea real) → DESHABILITADO");
+    const c4 = configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY });
+    assert(c4.modo === "deshabilitado" && c4.motivo === "claves_incompletas", "una sola clave → DESHABILITADO");
+    const c5 = configuracionAntibot({ ...PROD, ...REAL });
+    assert(c5.modo === "turnstile" && c5.siteKey === REAL.TURNSTILE_SITE_KEY && !c5.dePrueba, "clientes con claves reales → Turnstile obligatorio");
+    const c6 = configuracionAntibot({ ...REAL });
+    assert(c6.modo === "turnstile", "sin NEXT_PUBLIC_ADMIN_APP_URL se trata como clientes: con claves reales, Turnstile");
+    const c7 = configuracionAntibot({ ...PRUEBA });
+    assert(c7.modo === "deshabilitado", "sin NEXT_PUBLIC_ADMIN_APP_URL y con claves de prueba → DESHABILITADO");
+
+    assert(configuracionAntibot({ ...STG }).modo === "omitido", "staging sin claves → omitido (como hoy), con aviso en el log");
+    const c8 = configuracionAntibot({ ...STG, ...PRUEBA });
+    assert(c8.modo === "turnstile" && c8.dePrueba, "staging con claves de prueba → Turnstile (de prueba) exigido");
+    assert(configuracionAntibot({ NEXT_PUBLIC_ADMIN_APP_URL: "http://localhost:3963", ...PRUEBA }).modo === "turnstile", "local con claves de prueba → Turnstile exigido");
+    assert(configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA }).modo === "deshabilitado", "staging con una sola clave → DESHABILITADO");
+  });
+
+  await seccion("Servidor y formulario conectados al desafío", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const raiz = join(__dirname, "../..");
+    const accion = readFileSync(join(raiz, "app/registro/actions.ts"), "utf8");
+    const pagina = readFileSync(join(raiz, "app/registro/page.tsx"), "utf8");
+    const formulario = readFileSync(join(raiz, "app/registro/registro-form.tsx"), "utf8");
+    assert(/configuracionAntibot\(process\.env\)/.test(accion) && /modo === "deshabilitado"[\s\S]*MENSAJES_ALTA\.noDisponible/.test(accion), "la acción del servidor rechaza si el entorno no tiene desafío válido");
+    assert(accion.indexOf("configuracionAntibot(process.env)") < accion.indexOf("createServiceRoleClient()"), "el desafío se decide antes de tocar la base o Auth");
+    assert(/verificarDesafio\([^)]*secreto: configAntibot\.secreto/.test(accion) && /MENSAJES_ALTA\.desafio/.test(accion), "con Turnstile, el token se verifica en el servidor con el secreto configurado");
+    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /antibot\.modo === "deshabilitado"/.test(pagina), "/registro no muestra el formulario si el entorno no tiene desafío válido");
+    assert(/turnstileSiteKey=\{antibot\.modo === "turnstile" \? antibot\.siteKey : null\}/.test(pagina), "solo la clave pública llega al navegador");
+    assert(!/TURNSTILE_SECRET_KEY/.test(formulario) && !/TURNSTILE_SECRET_KEY/.test(pagina.replace(/configuracionAntibot\(process\.env\)/, "")), "el secreto nunca llega al formulario");
+    assert(/name="cf-turnstile-response"/.test(formulario) && /disabled=\{enviando \|\| faltaDesafio\}/.test(formulario) && /desafio\.current\?\.reset\(\)/.test(formulario), "formulario: manda el token, no deja enviar sin él y pide uno nuevo tras un rechazo");
   });
 
   console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
