@@ -27,8 +27,8 @@ export function PackagesChart({ data }: { data: VolumenDiario[] }) {
       <CardContent className="h-72 pl-0">
         {puntos.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Sin datos todavía — la vista de agregación se actualiza periódicamente (ver
-            supabase/README.md).
+            {/* Sin filas: vista de agregación sin refrescar o sin permiso (obtenerVolumen30Dias devuelve []). */}
+            Todavía no hay datos para mostrar.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
