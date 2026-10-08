@@ -6,6 +6,8 @@
 //   /auth/v1/logout → 204
 //   resto           → 404 (incluido el refresh: la sesión no expira
 //                     durante la corrida)
+// Con `auth` (URL de un GoTrue local real), /auth/v1/* se reenvía a ese
+// servidor en lugar de imitarse (recorrido de registro con Auth real).
 // Escucha solo en 127.0.0.1. El secreto es aleatorio por corrida y
 // nunca se imprime.
 // ============================================================
@@ -46,14 +48,41 @@ export function cookieSesion({ urlSupabase, secreto, userId, email }) {
   return { nombre, valor: "base64-" + b64url(JSON.stringify(sesion)) };
 }
 
-export function iniciarGateway({ puerto, postgrest, secreto }) {
+function reenviar(req, res, destino, ruta, alFallar) {
+  const cabeceras = { ...req.headers, host: destino.host };
+  delete cabeceras.apikey;
+  const p = http.request({ hostname: destino.hostname, port: destino.port, method: req.method, path: ruta, headers: cabeceras }, (r) => {
+    res.writeHead(r.statusCode ?? 502, r.headers);
+    r.pipe(res);
+  });
+  p.on("error", alFallar);
+  req.pipe(p);
+}
+
+export function iniciarGateway({ puerto, postgrest, secreto, auth = null }) {
   const destino = new URL(postgrest);
+  const destinoAuth = auth ? new URL(auth) : null;
   const servidor = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const json = (status, cuerpo) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(cuerpo));
     };
+    if (destinoAuth && url.pathname.startsWith("/auth/v1/") && req.method === "OPTIONS") {
+      // Como el gateway de Supabase (Kong): el preflight CORS se responde
+      // aquí; GoTrue solo no admite la cabecera apikey de supabase-js.
+      res.writeHead(204, {
+        "access-control-allow-origin": req.headers.origin ?? "*",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-headers": req.headers["access-control-request-headers"] ?? "*",
+        "access-control-max-age": "600",
+        vary: "Origin",
+      });
+      return res.end();
+    }
+    if (destinoAuth && url.pathname.startsWith("/auth/v1/")) {
+      return reenviar(req, res, destinoAuth, url.pathname.slice("/auth/v1".length) + url.search, () => json(502, { message: "auth no disponible" }));
+    }
     if (url.pathname === "/auth/v1/user") {
       const token = /^Bearer (.+)$/i.exec(req.headers.authorization ?? "")?.[1];
       const c = token ? verificarJwt(token, secreto) : null;
@@ -65,18 +94,7 @@ export function iniciarGateway({ puerto, postgrest, secreto }) {
       return res.end();
     }
     if (url.pathname.startsWith("/rest/v1/")) {
-      const cabeceras = { ...req.headers, host: destino.host };
-      delete cabeceras.apikey;
-      const p = http.request(
-        { hostname: destino.hostname, port: destino.port, method: req.method, path: url.pathname.slice("/rest/v1".length) + url.search, headers: cabeceras },
-        (r) => {
-          res.writeHead(r.statusCode ?? 502, r.headers);
-          r.pipe(res);
-        },
-      );
-      p.on("error", () => json(502, { message: "postgrest no disponible" }));
-      req.pipe(p);
-      return;
+      return reenviar(req, res, destino, url.pathname.slice("/rest/v1".length) + url.search, () => json(502, { message: "postgrest no disponible" }));
     }
     json(404, { message: "no soportado por el gateway de pruebas" });
   });

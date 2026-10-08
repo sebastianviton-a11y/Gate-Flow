@@ -22,6 +22,10 @@
 //            de billing existentes)
 //   B        tests/billing/db/run-local.sh  (paquete SQL, base local, revertido)
 //   B2 / C-local  tests/billing/e2e/run-local.mjs
+//   C-prueba      tests/recorrido/run-local.mjs (solo --e2e): prueba gratuita
+//                 de punta a punta (landing → registro AR → correo →
+//                 onboarding → guardia en Guard → vencimiento) con el Auth
+//                 real de Supabase; ver tests/recorrido/README.md
 //   B2-compat     tests/billing/compat/rpc-postgrest.mjs (solo --e2e): llamada del
 //                 servidor anterior contra el esquema migrado, por PostgREST
 //   C-staging     tests/billing/staging/run-staging.sh (opt-in; escribe filas
@@ -74,6 +78,13 @@ const ESCENARIOS = {
   "18": "Multitenant",
   "19": "Integridad referencial",
   "20": "Teardown / residuos",
+  // Prueba gratuita de punta a punta (tests/recorrido/run-local.mjs).
+  // 21–30 quedan reservados para Argentina / Mercado Pago (su rama).
+  "31": "Prueba · landing V2 → Probar gratis",
+  "32": "Prueba · registro AR + correo + 30 días",
+  "33": "Prueba · residentes y guardias",
+  "34": "Prueba · AR sin contratación paga (interfaz y servidor)",
+  "35": "Prueba · ningún correo a dominios reales",
 };
 
 // Entorno limpio para las suites TS: sin URLs públicas del shell que cambian resultados.
@@ -135,13 +146,14 @@ else if (SOLO_STRIPE) await stripeTest();
 else {
   // A — pura + suites de billing existentes
   absorber(await correr("A · billing-bateria.test.ts", "npx", ["-y", "tsx", "apps/admin/lib/__tests__/billing-bateria.test.ts"], envLimpio), "A");
-  for (const f of ["billing-checkout", "billing-webhook", "billing-acceso", "billing-config", "suscripcion-situacion", "acceso-trial"]) {
+  for (const f of ["billing-checkout", "billing-webhook", "billing-acceso", "billing-config", "suscripcion-situacion", "acceso-trial", "prueba-argentina"]) {
     absorber(await correr(`A · ${f}.test.ts (existente)`, "npx", ["-y", "tsx", `apps/admin/lib/__tests__/${f}.test.ts`], envLimpio), "A-existentes");
   }
   // B — base local
   absorber(await correr("B · paquete SQL (base local, revertido)", "bash", ["tests/billing/db/run-local.sh"]), "B");
   if (E2E) {
     absorber(await correr("C · pila local (pipeline + HTTP + Playwright)", "node", ["tests/billing/e2e/run-local.mjs"]), "C-local");
+    absorber(await correr("C · recorrido de prueba gratuita (Auth real + landing + Admin + Guard, desktop y móvil)", "node", ["tests/recorrido/run-local.mjs"]), "C-prueba");
     absorber(await correr("B2 · compatibilidad del despliegue (RPC por PostgREST, código anterior)", "node", ["tests/billing/compat/rpc-postgrest.mjs"]), "B2-compat");
     await staging();
     await stripeTest();
