@@ -359,6 +359,12 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     await page.waitForTimeout(800);
     const t = await texto(page);
     ok(e("31"), page.url() === `${URL_WEB}/` && /30 d[ií]as/i.test(t) && !/7 d[ií]as|una semana/i.test(t), `[${p}] landing publicada (V2): 30 días, sin "7 días"`, t.slice(0, 160));
+    ok(
+      e("31"),
+      !/elegir un plan|USD|\/ mes|se elimina/i.test(t) && t.includes("En Argentina, por ahora solo está disponible la prueba gratuita de 30 días") && t.includes("No se borra"),
+      `[${p}] landing honesta para Argentina: sin promesa de contratar, sin importes en USD, sin borrado automático`,
+      t.slice(0, 200),
+    );
     const html = await page.content();
     ok(e("31"), !/7 d[ií]as|7 D[IÍ]AS|una semana/i.test(html), `[${p}] el HTML de "/" no contiene "7 días"`);
     const enlaceIngresar = page.locator(`a[href="${URL_ADMIN}/login"]`);

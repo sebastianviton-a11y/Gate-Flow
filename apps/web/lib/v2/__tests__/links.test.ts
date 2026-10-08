@@ -49,6 +49,13 @@ for (const [archivo, ancla] of [["DesktopLandingV2.tsx", "#d-probar"], ["MobileL
   assert(/href=\{V2_LINKS\.contacto\} onClick=\{preventPendingLinkClick\} className="gf-ghost2"[^>]*>Contactar/.test(s), `${archivo}: >150 sigue en "Contactar" (V2_LINKS.contacto)`);
   assert(!/registro[^"]*plan=(?!hasta-50|hasta-150)/.test(s), `${archivo}: sin otros valores de plan`);
   assert(!/href="[^"]*gateflow\.mx/.test(s), `${archivo}: ningún link al dominio de producción`);
+  // Textos honestos para Argentina: sin contratación todavía, sin borrado automático.
+  assert(!/elegir un plan/i.test(texto), `${archivo}: no promete contratar al terminar`);
+  assert(!/USD|US\$|\/ mes|Precios? de referencia/i.test(texto), `${archivo}: sin importes en USD (Argentina no puede contratar; México se cobra en MXN)`);
+  assert(texto.includes("Durante la prueba no se cobra nada. En Argentina, por ahora solo está disponible la prueba gratuita de 30 días: la contratación todavía no está habilitada."), `${archivo}: planes: en Argentina, solo la prueba`);
+  assert(texto.includes("en Argentina, la contratación todavía no está disponible"), `${archivo}: "¿Qué pasa después de los 30 días?" sin promesa de contratación`);
+  assert(!/se elimina|eliminamos|se borra después/i.test(texto) && texto.includes("No se borra: al terminar la prueba o la suscripción, la información del residencial se conserva."), `${archivo}: sin eliminación automática de datos (no está implementada)`);
+  assert(/30 d[ií]as gratis/i.test(texto), `${archivo}: mantiene los 30 días gratis`);
 }
 
 console.log("\nLanding publicada: la V2 en \"/\" (prueba de 30 días)");

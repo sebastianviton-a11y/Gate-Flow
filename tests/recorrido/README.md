@@ -6,6 +6,8 @@ Argentina que no paga nada:
 
 1. Landing V2 (`/`, de `apps/web`):
    - textos de 30 días, sin "7 días";
+   - honesta para Argentina: sin importes en USD, sin prometer que al
+     terminar se puede contratar, sin borrado automático de datos;
    - preview sin indexar (meta robots, `robots.txt` y `X-Robots-Tag`);
    - "Probar gratis" lleva a `/registro` del panel; Ingresar y Privacidad
      apuntan al panel.
