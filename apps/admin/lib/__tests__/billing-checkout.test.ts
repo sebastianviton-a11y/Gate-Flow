@@ -16,6 +16,7 @@ import {
   planDeCheckout,
   validarPlanParaViviendas,
   viviendasRequeridas,
+  montosPublicables,
 } from "../billing/catalogo";
 import { iniciarCheckout, planIdDeFormulario, type DepsCheckout } from "../billing/checkout";
 import { contratacionHabilitada } from "../billing/pais";
@@ -63,7 +64,7 @@ interface Llamadas {
 }
 
 function deps(
-  opciones: { viviendas?: { declaradas: number | null; unidadesActivas: number }; errorBase?: string; anteriores?: string[]; falloProveedor?: boolean; pais?: string | null; falloPais?: boolean } = {},
+  opciones: { viviendas?: { declaradas: number | null; unidadesActivas: number }; errorBase?: string; anteriores?: string[]; falloProveedor?: boolean; pais?: string | null; falloPais?: boolean; montosPublicables?: boolean } = {},
 ) {
   const llamadas: Llamadas = { crearEnBase: [], registrar: [], proveedor: [], expirados: [] };
   const proveedor: BillingProvider = {
@@ -90,6 +91,7 @@ function deps(
       if (opciones.falloPais) throw new Error("red");
       return opciones.pais === undefined ? "MX" : opciones.pais;
     },
+    montosPublicables: () => opciones.montosPublicables ?? true,
     ahora: () => AHORA,
     contarViviendas: async () => opciones.viviendas ?? { declaradas: 40, unidadesActivas: 12 },
     async crearCheckoutEnBase({ userId, tenantId, plan }) {
@@ -202,6 +204,24 @@ async function main() {
     assert(r.ok && llamadas.crearEnBase[0]?.moneda === "MXN" && llamadas.proveedor.length === 1, "MX → checkout de Stripe en MXN, igual que antes");
     const servidor = fuente("apps/admin/lib/billing/servidor.ts");
     assert(/paisDelTenant: \(tenantId\) => paisDeTenantServidor\(tenantId\)/.test(servidor) && /from\("tenants"\)\.select\("pais"\)/.test(servidor), "el servidor lee tenants.pais con la sesión (nunca del navegador)");
+  });
+
+  await seccion("Montos sin aprobación comercial: nunca a clientes; las pruebas siguen", async () => {
+    const PROD = { NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow.mx" };
+    assert(!montosPublicables(PROD) && !montosPublicables({}) && !montosPublicables({ NEXT_PUBLIC_ADMIN_APP_URL: "no-es-url" }), "entorno de clientes (gateflow.mx, sin URL o inválida) con montos pendientes → no publicables");
+    assert(montosPublicables({ NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow-admin-staging.netlify.app" }) && montosPublicables({ NEXT_PUBLIC_ADMIN_APP_URL: "http://localhost:3000" }) && montosPublicables({ NEXT_PUBLIC_ADMIN_APP_URL: "https://deploy-preview-2--gateflow-admin-staging.netlify.app" }), "staging, local y previews → publicables (Stripe TEST y la capa C siguen igual)");
+    assert(montosPublicables(PROD, false), "con los montos aprobados (MONTOS_PENDIENTES_DE_APROBACION = false), también en el entorno de clientes");
+    for (const planId of ["hasta-50", "hasta-150"]) {
+      const { d, llamadas } = deps({ pais: "MX", montosPublicables: false });
+      const r = await iniciarCheckout(d, { userId: "u1", tenantId: A, planId, emailPagador: "admin@x.test" });
+      assert(!r.ok && r.motivo === "precios", `MX ${planId} con montos no publicables → motivo "precios"`);
+      assert(llamadas.crearEnBase.length === 0 && llamadas.proveedor.length === 0 && llamadas.registrar.length === 0 && llamadas.expirados.length === 0, `MX ${planId}: ningún checkout en la base ni en Stripe`);
+    }
+    const servidor = fuente("apps/admin/lib/billing/servidor.ts");
+    assert(/montosPublicables: \(\) => montosPublicables\(process\.env\)/.test(servidor), "el servidor decide con el entorno real (no con datos del navegador)");
+    const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
+    assert(/&& montosPublicables\(process\.env\);/.test(pagina), "/suscripcion: sin montos publicables no hay planes ni precios (aviso de contratación no disponible)");
+    assert(/function VistaGestion[\s\S]*BotonGestion disponible=\{gestion\} texto="Administrar suscripción"/.test(pagina) && !/function VistaGestion[\s\S]*precio\.texto[\s\S]*function BotonGestion/.test(pagina), "suscripciones existentes: la gestión sigue igual y no muestra montos");
   });
 
   await seccion("8. el precio del navegador se ignora", async () => {

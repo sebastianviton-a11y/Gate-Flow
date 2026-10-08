@@ -46,7 +46,7 @@ assert(/construirEnlaceWhatsApp\([^)]*session\.tenant\.pais/.test(fuente("apps/a
 console.log("\nArgentina sin contratación paga; México sin cambios");
 assert(!contratacionHabilitada("AR") && contratacionHabilitada("MX") && contratacionHabilitada(null), "solo Argentina queda sin contratación");
 const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
-assert(/const contratacion = contratacionHabilitada\(tenantSeleccionado \? await paisDeTenantServidor\(tenantSeleccionado\) : null\);/.test(pagina), "/suscripcion decide con tenants.pais del servidor");
+assert(/const contratacion = contratacionHabilitada\(tenantSeleccionado \? await paisDeTenantServidor\(tenantSeleccionado\) : null\) && montosPublicables\(process\.env\);/.test(pagina), "/suscripcion decide con tenants.pais del servidor (y con montos publicables en el entorno)");
 assert(/\) : contratacion \? \(\s*<EncabezadoPlanes/.test(pagina) && /<SinContratacion etiqueta=/.test(pagina), "vencida sin contratación → aviso (no la elección de plan)");
 assert(/contratacion \? <SeccionPlanes /.test(pagina) && /\{contratacion && decision\.tipo === "permitir" && suscripcion\?\.estado === "trialing" && <SeccionPlanes/.test(pagina), "planes solo con contratación (vencida y en prueba)");
 assert(pagina.includes("La contratación en línea todavía no está disponible") && pagina.includes("Tu información se conserva."), "aviso AR: no disponible + la información se conserva");

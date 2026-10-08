@@ -13,6 +13,8 @@
  * verifica que coincidan.
  */
 
+import { esEntornoDePruebas } from "../entorno";
+
 export type PlanBillingId = "hasta-50" | "hasta-150";
 export type MonedaBilling = "MXN";
 
@@ -30,6 +32,21 @@ export interface PlanBilling {
 
 /** true mientras los montos MXN no estén aprobados comercialmente. */
 export const MONTOS_PENDIENTES_DE_APROBACION = true;
+
+/**
+ * ¿Se pueden mostrar y cobrar los montos en este entorno? Solo si están
+ * aprobados comercialmente o si el Admin corre en un entorno de pruebas
+ * (local, staging, previews: ahí corren las pruebas de Stripe TEST).
+ * En el entorno de clientes, con montos pendientes, no se muestran
+ * precios ni se abre un checkout nuevo; las suscripciones existentes y
+ * su gestión no cambian.
+ */
+export function montosPublicables(
+  entorno: Readonly<Record<string, string | undefined>>,
+  pendientes: boolean = MONTOS_PENDIENTES_DE_APROBACION,
+): boolean {
+  return !pendientes || esEntornoDePruebas(entorno.NEXT_PUBLIC_ADMIN_APP_URL);
+}
 
 export const CATALOGO_BILLING: Readonly<Record<PlanBillingId, PlanBilling>> = {
   "hasta-50": {

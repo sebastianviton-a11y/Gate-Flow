@@ -95,6 +95,8 @@ export type MotivoCheckout =
   | "configuracion"
   /** País del residencial sin contratación paga habilitada (pais.ts). */
   | "pais"
+  /** Montos sin aprobación comercial en el entorno de clientes (catalogo.ts). */
+  | "precios"
   | "error";
 
 export function motivoDeErrorRpc(mensaje: string | null | undefined): MotivoCheckout {

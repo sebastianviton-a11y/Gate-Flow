@@ -9,6 +9,7 @@ import { destinoDeDecision } from "@/lib/acceso-panel";
 import { leerAccesoAdmin } from "@/lib/acceso-servidor";
 import { autorizarBilling, permiteAlta } from "@/lib/billing/autorizacion";
 import { viviendasRequeridas } from "@/lib/billing/catalogo";
+import { montosPublicables } from "@/lib/billing/catalogo";
 import { contratacionHabilitada } from "@/lib/billing/pais";
 import { checkoutDisponible, gestionDisponible, paisDeTenantServidor } from "@/lib/billing/servidor";
 import { CORREO_SOPORTE, PLANES, type Plan } from "@/lib/planes";
@@ -56,6 +57,7 @@ const ERRORES: Record<string, string> = {
   proveedor: "No pudimos abrir el pago en este momento. Inténtalo de nuevo en unos minutos.",
   configuracion: "Los pagos en línea no están disponibles por ahora. Escríbenos a soporte.",
   pais: "La contratación en línea todavía no está disponible para tu residencial. Tu información se conserva.",
+  precios: "La contratación en línea todavía no está disponible. Tu información se conserva.",
   gestion: "No pudimos abrir la administración de tu suscripción. Inténtalo de nuevo o escríbenos a soporte.",
   error: "Algo salió mal. Inténtalo de nuevo o escríbenos a soporte.",
 };
@@ -109,8 +111,9 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
       : "America/Mexico_City";
   const { suscripcion, viviendas } = autorizacion.ok ? await datosResidencial(autorizacion.tenantId) : { suscripcion: null, viviendas: 0 };
   // País del residencial seleccionado (servidor, RLS). Argentina: sin contratación paga todavía.
+  // Entorno de clientes con montos sin aprobar: ni precios ni planes para nadie.
   const tenantSeleccionado = autorizacion.ok ? autorizacion.tenantId : resultado.seleccion.tipo === "resuelta" ? resultado.seleccion.membresia.tenant_id : null;
-  const contratacion = contratacionHabilitada(tenantSeleccionado ? await paisDeTenantServidor(tenantSeleccionado) : null);
+  const contratacion = contratacionHabilitada(tenantSeleccionado ? await paisDeTenantServidor(tenantSeleccionado) : null) && montosPublicables(process.env);
   const error = searchParams.error ? (ERRORES[searchParams.error] ?? ERRORES.error) : null;
   const gestion = gestionDisponible() && Boolean(suscripcion?.tieneClienteProveedor);
 
@@ -188,7 +191,7 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
   );
 }
 
-/** Argentina, prueba vencida: sin contratación en línea todavía; nada de planes ni de otro medio de pago. */
+/** Sin contratación en línea todavía (Argentina, o montos sin aprobar en el entorno de clientes): nada de planes, precios ni medios de pago. */
 function SinContratacion({ etiqueta }: { etiqueta: string }) {
   return (
     <section data-contratacion="no-disponible" className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 py-6 text-center md:py-10">
@@ -198,7 +201,7 @@ function SinContratacion({ etiqueta }: { etiqueta: string }) {
       </p>
       <h1 className="font-display text-2xl font-bold tracking-[-0.02em] md:text-[32px] md:leading-tight">La contratación en línea todavía no está disponible</h1>
       <p className="text-[15px] leading-[1.6] text-white/70 md:text-base">
-        Tu información se conserva. Cuando la contratación esté habilitada vas a poder elegir un plan y seguir donde lo dejaste. Si tenés dudas, escribinos a{" "}
+        Tu información se conserva. Cuando la contratación esté habilitada podrás elegir un plan y seguir donde lo dejaste. Si tienes dudas, escríbenos a{" "}
         <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm text-primary underline", FOCO)}>
           {CORREO_SOPORTE}
         </a>

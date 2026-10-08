@@ -289,6 +289,16 @@ Cambiar un precio solo afecta checkouts nuevos; las suscripciones
 existentes conservan su precio (y la verificación de monto compara con
 el checkout que las creó).
 
+Mientras estén pendientes, en el **entorno de clientes** (host de
+`NEXT_PUBLIC_ADMIN_APP_URL` que no sea local, staging ni preview; ver
+`lib/entorno.ts`) `montosPublicables()` es false: `/suscripcion` no
+muestra planes ni montos (aviso "La contratación en línea todavía no
+está disponible") y el servidor rechaza el checkout con `error=precios`
+sin tocar la base ni Stripe. Las suscripciones existentes conservan el
+acceso y la gestión (portal), que no muestra montos. En local, staging y
+previews todo sigue igual (las pruebas de Stripe TEST no cambian). Al
+aprobar los montos: `MONTOS_PENDIENTES_DE_APROBACION = false`.
+
 ## Qué NO hacer a mano
 
 - No cambiar `suscripciones.estado`/`provider*` por SQL para "activar"

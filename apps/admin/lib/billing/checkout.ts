@@ -6,6 +6,7 @@ import { motivoDeErrorRpc, type BillingProvider, type MotivoCheckout } from "./t
  * Núcleo del alta de pago, sin Next ni Supabase (dependencias
  * inyectadas: testeable sin red). Orden:
  *   país del residencial (Argentina: sin contratación paga, pais.ts)
+ *   → montos publicables en este entorno (catalogo.ts)
  *   → plan del catálogo (solo planId del navegador) → viviendas
  *   → checkout en NUESTRA base (RPC: rol, estado, viviendas otra vez)
  *   → expirar checkouts anteriores en el proveedor
@@ -22,6 +23,8 @@ export interface DepsCheckout {
   urlBase: string;
   /** tenants.pais del residencial, leído en el servidor (nunca del navegador). */
   paisDelTenant(tenantId: string): Promise<string | null>;
+  /** false en el entorno de clientes mientras los montos no estén aprobados. */
+  montosPublicables(): boolean;
   contarViviendas(tenantId: string): Promise<{ declaradas: number | null; unidadesActivas: number }>;
   crearCheckoutEnBase(datos: {
     userId: string;
@@ -60,6 +63,10 @@ export async function iniciarCheckout(deps: DepsCheckout, entrada: EntradaChecko
   if (!contratacionHabilitada(pais)) {
     log("billing.checkout_rechazado", { tenant_id: entrada.tenantId, motivo: "pais" });
     return { ok: false, motivo: "pais" };
+  }
+  if (!deps.montosPublicables()) {
+    log("billing.checkout_rechazado", { tenant_id: entrada.tenantId, motivo: "precios" });
+    return { ok: false, motivo: "precios" };
   }
 
   const { declaradas, unidadesActivas } = await deps.contarViviendas(entrada.tenantId);

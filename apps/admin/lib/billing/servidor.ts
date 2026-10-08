@@ -1,6 +1,7 @@
 import "server-only";
 import Stripe from "stripe";
 import { createServerSupabaseClient, createServiceRoleClient } from "@gateflow/supabase";
+import { montosPublicables } from "./catalogo";
 import { iniciarCheckout, type ResultadoCheckout } from "./checkout";
 import { configuracionStripe } from "./config";
 import { StripeBillingProvider } from "./proveedores/stripe";
@@ -84,6 +85,7 @@ export async function iniciarCheckoutServidor(entrada: {
       urlBase,
       log,
       paisDelTenant: (tenantId) => paisDeTenantServidor(tenantId),
+      montosPublicables: () => montosPublicables(process.env),
       async contarViviendas(tenantId) {
         const [{ data: s }, { count }] = await Promise.all([
           sesion.from("suscripciones").select("viviendas_declaradas").eq("tenant_id", tenantId).maybeSingle(),
