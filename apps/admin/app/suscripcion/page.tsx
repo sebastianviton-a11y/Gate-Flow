@@ -9,7 +9,8 @@ import { destinoDeDecision } from "@/lib/acceso-panel";
 import { leerAccesoAdmin } from "@/lib/acceso-servidor";
 import { autorizarBilling, permiteAlta } from "@/lib/billing/autorizacion";
 import { viviendasRequeridas } from "@/lib/billing/catalogo";
-import { checkoutDisponible, gestionDisponible } from "@/lib/billing/servidor";
+import { contratacionHabilitada } from "@/lib/billing/pais";
+import { checkoutDisponible, gestionDisponible, paisDeTenantServidor } from "@/lib/billing/servidor";
 import { CORREO_SOPORTE, PLANES, type Plan } from "@/lib/planes";
 import { CerrarSesionButton } from "../sin-acceso/cerrar-sesion-button";
 import { administrarSuscripcionAction, elegirPlanAction } from "./actions";
@@ -30,6 +31,12 @@ export const dynamic = "force-dynamic";
  * La página no escribe nada: el alta la hace la server action y la
  * activación SOLO el webhook verificado.
  *
+ * Argentina (pais.ts): prueba gratuita sin contratación paga todavía.
+ * Ni planes ni "Activar plan": en prueba, "no se cobra nada ni se pide
+ * tarjeta"; vencida, un aviso de que la contratación aún no está
+ * disponible y de que la información se conserva. El servidor rechaza
+ * el checkout igual (motivo "pais"). México: sin cambios.
+ *
  * Diseño: variante B aprobada (beneficios compartidos). Verde Flujo
  * (primary) es el único verde funcional; el logo conserva el suyo.
  */
@@ -48,6 +55,7 @@ const ERRORES: Record<string, string> = {
   limite: "Demasiados intentos seguidos. Espera unos minutos e inténtalo de nuevo.",
   proveedor: "No pudimos abrir el pago en este momento. Inténtalo de nuevo en unos minutos.",
   configuracion: "Los pagos en línea no están disponibles por ahora. Escríbenos a soporte.",
+  pais: "La contratación en línea todavía no está disponible para tu residencial. Tu información se conserva.",
   gestion: "No pudimos abrir la administración de tu suscripción. Inténtalo de nuevo o escríbenos a soporte.",
   error: "Algo salió mal. Inténtalo de nuevo o escríbenos a soporte.",
 };
@@ -100,6 +108,9 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
       ? ((resultado.seleccion.membresia.tenants as { timezone?: string | null } | null)?.timezone ?? "America/Mexico_City")
       : "America/Mexico_City";
   const { suscripcion, viviendas } = autorizacion.ok ? await datosResidencial(autorizacion.tenantId) : { suscripcion: null, viviendas: 0 };
+  // País del residencial seleccionado (servidor, RLS). Argentina: sin contratación paga todavía.
+  const tenantSeleccionado = autorizacion.ok ? autorizacion.tenantId : resultado.seleccion.tipo === "resuelta" ? resultado.seleccion.membresia.tenant_id : null;
+  const contratacion = contratacionHabilitada(tenantSeleccionado ? await paisDeTenantServidor(tenantSeleccionado) : null);
   const error = searchParams.error ? (ERRORES[searchParams.error] ?? ERRORES.error) : null;
   const gestion = gestionDisponible() && Boolean(suscripcion?.tieneClienteProveedor);
 
@@ -128,7 +139,7 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
         )}
 
         {decision.tipo === "permitir" ? (
-          <VistaGestion estado={decision.estado} suscripcion={suscripcion} zona={zona} gestion={gestion} />
+          <VistaGestion estado={decision.estado} suscripcion={suscripcion} zona={zona} gestion={gestion} contratacion={contratacion} />
         ) : decision.estado === "sin_suscripcion" ? (
           <Aviso titulo="No pudimos determinar una suscripción activa para este residencial.">
             Es un problema de configuración de la cuenta. Escríbenos a{" "}
@@ -142,15 +153,17 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
             Terminó el periodo de gracia. Actualiza tu método de pago para reactivar el servicio; al hacerlo, continúas donde lo dejaste.
             <BotonGestion disponible={gestion} texto="Actualizar método de pago" />
           </Aviso>
-        ) : (
+        ) : contratacion ? (
           <EncabezadoPlanes etiqueta={TEXTOS[decision.estado].etiqueta} />
+        ) : (
+          <SinContratacion etiqueta={TEXTOS[decision.estado].etiqueta} />
         )}
 
         {decision.tipo === "suscripcion" && decision.estado !== "sin_suscripcion" && suscripcion?.estado !== "past_due" && (
-          <SeccionPlanes viviendas={viviendas} comprable={autorizacion.ok && permiteAlta(resultado) && checkoutDisponible()} />
+          contratacion ? <SeccionPlanes viviendas={viviendas} comprable={autorizacion.ok && permiteAlta(resultado) && checkoutDisponible()} /> : null
         )}
 
-        {decision.tipo === "permitir" && suscripcion?.estado === "trialing" && <SeccionPlanes viviendas={viviendas} comprable={false} enTrial />}
+        {contratacion && decision.tipo === "permitir" && suscripcion?.estado === "trialing" && <SeccionPlanes viviendas={viviendas} comprable={false} enTrial />}
       </main>
 
       <footer className="mx-auto mt-9 w-full max-w-[1200px] px-5 md:mt-12 md:px-10 lg:mt-14">
@@ -172,6 +185,26 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
         </nav>
       </footer>
     </div>
+  );
+}
+
+/** Argentina, prueba vencida: sin contratación en línea todavía; nada de planes ni de otro medio de pago. */
+function SinContratacion({ etiqueta }: { etiqueta: string }) {
+  return (
+    <section data-contratacion="no-disponible" className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 py-6 text-center md:py-10">
+      <p className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[12.5px] font-medium text-white/[0.78] md:text-[13px]">
+        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/[0.45]" />
+        {etiqueta}
+      </p>
+      <h1 className="font-display text-2xl font-bold tracking-[-0.02em] md:text-[32px] md:leading-tight">La contratación en línea todavía no está disponible</h1>
+      <p className="text-[15px] leading-[1.6] text-white/70 md:text-base">
+        Tu información se conserva. Cuando la contratación esté habilitada vas a poder elegir un plan y seguir donde lo dejaste. Si tenés dudas, escribinos a{" "}
+        <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm text-primary underline", FOCO)}>
+          {CORREO_SOPORTE}
+        </a>
+        .
+      </p>
+    </section>
   );
 }
 
@@ -389,17 +422,24 @@ function VistaGestion({
   suscripcion,
   zona,
   gestion,
+  contratacion,
 }: {
   estado: string;
   suscripcion: Suscripcion | null;
   zona: string;
   gestion: boolean;
+  /** false (Argentina): no se promete elegir un plan al terminar. */
+  contratacion: boolean;
 }) {
   if (estado === "trial_activo") {
     return (
       <Aviso titulo="Estás en tu prueba gratuita">
         <p>Tu prueba termina el {fecha(suscripcion?.trialEndsAt ?? null, zona)}.</p>
-        <p className="mt-1">Durante la prueba no se cobra nada. Al terminar podrás elegir un plan y continuar donde lo dejaste.</p>
+        <p className="mt-1">
+          {contratacion
+            ? "Durante la prueba no se cobra nada. Al terminar podrás elegir un plan y continuar donde lo dejaste."
+            : "Durante la prueba no se cobra nada ni se pide tarjeta."}
+        </p>
       </Aviso>
     );
   }

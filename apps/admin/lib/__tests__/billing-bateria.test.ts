@@ -160,6 +160,7 @@ function checkoutFalso(viviendas: { declaradas: number | null; unidadesActivas: 
   const deps: DepsCheckout = {
     proveedor,
     urlBase: "https://admin.zz-autotest.invalid",
+    paisDelTenant: async () => "MX",
     contarViviendas: async () => viviendas,
     crearCheckoutEnBase: async (d) => (enBase.push(d), { checkoutId: "chk-zz-nuevo", anteriores: ["cs_test_viejo"] }),
     registrarCheckoutProveedor: async (a, b) => void registrados.push([a, b]),

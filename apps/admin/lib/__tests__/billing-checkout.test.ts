@@ -18,6 +18,7 @@ import {
   viviendasRequeridas,
 } from "../billing/catalogo";
 import { iniciarCheckout, planIdDeFormulario, type DepsCheckout } from "../billing/checkout";
+import { contratacionHabilitada } from "../billing/pais";
 import { motivoDeErrorRpc, type BillingProvider, type DatosCheckoutProveedor } from "../billing/tipos";
 
 let pasadas = 0;
@@ -61,7 +62,9 @@ interface Llamadas {
   expirados: string[];
 }
 
-function deps(opciones: { viviendas?: { declaradas: number | null; unidadesActivas: number }; errorBase?: string; anteriores?: string[]; falloProveedor?: boolean } = {}) {
+function deps(
+  opciones: { viviendas?: { declaradas: number | null; unidadesActivas: number }; errorBase?: string; anteriores?: string[]; falloProveedor?: boolean; pais?: string | null; falloPais?: boolean } = {},
+) {
   const llamadas: Llamadas = { crearEnBase: [], registrar: [], proveedor: [], expirados: [] };
   const proveedor: BillingProvider = {
     id: "stripe",
@@ -83,6 +86,10 @@ function deps(opciones: { viviendas?: { declaradas: number | null; unidadesActiv
   const d: DepsCheckout = {
     proveedor,
     urlBase: "https://admin.gateflow.test",
+    paisDelTenant: async () => {
+      if (opciones.falloPais) throw new Error("red");
+      return opciones.pais === undefined ? "MX" : opciones.pais;
+    },
     ahora: () => AHORA,
     contarViviendas: async () => opciones.viviendas ?? { declaradas: 40, unidadesActivas: 12 },
     async crearCheckoutEnBase({ userId, tenantId, plan }) {
@@ -174,6 +181,27 @@ async function main() {
     assert(p?.urlCancelar === "https://admin.gateflow.test/suscripcion", "cancel_url → /suscripcion");
     assert(p?.expiraEn.getTime() === AHORA.getTime() + 60 * 60_000, "la sesión vence en 60 min");
     assert(llamadas.registrar.length === 1 && llamadas.registrar[0]?.[0] === "chk-1" && llamadas.registrar[0]?.[1] === "cs_test_chk-1", "se registra el id del proveedor");
+  });
+
+  await seccion("Argentina: sin contratación paga (pais.ts), ni en la base ni en Stripe", async () => {
+    assert(contratacionHabilitada("MX") && !contratacionHabilitada("AR") && !contratacionHabilitada(" ar "), "solo Argentina queda sin contratación");
+    assert(contratacionHabilitada(null) && contratacionHabilitada(""), "sin país (default MX de la base): el comportamiento de México no cambia");
+    for (const planId of ["hasta-50", "hasta-150"]) {
+      const { d, llamadas } = deps({ pais: "AR" });
+      const r = await iniciarCheckout(d, { userId: "u1", tenantId: A, planId, emailPagador: "admin@x.test" });
+      assert(!r.ok && r.motivo === "pais", `AR ${planId} → motivo "pais"`);
+      assert(llamadas.crearEnBase.length === 0 && llamadas.proveedor.length === 0 && llamadas.registrar.length === 0 && llamadas.expirados.length === 0, `AR ${planId}: ningún checkout en la base ni en Stripe`);
+    }
+    for (const opciones of [{ pais: null }, { falloPais: true }]) {
+      const { d, llamadas } = deps(opciones);
+      const r = await iniciarCheckout(d, { userId: "u1", tenantId: A, planId: "hasta-50", emailPagador: null });
+      assert(!r.ok && r.motivo === "error" && llamadas.crearEnBase.length === 0 && llamadas.proveedor.length === 0, `país ilegible (${JSON.stringify(opciones)}) → falla cerrado, sin efectos`);
+    }
+    const { d, llamadas } = deps({ pais: "MX" });
+    const r = await iniciarCheckout(d, { userId: "u1", tenantId: A, planId: "hasta-50", emailPagador: null });
+    assert(r.ok && llamadas.crearEnBase[0]?.moneda === "MXN" && llamadas.proveedor.length === 1, "MX → checkout de Stripe en MXN, igual que antes");
+    const servidor = fuente("apps/admin/lib/billing/servidor.ts");
+    assert(/paisDelTenant: \(tenantId\) => paisDeTenantServidor\(tenantId\)/.test(servidor) && /from\("tenants"\)\.select\("pais"\)/.test(servidor), "el servidor lee tenants.pais con la sesión (nunca del navegador)");
   });
 
   await seccion("8. el precio del navegador se ignora", async () => {

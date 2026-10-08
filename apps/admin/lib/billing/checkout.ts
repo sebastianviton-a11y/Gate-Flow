@@ -1,10 +1,12 @@
 import { validarPlanParaViviendas, viviendasRequeridas, type PlanBilling } from "./catalogo";
+import { contratacionHabilitada } from "./pais";
 import { motivoDeErrorRpc, type BillingProvider, type MotivoCheckout } from "./tipos";
 
 /**
  * Núcleo del alta de pago, sin Next ni Supabase (dependencias
  * inyectadas: testeable sin red). Orden:
- *   plan del catálogo (solo planId del navegador) → viviendas
+ *   país del residencial (Argentina: sin contratación paga, pais.ts)
+ *   → plan del catálogo (solo planId del navegador) → viviendas
  *   → checkout en NUESTRA base (RPC: rol, estado, viviendas otra vez)
  *   → expirar checkouts anteriores en el proveedor
  *   → sesión hospedada del proveedor → registrar su id → URL.
@@ -18,6 +20,8 @@ export interface DepsCheckout {
   proveedor: BillingProvider;
   /** URL pública de Admin (https, sin "/" final). Nunca el Host de la petición. */
   urlBase: string;
+  /** tenants.pais del residencial, leído en el servidor (nunca del navegador). */
+  paisDelTenant(tenantId: string): Promise<string | null>;
   contarViviendas(tenantId: string): Promise<{ declaradas: number | null; unidadesActivas: number }>;
   crearCheckoutEnBase(datos: {
     userId: string;
@@ -44,6 +48,19 @@ export type ResultadoCheckout = { ok: true; url: string; checkoutId: string } | 
 export async function iniciarCheckout(deps: DepsCheckout, entrada: EntradaCheckout): Promise<ResultadoCheckout> {
   const log = deps.log ?? (() => {});
   const ahora = (deps.ahora ?? (() => new Date()))();
+
+  // Antes de tocar la base o el proveedor: sin país legible, falla cerrado.
+  let pais: string | null;
+  try {
+    pais = await deps.paisDelTenant(entrada.tenantId);
+  } catch {
+    pais = null;
+  }
+  if (!pais) return { ok: false, motivo: "error" };
+  if (!contratacionHabilitada(pais)) {
+    log("billing.checkout_rechazado", { tenant_id: entrada.tenantId, motivo: "pais" });
+    return { ok: false, motivo: "pais" };
+  }
 
   const { declaradas, unidadesActivas } = await deps.contarViviendas(entrada.tenantId);
   const validacion = validarPlanParaViviendas(entrada.planId, viviendasRequeridas(declaradas, unidadesActivas));

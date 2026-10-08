@@ -52,6 +52,12 @@ export function proveedorStripe(): StripeBillingProvider | null {
   return new StripeBillingProvider(cliente, config.webhookSecret, config.portalConfiguracionId);
 }
 
+/** tenants.pais con la sesión del usuario (RLS: solo un residencial al que pertenece). */
+export async function paisDeTenantServidor(tenantId: string): Promise<string | null> {
+  const { data } = await createServerSupabaseClient().from("tenants").select("pais").eq("id", tenantId).maybeSingle();
+  return (data as { pais: string | null } | null)?.pais ?? null;
+}
+
 /** URL pública de Admin para success/cancel/return: de configuración, nunca del Host. */
 export function urlBaseAdmin(): string | null {
   const url = (process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? "").trim().replace(/\/+$/, "");
@@ -77,6 +83,7 @@ export async function iniciarCheckoutServidor(entrada: {
       proveedor,
       urlBase,
       log,
+      paisDelTenant: (tenantId) => paisDeTenantServidor(tenantId),
       async contarViviendas(tenantId) {
         const [{ data: s }, { count }] = await Promise.all([
           sesion.from("suscripciones").select("viviendas_declaradas").eq("tenant_id", tenantId).maybeSingle(),

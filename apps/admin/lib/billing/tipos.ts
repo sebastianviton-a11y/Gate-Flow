@@ -93,6 +93,8 @@ export type MotivoCheckout =
   | "limite"
   | "proveedor"
   | "configuracion"
+  /** País del residencial sin contratación paga habilitada (pais.ts). */
+  | "pais"
   | "error";
 
 export function motivoDeErrorRpc(mensaje: string | null | undefined): MotivoCheckout {

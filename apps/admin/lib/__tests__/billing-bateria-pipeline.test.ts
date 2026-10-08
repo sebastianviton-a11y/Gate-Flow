@@ -96,6 +96,7 @@ async function main() {
     {
       proveedor,
       urlBase: "http://localhost:3000",
+      paisDelTenant: async () => "MX",
       contarViviendas: async () => ({ declaradas: 40, unidadesActivas: Number(sql(`select count(*) from public.unidades where tenant_id = '${T.PIPE}' and activo`)) }),
       async crearCheckoutEnBase({ userId, tenantId, plan, expiraEn }) {
         const { data, error } = await servicio.rpc("billing_crear_checkout", {
