@@ -26,20 +26,10 @@ export function LoginForm() {
     const supabase = createBrowserSupabaseClient();
     const emailNormalizado = email.trim().toLowerCase();
     const passwordNormalizada = password.trim();
-    console.log(
-      "STEP 8: intentando signInWithPassword ->",
-      JSON.stringify({ email: emailNormalizado, longitudPassword: passwordNormalizada.length }),
-    );
-
     const { data: dataSignIn, error: signInError } = await supabase.auth.signInWithPassword({
       email: emailNormalizado,
       password: passwordNormalizada,
     });
-
-    console.log(
-      "STEP 9: resultado signInWithPassword ->",
-      JSON.stringify({ huboSesion: !!dataSignIn?.session, userId: dataSignIn?.user?.id, error: signInError?.message }),
-    );
 
     if (signInError) {
       console.error(
@@ -50,14 +40,7 @@ export function LoginForm() {
         "status:",
         signInError.status,
       );
-      // ── DIAGNÓSTICO TEMPORAL ──────────────────────────────────
-      // Mostrando el error técnico real en pantalla, sin reemplazarlo
-      // por el mensaje genérico, porque en iPad no hay forma sencilla
-      // de leer la consola del navegador. Quitar esto una vez
-      // resuelto — no debe quedar en producción.
-      setError(
-        `[DEBUG] ${signInError.message} | code: ${(signInError as { code?: string }).code ?? "—"} | status: ${signInError.status ?? "—"}`,
-      );
+      setError(mensajeErrorLogin((signInError as { code?: string }).code));
       setLoading(false);
       return;
     }
@@ -153,10 +136,25 @@ export function LoginForm() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-white/30">
+        <p className="mt-6 text-center text-sm text-white/60">
+          ¿Todavía no tienes cuenta?{" "}
+          <a href="/registro" className="text-primary underline">
+            Prueba Gate Flow 30 días gratis
+          </a>
+        </p>
+
+        <p className="mt-4 text-center text-xs text-white/30">
           El acceso de guardias en campo se realiza desde la app móvil offline-first.
         </p>
       </div>
     </div>
   );
+}
+
+/** Mensaje para la persona; el detalle técnico queda solo en la consola. */
+function mensajeErrorLogin(codigo: string | undefined): string {
+  if (codigo === "email_not_confirmed") return "Tu correo todavía no está confirmado. Abre el enlace que te enviamos al registrarte.";
+  if (codigo === "invalid_credentials") return "Correo o contraseña incorrectos.";
+  if (codigo === "over_request_rate_limit" || codigo === "over_email_send_rate_limit") return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+  return "No pudimos iniciar sesión. Inténtalo de nuevo en unos minutos.";
 }
