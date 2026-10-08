@@ -90,6 +90,26 @@ cambia esa función. Nunca se activa el signup público.
 | `TURNSTILE_SITE_KEY` | sí en clientes (pública) | clave del widget; la lee el servidor y se la pasa al formulario |
 | `TURNSTILE_SECRET_KEY` | sí en clientes (secreta) | verificación del token (siteverify) |
 
+**Netlify: contextos y alcances.**
+- Una variable marcada como secreta («Contains secret values») no admite
+  «el mismo valor para todos los contextos»: hay que cargar un valor en
+  cada contexto donde se use. Sin un valor en **Deploy Previews**, las
+  previews de los PR no reciben `REGISTRO_HASH_PEPPER`,
+  `SUPABASE_SERVICE_ROLE_KEY` ni `TURNSTILE_SECRET_KEY`.
+- Alcance: *Functions* (o *All scopes*). `/registro` y su acción corren
+  en la función del servidor de Next.
+- `NEXT_PUBLIC_ADMIN_APP_URL`: si en ejecución no está (por ejemplo,
+  porque solo tiene el alcance *Builds*), el antibot usa el valor del
+  build. Sin valor en ninguno de los dos, cuenta como entorno de
+  clientes.
+- Si `/registro` está cerrado, el log de la función lo dice con un código
+  y sin valores (`[GateFlow] /registro cerrado: …`):
+  - `sin_REGISTRO_HASH_PEPPER`;
+  - `REGISTRO_HASH_PEPPER_corta`;
+  - `turnstile_sin_claves`;
+  - `turnstile_claves_incompletas`;
+  - `turnstile_claves_de_prueba_fuera_de_pruebas`.
+
 Auth (Supabase): signups OFF; Confirm email ON; Redirect URLs deben
 cubrir `<admin>/confirmar-cuenta`.
 

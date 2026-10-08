@@ -1,5 +1,5 @@
 import { GateFlowLogo } from "@gateflow/ui";
-import { configuracionAntibot } from "@/lib/registro/antibot";
+import { configuracionAntibot, motivoRegistroCerrado } from "@/lib/registro/antibot";
 import { emitirTokenTiempo } from "@/lib/registro/hash";
 import { RegistroForm } from "./registro-form";
 
@@ -15,8 +15,11 @@ export default function RegistroPage() {
   const pepper = process.env.REGISTRO_HASH_PEPPER;
   // Turnstile obligatorio con claves reales en el entorno de clientes.
   const antibot = configuracionAntibot(process.env);
-  if (!pepper || pepper.length < 16 || antibot.modo === "deshabilitado") {
-    // Sin el secreto o sin desafío anti-bot válido no hay antiabuso: el formulario no se muestra.
+  const motivo = motivoRegistroCerrado(pepper, antibot);
+  if (!pepper || motivo) {
+    // Sin el secreto o sin desafío anti-bot válido no hay antiabuso: el
+    // formulario no se muestra. El log dice cuál falta (sin valores).
+    console.error(`[GateFlow] /registro cerrado: ${motivo}`);
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-950 px-4">
         <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white">

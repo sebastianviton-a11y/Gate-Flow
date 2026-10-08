@@ -12,6 +12,14 @@
  * prueba, /registro queda deshabilitado: nunca abierto sin desafío.
  * Entorno de pruebas (localhost, staging, previews): sin claves se omite
  * (y se avisa en el log); con claves —de prueba o reales— se exige.
+ *
+ * El entorno sale de NEXT_PUBLIC_ADMIN_APP_URL. Primero se usa el valor en
+ * tiempo de ejecución (process.env del servidor); si no está, el que quedó
+ * fijado en el build. En Netlify una variable NEXT_PUBLIC_* puede existir
+ * solo en el alcance "Builds": los enlaces y redirecciones del deploy la
+ * usan igual, y sin este respaldo una Deploy Preview se tomaba por
+ * entorno de clientes y cerraba /registro. Sin valor en ninguno de los
+ * dos, sigue siendo entorno de clientes (falla cerrado).
  */
 import { esEntornoDePruebas } from "../entorno";
 
@@ -31,14 +39,29 @@ export type ConfigAntibot =
  * "2x" (siempre rechaza), "3x" (fuerza desafío / token ya usado), con
  * relleno de ceros. https://developers.cloudflare.com/turnstile/troubleshooting/testing/
  */
+/**
+ * Por qué /registro está cerrado, para el log del servidor: solo un código,
+ * nunca valores. null si está abierto.
+ */
+export function motivoRegistroCerrado(pepper: string | undefined, antibot: ConfigAntibot): string | null {
+  if (!pepper) return "sin_REGISTRO_HASH_PEPPER";
+  if (pepper.length < 16) return "REGISTRO_HASH_PEPPER_corta";
+  if (antibot.modo === "deshabilitado") return `turnstile_${antibot.motivo}`;
+  return null;
+}
+
 export function esClaveDePruebaTurnstile(clave: string): boolean {
   return /^[0-9]x0{15,}[A-Z]{2}$/.test(clave.trim());
 }
 
-export function configuracionAntibot(entorno: Readonly<Record<string, string | undefined>>): ConfigAntibot {
+export function configuracionAntibot(
+  entorno: Readonly<Record<string, string | undefined>>,
+  // Referencia literal: Next la reemplaza en el build por el valor de ese deploy.
+  urlAdminBuild: string | undefined = process.env.NEXT_PUBLIC_ADMIN_APP_URL,
+): ConfigAntibot {
   const siteKey = (entorno.TURNSTILE_SITE_KEY ?? "").trim();
   const secreto = (entorno.TURNSTILE_SECRET_KEY ?? "").trim();
-  const pruebas = esEntornoDePruebas(entorno.NEXT_PUBLIC_ADMIN_APP_URL);
+  const pruebas = esEntornoDePruebas(entorno.NEXT_PUBLIC_ADMIN_APP_URL?.trim() || urlAdminBuild);
   if (!siteKey && !secreto) return pruebas ? { modo: "omitido" } : { modo: "deshabilitado", motivo: "sin_claves" };
   if (!siteKey || !secreto) return { modo: "deshabilitado", motivo: "claves_incompletas" };
   const dePrueba = esClaveDePruebaTurnstile(siteKey) || esClaveDePruebaTurnstile(secreto);

@@ -2,7 +2,7 @@
  * Hashes, token de tiempo, IP y desafío anti-bot de /registro.
  *   npx tsx apps/admin/lib/__tests__/registro-antiabuso.test.ts
  */
-import { configuracionAntibot, esClaveDePruebaTurnstile, verificarDesafio } from "../registro/antibot";
+import { configuracionAntibot, esClaveDePruebaTurnstile, motivoRegistroCerrado, verificarDesafio } from "../registro/antibot";
 import { esEntornoDePruebas } from "../entorno";
 import { emitirTokenTiempo, hashEmail, hashIp, ipDesdeHeaders, TIEMPO_MAXIMO_MS, TIEMPO_MINIMO_MS, verificarTokenTiempo } from "../registro/hash";
 
@@ -123,6 +123,31 @@ async function main() {
     assert(c8.modo === "turnstile" && c8.dePrueba, "staging con claves de prueba → Turnstile (de prueba) exigido");
     assert(configuracionAntibot({ NEXT_PUBLIC_ADMIN_APP_URL: "http://localhost:3963", ...PRUEBA }).modo === "turnstile", "local con claves de prueba → Turnstile exigido");
     assert(configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA }).modo === "deshabilitado", "staging con una sola clave → DESHABILITADO");
+
+    // Deploy Preview de Netlify con NEXT_PUBLIC_ADMIN_APP_URL solo en el
+    // alcance "Builds": en ejecución no está, pero quedó fijada en el build.
+    const PREVIEW = "https://deploy-preview-2--gateflow-admin-staging.netlify.app";
+    assert(configuracionAntibot({}, PREVIEW).modo === "omitido", "sin la URL en ejecución, usa la del build: una preview sin claves sigue siendo pruebas (antes cerraba /registro)");
+    assert(configuracionAntibot({ NEXT_PUBLIC_ADMIN_APP_URL: "" }, STG.NEXT_PUBLIC_ADMIN_APP_URL).modo === "omitido", "URL vacía en ejecución → la del build");
+    const c9 = configuracionAntibot({ ...PROD }, STG.NEXT_PUBLIC_ADMIN_APP_URL);
+    assert(c9.modo === "deshabilitado" && c9.motivo === "sin_claves", "la URL de ejecución manda: gateflow.mx en ejecución es clientes aunque el build diga staging");
+    const c10 = configuracionAntibot({ ...PRUEBA }, PREVIEW);
+    assert(c10.modo === "turnstile" && c10.dePrueba, "preview con claves de prueba y la URL solo del build → Turnstile de prueba exigido");
+    const c11 = configuracionAntibot({}, undefined);
+    assert(c11.modo === "deshabilitado" && c11.motivo === "sin_claves", "sin URL en ejecución ni en el build → clientes: cerrado (falla cerrado)");
+    const c12 = configuracionAntibot({ ...PRUEBA }, "https://gateflow.mx");
+    assert(c12.modo === "deshabilitado", "build de clientes sin URL en ejecución y con claves de prueba → DESHABILITADO");
+
+    // Motivo para el log: solo un código, nunca valores.
+    const omitido = configuracionAntibot({ ...STG });
+    assert(motivoRegistroCerrado(undefined, omitido) === "sin_REGISTRO_HASH_PEPPER" && motivoRegistroCerrado("corta", omitido) === "REGISTRO_HASH_PEPPER_corta",
+      "motivo: falta el pepper o es corto");
+    assert(motivoRegistroCerrado("p".repeat(16), configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA })) === "turnstile_claves_incompletas"
+      && motivoRegistroCerrado("p".repeat(16), c1) === "turnstile_sin_claves" && motivoRegistroCerrado("p".repeat(16), omitido) === null,
+      "motivo: Turnstile incompleto o ausente en clientes; abierto → null");
+    const secretoLargo = "s".repeat(40);
+    assert(!String(motivoRegistroCerrado(secretoLargo, configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY }))).includes(secretoLargo.slice(0, 8))
+      && !String(motivoRegistroCerrado(secretoLargo, c4)).includes("0x4AAA"), "el motivo nunca incluye el pepper ni claves");
   });
 
   await seccion("Servidor y formulario conectados al desafío", async () => {
@@ -135,7 +160,10 @@ async function main() {
     assert(/configuracionAntibot\(process\.env\)/.test(accion) && /modo === "deshabilitado"[\s\S]*MENSAJES_ALTA\.noDisponible/.test(accion), "la acción del servidor rechaza si el entorno no tiene desafío válido");
     assert(accion.indexOf("configuracionAntibot(process.env)") < accion.indexOf("createServiceRoleClient()"), "el desafío se decide antes de tocar la base o Auth");
     assert(/verificarDesafio\([^)]*secreto: configAntibot\.secreto/.test(accion) && /MENSAJES_ALTA\.desafio/.test(accion), "con Turnstile, el token se verifica en el servidor con el secreto configurado");
-    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /antibot\.modo === "deshabilitado"/.test(pagina), "/registro no muestra el formulario si el entorno no tiene desafío válido");
+    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /const motivo = motivoRegistroCerrado\(pepper, antibot\)/.test(pagina) && /if \(!pepper \|\| motivo\)/.test(pagina),
+      "/registro no muestra el formulario si falta el pepper o el entorno no tiene desafío válido");
+    assert(/console\.error\(`\[GateFlow\] \/registro cerrado: \$\{motivo\}`\)/.test(pagina) && !/console\.[a-z]+\([^)]*pepper\b/.test(pagina),
+      "/registro cerrado deja en el log el motivo (código), nunca el pepper");
     assert(/turnstileSiteKey=\{antibot\.modo === "turnstile" \? antibot\.siteKey : null\}/.test(pagina), "solo la clave pública llega al navegador");
     assert(!/TURNSTILE_SECRET_KEY/.test(formulario) && !/TURNSTILE_SECRET_KEY/.test(pagina.replace(/configuracionAntibot\(process\.env\)/, "")), "el secreto nunca llega al formulario");
     assert(/name="cf-turnstile-response"/.test(formulario) && /disabled=\{enviando \|\| faltaDesafio\}/.test(formulario) && /desafio\.current\?\.reset\(\)/.test(formulario), "formulario: manda el token, no deja enviar sin él y pide uno nuevo tras un rechazo");
