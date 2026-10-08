@@ -27,7 +27,9 @@
 #   …B   + billing_base                     → 0 FAIL
 #   …BO  + tenant_operativo_billing         → 0 FAIL
 #   …BOF + corrección otro tenant           → 0 FAIL
-#   …BOFM + gracia desde impago_desde       → 0 FAIL; contrato aquí
+#   …BOFM + gracia desde impago_desde       → 0 FAIL
+#   …BOFMR + residentes por enlace (20261011) → 0 FAIL; contrato aquí
+#        rollback RE = …BOFM
 #        rollback IM = …BOF
 #        rollback OB = …B, rollback B = GRACTOIP
 #        rollback P = GRACTOI
@@ -73,6 +75,8 @@ MIG_BF="20261008300000_billing_evento_otro_tenant.sql"
 DOWN_BF="$SUPA/rollback/20261008300000_billing_evento_otro_tenant.down.sql"
 MIG_IM="20261009000000_billing_impago_desde.sql"
 DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
+MIG_RE="20261011000000_residentes_enlace.sql"
+DOWN_RE="$SUPA/rollback/20261011000000_residentes_enlace.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -162,7 +166,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM"|"$MIG_RE") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -254,10 +258,14 @@ snapshot "$OUT/snap_GRACTOIPBOF.txt"
 sql_file "$SUPA/migrations/$MIG_IM"
 run_suites GRACTOIPBOFM "… + gracia desde impago_desde"
 snapshot "$OUT/snap_GRACTOIPBOFM.txt"
+sql_file "$SUPA/migrations/$MIG_RE"
+run_suites GRACTOIPBOFMR "… + residentes por enlace"
+snapshot "$OUT/snap_GRACTOIPBOFMR.txt"
 
-# El código llama a las RPC de registro, Super Admin y billing, lee
-# suscripciones (con las columnas de billing) y actualiza tenants por
-# columna: el contrato se verifica con el esquema completo.
+# El código llama a las RPC de registro, Super Admin, billing y
+# residentes, lee suscripciones (con las columnas de billing) y
+# actualiza tenants por columna: el contrato se verifica con el esquema
+# completo.
 echo "Contrato código ↔ esquema:"
 if python3 "$DIR/contrato_selects.py" --repo "$REPO" --db "$DB" > "$OUT/contrato.log" 2>&1; then
   tail -n 1 "$OUT/contrato.log" | sed 's/^/  /'
@@ -280,6 +288,7 @@ else
   echo "  la autoprueba NO detecta lo esperado:"; sed 's/^/    /' "$OUT/contrato_autoprueba.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_RE";                   snapshot "$OUT/snap_GRACTOIPBOFMb.txt"; igual "$OUT/snap_GRACTOIPBOFM.txt" "$OUT/snap_GRACTOIPBOFMb.txt" rollback_RE
 sql_file "$DOWN_IM";                   snapshot "$OUT/snap_GRACTOIPBOFb.txt"; igual "$OUT/snap_GRACTOIPBOF.txt" "$OUT/snap_GRACTOIPBOFb.txt" rollback_IM
 sql_file "$DOWN_BF";                   snapshot "$OUT/snap_GRACTOIPBOb.txt"; igual "$OUT/snap_GRACTOIPBO.txt" "$OUT/snap_GRACTOIPBOb.txt" rollback_BF
 sql_file "$DOWN_OB";                   snapshot "$OUT/snap_GRACTOIPBb.txt"; igual "$OUT/snap_GRACTOIPB.txt" "$OUT/snap_GRACTOIPBb.txt" rollback_OB

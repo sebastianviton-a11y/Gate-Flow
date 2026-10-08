@@ -52,6 +52,18 @@ begin
   end if;
 end $$;
 
+-- Residentes por enlace (20261011): las dos tablas nuevas, solo SELECT
+-- para authenticated (las políticas las limitan a la administración);
+-- toda escritura pasa por las funciones.
+do $$
+begin
+  if to_regclass('public.residentes_solicitudes') is not null then
+    insert into esperado values
+      ('residentes_enlaces',     'authenticated', '{SELECT}'),
+      ('residentes_solicitudes', 'authenticated', '{SELECT}');
+  end if;
+end $$;
+
 -- La migración A (privilegios fase A) cambia el UPDATE de tabla en
 -- user_tenants por UPDATE solo de la columna activo (E2b) y da a
 -- service_role lo que otorgar_membresia necesita.

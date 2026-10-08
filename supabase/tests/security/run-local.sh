@@ -26,6 +26,10 @@
 #        rollback BF → catálogo idéntico a OB
 #   IM + gracia de past_due desde impago_desde (20261009) → 0 FAIL;
 #        rollback IM → catálogo idéntico a BF; IM se reaplica idéntico
+#   RE + registro de residentes por enlace (20261011) → 0 FAIL;
+#        revisión concurrente (concurrencia_residentes.sh) → 3 PASS;
+#        rollback RE → catálogo idéntico a IM; RE se reaplica idéntico;
+#        con solicitudes o personas cargadas, el rollback aborta sin cambios
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -63,6 +67,8 @@ MIG_BF="20261008300000_billing_evento_otro_tenant.sql"
 DOWN_BF="$SUPA/rollback/20261008300000_billing_evento_otro_tenant.down.sql"
 MIG_IM="20261009000000_billing_impago_desde.sql"
 DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
+MIG_RE="20261011000000_residentes_enlace.sql"
+DOWN_RE="$SUPA/rollback/20261011000000_residentes_enlace.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -150,7 +156,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -220,6 +226,32 @@ same_catalog "$OUT/snap_BF.txt" "$OUT/snap_BF_tras_down_IM.txt" "rollback_IM"
 sql_file "$SUPA/migrations/$MIG_IM"
 snapshot "$OUT/snap_IM2.txt"
 same_catalog "$OUT/snap_IM.txt" "$OUT/snap_IM2.txt" "reaplicar_IM"
+
+sql_file "$SUPA/migrations/$MIG_RE"
+run_suites RE "… + residentes por enlace" C
+echo "  concurrencia de la revisión de residentes (dos sesiones):"
+bash "$DIR/concurrencia_residentes.sh" "$DB" > "$OUT/concurrencia_residentes.log" 2>&1 || true
+sed 's/^/    /' "$OUT/concurrencia_residentes.log"
+if grep -qv '^PASS|' "$OUT/concurrencia_residentes.log" || [[ "$(grep -c '^PASS|' "$OUT/concurrencia_residentes.log")" != "3" ]]; then FALLAS=$((FALLAS + 1)); fi
+snapshot "$OUT/snap_RE.txt"
+sql_file "$DOWN_RE"
+snapshot "$OUT/snap_IM_tras_down_RE.txt"
+same_catalog "$OUT/snap_IM2.txt" "$OUT/snap_IM_tras_down_RE.txt" "rollback_RE"
+sql_file "$SUPA/migrations/$MIG_RE"
+snapshot "$OUT/snap_RE2.txt"
+same_catalog "$OUT/snap_RE.txt" "$OUT/snap_RE2.txt" "reaplicar_RE"
+# Con datos de personas, el rollback debe abortar sin tocar nada.
+sql -c "insert into public.residentes_enlaces (id, tenant_id, token) values ('e1000000-0000-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000000', repeat('e', 64))" >/dev/null
+sql -c "insert into public.residentes_solicitudes (tenant_id, enlace_id, nombre, apellido, direccion, telefono) values ('aaaaaaaa-0000-0000-0000-000000000000', 'e1000000-0000-0000-0000-000000000000', 'Zz', 'Prueba', 'Casa Z', '529981234567')" >/dev/null
+if sql -f "$DOWN_RE" >/dev/null 2>"$OUT/RE_con_datos.err"; then
+  echo "  residentes: el rollback se aplicó con solicitudes cargadas (debía abortar)"; FALLAS=$((FALLAS + 1))
+else
+  echo "  residentes: el rollback aborta con datos ($(grep -o '[0-9]* solicitudes' "$OUT/RE_con_datos.err" | head -1))"
+fi
+snapshot "$OUT/snap_RE_tras_abortar.txt"
+same_catalog "$OUT/snap_RE.txt" "$OUT/snap_RE_tras_abortar.txt" "RE_rollback_abortado_sin_cambios"
+sql -c "delete from public.residentes_solicitudes; delete from public.residentes_enlaces" >/dev/null
+sql_file "$DOWN_RE"
 sql_file "$DOWN_IM"
 sql_file "$DOWN_BF"
 snapshot "$OUT/snap_OB_tras_down_BF.txt"
