@@ -15,7 +15,7 @@ export default async function UnidadesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Unidades" description="Casas y departamentos del residencial activo." />
-      <UnidadesClient tenantId={session.tenant.id} unidades={unidades} />
+      <UnidadesClient tenantId={session.tenant.id} unidades={unidades} pais={session.tenant.pais ?? null} />
     </div>
   );
 }

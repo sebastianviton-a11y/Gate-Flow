@@ -19,7 +19,7 @@ const ACCEPT_ARCHIVOS =
  * misma fila de `unidades`. Solo se agrega la búsqueda y la
  * presentación orientada a contacto (nombre primero, no dirección).
  */
-export function ResidentesClient({ tenantId, unidades }: { tenantId: string; unidades: UnidadListItem[] }) {
+export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId: string; unidades: UnidadListItem[]; pais?: string | null }) {
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<UnidadListItem | null>(null);
@@ -101,10 +101,7 @@ export function ResidentesClient({ tenantId, unidades }: { tenantId: string; uni
 
       {mostrarAgregar && (
         <div className="rounded-lg border border-border bg-card p-4">
-          <AgregarUnidadManual tenantId={tenantId} onAgregada={handleActualizado} />
-          <button onClick={() => setMostrarAgregar(false)} className="mt-3 text-sm text-muted-foreground underline">
-            Cerrar
-          </button>
+          <AgregarUnidadManual tenantId={tenantId} onAgregada={handleActualizado} pais={pais} abiertoInicial onCerrar={() => setMostrarAgregar(false)} />
         </div>
       )}
 
