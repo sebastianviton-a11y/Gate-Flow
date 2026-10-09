@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { importarUnidadesMasivo, type FilaImportarUnidad, type ResultadoImportacion } from "@gateflow/paquetes";
 import { validarCSVUnidades, type FilaValidada } from "@/lib/csv";
 import { cargarXLSXDesdeCDN, descargarPlantillaCSV, descargarPlantillaXLSX } from "@/lib/generar-plantilla";
+import { RESIDENT_IMPORT_COLUMNS } from "@/lib/residentes-import-columns";
 
 type Paso = "inicio" | "revisando" | "importando" | "resumen";
 
@@ -19,6 +20,8 @@ interface ImportarUnidadesProps {
   archivoExterno?: File | null;
   onArchivoConsumido?: () => void;
   onSolicitarArchivo?: () => void;
+  /** País del residencial: solo cambia el ejemplo de teléfono de la plantilla. */
+  pais?: string | null;
 }
 
 /** Botones de plantilla — se muestran en TODOS los pasos (inicio,
@@ -26,7 +29,7 @@ interface ImportarUnidadesProps {
  * primero. Es la corrección directa del punto 1: antes vivían dentro
  * del bloque `if (paso === "inicio")`, así que desaparecían en cuanto
  * el usuario avanzaba o encontraba un error. */
-function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
+function BotonesPlantilla({ compacto = false, pais = null }: { compacto?: boolean; pais?: string | null }) {
   const [descargandoXlsx, setDescargandoXlsx] = useState(false);
   const [errorXlsx, setErrorXlsx] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
     setErrorXlsx(null);
     setDescargandoXlsx(true);
     try {
-      await descargarPlantillaXLSX();
+      await descargarPlantillaXLSX(pais);
     } catch {
       setErrorXlsx("No se pudo generar el Excel. Descarga el CSV mientras tanto.");
     } finally {
@@ -48,7 +51,7 @@ function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
         {descargandoXlsx ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
         Descargar plantilla (Excel)
       </Button>
-      <Button variant="outline" size="sm" onClick={descargarPlantillaCSV} type="button">
+      <Button variant="outline" size="sm" onClick={() => descargarPlantillaCSV(pais)} type="button">
         <FileText className="h-4 w-4" />
         Descargar plantilla (CSV)
       </Button>
@@ -63,6 +66,7 @@ export function ImportarUnidades({
   archivoExterno,
   onArchivoConsumido,
   onSolicitarArchivo,
+  pais = null,
 }: ImportarUnidadesProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [paso, setPaso] = useState<Paso>("inicio");
@@ -147,7 +151,8 @@ export function ImportarUnidades({
     const filasValidas: FilaImportarUnidad[] = filas
       .filter((f) => f.errores.length === 0)
       .map((f) => ({
-        tipo: f.datos.tipo as "casa" | "departamento",
+        // Solo si un archivo anterior trae un Tipo válido; si no, sin tipo.
+        tipo: f.datos.tipo,
         identificador: f.datos.identificador,
         contactoNombre: f.datos.contactoNombre || undefined,
         contactoTelefono: f.datos.contactoTelefono || undefined,
@@ -169,7 +174,11 @@ export function ImportarUnidades({
         <p className="text-sm text-muted-foreground">
           Descarga la plantilla, complétala y súbela — acepta CSV, XLSX o XLS.
         </p>
-        <BotonesPlantilla />
+        <p className="text-xs text-muted-foreground" data-testid="plantilla-columnas">
+          Columnas: {RESIDENT_IMPORT_COLUMNS.map((c) => c.label).join(", ")}. Si tienes un archivo hecho con una plantilla anterior, también
+          sirve.
+        </p>
+        <BotonesPlantilla pais={pais} />
       </div>
 
       {paso === "inicio" && (
@@ -241,7 +250,7 @@ export function ImportarUnidades({
             <div className="max-h-48 overflow-y-auto rounded-md border border-warn/30 bg-warn/5 p-3 text-sm">
               {filasConError.map((f) => (
                 <p key={f.fila} className="text-warn-foreground">
-                  Fila {f.fila} ({f.datos.identificador || "sin identificador"}): {f.errores.join(" ")}
+                  Fila {f.fila} ({f.datos.identificador || "sin dirección"}): {f.errores.join(" ")}
                 </p>
               ))}
             </div>
@@ -251,8 +260,7 @@ export function ImportarUnidades({
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2">Tipo</th>
-                  <th className="px-3 py-2">Identificador</th>
+                  <th className="px-3 py-2">Dirección</th>
                   <th className="px-3 py-2">Residente</th>
                   <th className="px-3 py-2">Teléfono</th>
                 </tr>
@@ -260,7 +268,6 @@ export function ImportarUnidades({
               <tbody className="divide-y divide-border">
                 {filasValidas.map((f) => (
                   <tr key={f.fila}>
-                    <td className="px-3 py-1.5 capitalize">{f.datos.tipo}</td>
                     <td className="px-3 py-1.5 font-medium">{f.datos.identificador}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{f.datos.contactoNombre || "—"}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{f.datos.contactoTelefono || "—"}</td>

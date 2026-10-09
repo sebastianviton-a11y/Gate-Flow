@@ -51,11 +51,11 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <dt className="text-muted-foreground">Unidad</dt>
+              <dt className="text-muted-foreground">Dirección</dt>
               <dd className="font-medium">{paquete.unidadIdentificador}</dd>
 
               <dt className="text-muted-foreground">Residente</dt>
-              <dd className="font-medium">{paquete.residenteNombre ?? "—"}</dd>
+              <dd className="font-medium" data-testid="paquete-destinatario">{paquete.residenteNombre ?? paquete.destinatarioNombre ?? "—"}</dd>
 
               <dt className="text-muted-foreground">Remitente</dt>
               <dd className="font-medium">{paquete.remitente ?? "—"}</dd>

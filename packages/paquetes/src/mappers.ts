@@ -35,6 +35,8 @@ export interface PaqueteRow {
   fecha_entrega: string | null;
   pickup_token: string | null;
   grupo_entrega_id: string | null;
+  destinatario_nombre?: string | null;
+  destinatario_telefono?: string | null;
   unidades?: { identificador: string; contacto_telefono: string | null } | null;
   residente?: { nombre_completo: string; telefono: string | null } | null;
   recibido?: { nombre_completo: string } | null;
@@ -56,6 +58,8 @@ export function mapPaqueteRow(row: PaqueteRow): Paquete {
     residenteNombre: row.residente?.nombre_completo ?? null,
     residenteTelefono: row.residente?.telefono ?? null,
     contactoTelefono: row.unidades?.contacto_telefono ?? null,
+    destinatarioNombre: row.destinatario_nombre ?? null,
+    destinatarioTelefono: row.destinatario_telefono ?? null,
     remitente: row.remitente,
     empresaPaqueteria: row.empresas_paqueteria?.nombre ?? null,
     estado: row.estado_id as EstadoPaquete,

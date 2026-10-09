@@ -1,4 +1,4 @@
-import { RESIDENT_IMPORT_COLUMNS } from "./residentes-import-columns";
+import { COLUMNAS_ANTERIORES, RESIDENT_IMPORT_COLUMNS } from "./residentes-import-columns";
 
 /**
  * Parser CSV mínimo pero correcto: maneja campos entre comillas (incluye
@@ -53,7 +53,8 @@ export function parseCSV(texto: string): string[][] {
 }
 
 export interface FilaImportacionUnidad {
-  tipo: string;
+  /** Solo si el archivo trae la columna Tipo (plantillas anteriores) con un valor válido. */
+  tipo: "casa" | "departamento" | null;
   identificador: string;
   contactoNombre: string;
   contactoTelefono: string;
@@ -85,12 +86,13 @@ function normalizarEncabezado(valor: string): string {
     .replace(/\s+/g, " ");
 }
 
-/** Acepta tanto la etiqueta amigable actual ("Nombre del residente")
- * como la clave técnica del formato anterior ("residente_nombre") —
- * es lo que garantiza que instalaciones con la plantilla vieja sigan
- * funcionando sin cambios (punto 4 de la especificación). */
-function encontrarIndiceColumna(encabezadoNormalizado: string[], columna: { key: string; label: string }): number {
-  const candidatos = [normalizarEncabezado(columna.label), normalizarEncabezado(columna.key)];
+/** Acepta la etiqueta amigable actual ("Nombre del residente"), la
+ * clave técnica del formato anterior ("residente_nombre") y los
+ * encabezados de plantillas anteriores ("Identificador") — es lo que
+ * garantiza que instalaciones con la plantilla vieja sigan funcionando
+ * sin cambios (punto 4 de la especificación). */
+function encontrarIndiceColumna(encabezadoNormalizado: string[], columna: { key: string; label: string; alias: readonly string[] }): number {
+  const candidatos = [columna.label, columna.key, ...columna.alias].map(normalizarEncabezado);
   return encabezadoNormalizado.findIndex((h) => candidatos.includes(h));
 }
 
@@ -121,13 +123,16 @@ export function validarCSVUnidades(contenido: string): ResultadoValidacionCSV {
     return { encabezadoValido: false, columnasFaltantes, filas: [] };
   }
 
-  const idxTipo = indices.get("tipo")!;
+  const idxTipo = encontrarIndiceColumna(encabezadoNormalizado, COLUMNAS_ANTERIORES[0]);
   const idxIdentificador = indices.get("identificador")!;
   const idxNombre = indices.get("residente_nombre")!;
   const idxTelefono = indices.get("residente_telefono")!;
 
   const filas: FilaValidada[] = filasCrudas.slice(1).map((cols, i) => {
-    const tipo = (cols[idxTipo] ?? "").trim().toLowerCase();
+    // Tipo ya no se pide: si un archivo anterior lo trae válido se
+    // conserva; si no, la vivienda queda sin tipo (nunca uno inventado).
+    const tipoLeido = idxTipo === -1 ? "" : (cols[idxTipo] ?? "").trim().toLowerCase();
+    const tipo = tipoLeido === "casa" || tipoLeido === "departamento" ? tipoLeido : null;
     const identificador = (cols[idxIdentificador] ?? "").trim();
     const contactoNombre = (cols[idxNombre] ?? "").trim();
     // Por si el archivo viene de un Excel que ya convirtió el teléfono
@@ -136,8 +141,7 @@ export function validarCSVUnidades(contenido: string): ResultadoValidacionCSV {
     const contactoTelefono = (cols[idxTelefono] ?? "").trim().replace(/\.0$/, "");
 
     const errores: string[] = [];
-    if (!identificador) errores.push('Falta el identificador (ej. "Casa 45").');
-    if (tipo !== "casa" && tipo !== "departamento") errores.push('El tipo debe ser "Casa" o "Departamento".');
+    if (!identificador) errores.push('Falta la dirección (ej. "Casa 45").');
 
     return { fila: i + 2, datos: { tipo, identificador, contactoNombre, contactoTelefono }, errores };
   });

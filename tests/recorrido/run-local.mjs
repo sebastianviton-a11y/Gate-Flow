@@ -714,7 +714,7 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     ok(e("33"), new URL(pg.url()).pathname === "/guard", `[${p}] guardia opera en Guard durante la prueba`, pg.url());
     // Registrar un paquete para el residente cargado a mano y avisar por WhatsApp (+54 9).
     await pg.goto(`${URL_GUARD}/guard/packages/register`, { waitUntil: "networkidle" });
-    await pg.getByPlaceholder("Buscar unidad, residente o teléfono…").fill("ZZ Casa 5");
+    await pg.getByPlaceholder("Buscar dirección o residente…").fill("ZZ Casa 5");
     await pg.getByRole("button", { name: /ZZ Casa 5/ }).first().click({ timeout: 20_000 });
     await pg.getByRole("button", { name: /Estante A/ }).click({ timeout: 20_000 });
     await captura(pg, `${p}-06a-guard-antes-de-confirmar`);
@@ -729,7 +729,7 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     // Entrega con nombre de quien recibe y firma.
     const idPaquete = sql(`select id from public.paquetes where tenant_id = '${tenantId}' order by fecha_recepcion desc limit 1`);
     await pg.goto(`${URL_GUARD}/guard/packages/deliver`, { waitUntil: "networkidle" });
-    await pg.getByPlaceholder("Unidad, nombre o código GateFlow…").fill("ZZ Casa 5");
+    await pg.getByPlaceholder("Dirección, nombre o código GateFlow…").fill("ZZ Casa 5");
     await pg.getByRole("button", { name: /ZZ Casa 5/ }).first().click({ timeout: 20_000 });
     await pg.getByPlaceholder("Nombre de quien recibe").fill("Residente Manual");
     const lienzo = pg.locator("canvas").first();

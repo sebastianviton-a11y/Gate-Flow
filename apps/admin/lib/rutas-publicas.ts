@@ -20,6 +20,9 @@ export const RUTAS_SOLO_INVITADOS = ["/login", "/registro"] as const;
  *   /sin-acceso          destino de quien tiene sesión pero no un
  *                        residencial activo; no consulta la sesión, así
  *                        que no puede entrar en bucle.
+ *   /alta-residente      formulario que el administrador comparte con
+ *                        los residentes: no usa la sesión (un admin con
+ *                        sesión puede abrirlo para probarlo).
  */
 export const RUTAS_SIEMPRE_PUBLICAS = [
   "/aceptar-invitacion",
@@ -30,6 +33,7 @@ export const RUTAS_SIEMPRE_PUBLICAS = [
   "/recuperar-password",
   "/restablecer-password",
   "/sin-acceso",
+  "/alta-residente",
 ] as const;
 
 /**

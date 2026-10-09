@@ -25,7 +25,6 @@ export function EditarUnidad({
 }) {
   const supabase = createBrowserSupabaseClient();
 
-  const [tipo, setTipo] = useState<"casa" | "departamento">(unidad.tipo as "casa" | "departamento");
   const [identificador, setIdentificador] = useState(unidad.identificador);
   const [contactoNombre, setContactoNombre] = useState(unidad.contactoNombre ?? "");
   const [contactoTelefono, setContactoTelefono] = useState(unidad.contactoTelefono ?? "");
@@ -64,7 +63,6 @@ export function EditarUnidad({
     setEnviando(true);
     try {
       await actualizarUnidad(supabase, unidad.id, {
-        tipo,
         identificador,
         contactoNombre,
         contactoTelefono,
@@ -97,25 +95,11 @@ export function EditarUnidad({
         <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">Los datos del residente se actualizaron correctamente.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="e-tipo">Tipo</Label>
-              <select
-                id="e-tipo"
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as "casa" | "departamento")}
-                className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="casa">Casa</option>
-                <option value="departamento">Departamento</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="e-identificador">
-                Identificador <span className="text-destructive">*</span>
-              </Label>
-              <Input id="e-identificador" value={identificador} onChange={(e) => setIdentificador(e.target.value)} className="mt-1.5" />
-            </div>
+          <div>
+            <Label htmlFor="e-identificador">
+              Dirección <span className="text-destructive">*</span>
+            </Label>
+            <Input id="e-identificador" value={identificador} onChange={(e) => setIdentificador(e.target.value)} className="mt-1.5" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

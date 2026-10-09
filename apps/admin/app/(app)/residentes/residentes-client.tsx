@@ -3,11 +3,12 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, Pencil, Upload, Phone, Mail } from "lucide-react";
-import type { UnidadListItem } from "@gateflow/paquetes";
+import { formatearWhatsApp, telefonoParaMostrar, type PaisResidencial, type ResidenteAdicional, type UnidadListItem } from "@gateflow/paquetes";
 import { Button, Input } from "@gateflow/ui";
 import { ImportarUnidades } from "../unidades/importar-unidades";
 import { AgregarUnidadManual } from "../unidades/agregar-manual";
 import { EditarUnidad } from "../unidades/editar-unidad";
+import { EditarResidenteAdicional } from "./editar-residente-adicional";
 
 const ACCEPT_ARCHIVOS =
   ".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
@@ -18,11 +19,24 @@ const ACCEPT_ARCHIVOS =
  * separada, porque son literalmente la misma operación sobre la
  * misma fila de `unidades`. Solo se agrega la búsqueda y la
  * presentación orientada a contacto (nombre primero, no dirección).
+ * Debajo de cada vivienda, sus residentes adicionales (aprobados desde
+ * el enlace), que se editan o quitan por separado.
  */
-export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId: string; unidades: UnidadListItem[]; pais?: string | null }) {
+export function ResidentesClient({
+  tenantId,
+  unidades,
+  adicionales,
+  pais,
+}: {
+  tenantId: string;
+  unidades: UnidadListItem[];
+  adicionales: ResidenteAdicional[];
+  pais: PaisResidencial;
+}) {
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<UnidadListItem | null>(null);
+  const [editandoAdicional, setEditandoAdicional] = useState<ResidenteAdicional | null>(null);
   const [mostrarAgregar, setMostrarAgregar] = useState(false);
   const [mostrarImportar, setMostrarImportar] = useState(false);
 
@@ -43,7 +57,24 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
     );
   }, [busqueda, unidades]);
 
+  // Cada vivienda seguida de sus residentes adicionales (aunque la
+  // búsqueda solo coincida con uno de ellos).
+  const direccionDe = useMemo(() => new Map(unidades.map((u) => [u.id, u.identificador])), [unidades]);
+  const filas = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    const coincide = (r: ResidenteAdicional) =>
+      !termino || [`${r.nombre} ${r.apellido}`, direccionDe.get(r.unidadId), r.telefono].some((campo) => campo?.toLowerCase().includes(termino));
+    const visibles = new Set(filtrados.map((u) => u.id));
+    const resultado: Array<{ unidad: UnidadListItem; visible: boolean; adicionales: ResidenteAdicional[] }> = [];
+    for (const u of unidades) {
+      const suyos = adicionales.filter((r) => r.unidadId === u.id && coincide(r));
+      if (visibles.has(u.id) || suyos.length > 0) resultado.push({ unidad: u, visible: visibles.has(u.id), adicionales: suyos });
+    }
+    return resultado;
+  }, [busqueda, unidades, adicionales, filtrados, direccionDe]);
+
   function handleActualizado() {
+    setEditandoAdicional(null);
     setEditando(null);
     setMostrarAgregar(false);
     setMostrarImportar(false);
@@ -67,7 +98,7 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
         <div className="relative flex-1 min-w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre, unidad, teléfono o correo…"
+            placeholder="Buscar por nombre, dirección, teléfono o correo…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="pl-9"
@@ -92,6 +123,7 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
             archivoExterno={archivoParaImportar}
             onArchivoConsumido={() => setArchivoParaImportar(null)}
             onSolicitarArchivo={() => inputFileRef.current?.click()}
+            pais={pais}
           />
           <button onClick={() => setMostrarImportar(false)} className="mt-3 text-sm text-muted-foreground underline">
             Cerrar
@@ -106,8 +138,17 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
       )}
 
       {editando && <EditarUnidad tenantId={tenantId} unidad={editando} onGuardado={handleActualizado} onCerrar={() => setEditando(null)} />}
+      {editandoAdicional && (
+        <EditarResidenteAdicional
+          residente={editandoAdicional}
+          direccion={direccionDe.get(editandoAdicional.unidadId) ?? ""}
+          pais={pais}
+          onGuardado={handleActualizado}
+          onCerrar={() => setEditandoAdicional(null)}
+        />
+      )}
 
-      {filtrados.length === 0 ? (
+      {filas.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           {busqueda ? "Sin resultados para esa búsqueda." : "Sin residentes todavía — agrega el primero o importa un Excel/CSV."}
         </div>
@@ -117,7 +158,7 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
             <thead className="bg-muted text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">Unidad</th>
+                <th className="px-4 py-2 font-medium">Dirección</th>
                 <th className="px-4 py-2 font-medium">Teléfono</th>
                 <th className="px-4 py-2 font-medium">Correo</th>
                 <th className="px-4 py-2 font-medium">Estado</th>
@@ -125,46 +166,72 @@ export function ResidentesClient({ tenantId, unidades, pais = null }: { tenantId
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtrados.map((u) => (
-                <tr key={u.id} className="hover:bg-muted/40">
-                  <td className="px-4 py-2.5 font-medium">{u.contactoNombre ?? <span className="text-muted-foreground">Sin nombre</span>}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{u.identificador}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">
-                    {u.contactoTelefono ? (
+              {filas.flatMap(({ unidad: u, visible, adicionales: suyos }) => [
+                visible && (
+                  <tr key={u.id} className="hover:bg-muted/40">
+                    <td className="px-4 py-2.5 font-medium">{u.contactoNombre ?? <span className="text-muted-foreground">Sin nombre</span>}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{u.identificador}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {u.contactoTelefono ? (
+                        <span className="flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5" />
+                          {telefonoParaMostrar(u.contactoTelefono, pais)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {u.contactoEmail ? (
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="h-3.5 w-3.5" />
+                          {u.contactoEmail}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                          u.activo ? "bg-success/10 text-success" : "bg-muted-foreground/10 text-muted-foreground"
+                        }`}
+                      >
+                        {u.activo ? "Activo" : "Desactivado"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => setEditando(u)} className="text-muted-foreground hover:text-primary" aria-label="Editar residente">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ),
+                ...suyos.map((r) => (
+                  <tr key={r.id} className="hover:bg-muted/40" data-testid="residente-adicional">
+                    <td className="px-4 py-2.5 font-medium">
+                      {r.nombre} {r.apellido}
+                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-normal text-primary">Adicional</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{u.identificador}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Phone className="h-3.5 w-3.5" />
-                        {u.contactoTelefono}
+                        {formatearWhatsApp(r.telefono, pais)}
                       </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">
-                    {u.contactoEmail ? (
-                      <span className="flex items-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5" />
-                        {u.contactoEmail}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                        u.activo ? "bg-success/10 text-success" : "bg-muted-foreground/10 text-muted-foreground"
-                      }`}
-                    >
-                      {u.activo ? "Activo" : "Desactivado"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setEditando(u)} className="text-muted-foreground hover:text-primary" aria-label="Editar residente">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">—</td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">Activo</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button onClick={() => setEditandoAdicional(r)} className="text-muted-foreground hover:text-primary" aria-label="Editar residente adicional">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )),
+              ])}
             </tbody>
           </table>
         </div>

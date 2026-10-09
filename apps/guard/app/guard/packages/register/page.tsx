@@ -19,6 +19,8 @@ import {
   marcarWhatsappGrupoEnviado,
   construirMensajeNotificacionGrupo,
   construirEnlaceWhatsAppGrupo,
+  destinatariosDeVivienda,
+  idPersonaDestinataria,
   type Catalogos,
   type UbicacionItem,
   type ResultadoRegistro,
@@ -44,6 +46,9 @@ export default function RegisterPackagePage() {
 
   const [unidadSeleccionada, setUnidadSeleccionada] = useState<UnidadConResidentes | null>(null);
   const [residenteId, setResidenteId] = useState<string | null>(null);
+  const [destinatarioClave, setDestinatarioClave] = useState<string | null>(null);
+  const destinatarios = destinatariosDeVivienda(unidadSeleccionada);
+  const destinatario = destinatarios.find((d) => d.clave === destinatarioClave) ?? destinatarios[0] ?? null;
 
   const [catalogos, setCatalogos] = useState<Catalogos | null>(null);
   const [empresaId, setEmpresaId] = useState<string>("");
@@ -117,6 +122,7 @@ export default function RegisterPackagePage() {
     setUnidades([]);
     setUnidadSeleccionada(null);
     setResidenteId(null);
+    setDestinatarioClave(null);
     setEmpresaId("");
     setRemitente("");
     setNumeroGuia("");
@@ -182,8 +188,9 @@ export default function RegisterPackagePage() {
           ubicacionId,
           notas: notas || null,
           recibidoPor: session.user.id,
-          destinatarioNombre: residenteId ? null : unidadSeleccionada.contactoNombre,
-          destinatarioTelefono: residenteId ? null : unidadSeleccionada.contactoTelefono,
+          destinatarioNombre: residenteId ? null : (destinatario?.nombre ?? null),
+          destinatarioTelefono: residenteId ? null : (destinatario?.telefono ?? null),
+          destinatarioResidenteId: residenteId ? null : idPersonaDestinataria(destinatario),
         }),
       );
       setConfirmacion(resultado);
@@ -237,7 +244,7 @@ export default function RegisterPackagePage() {
       const r = unidadSeleccionada?.residentes.find((r) => r.id === residenteId);
       if (r) return r.nombreCompleto;
     }
-    return unidadSeleccionada?.contactoNombre ?? "residente";
+    return destinatario?.nombre ?? "residente";
   }
 
   async function handleEnviarNotificacion() {
@@ -253,7 +260,7 @@ export default function RegisterPackagePage() {
         grupoActivo.codigoGrupo ?? grupoActivo.token,
         urlVerQr,
       );
-      const enlace = construirEnlaceWhatsAppGrupo(unidadSeleccionada.contactoTelefono ?? null, mensaje, session.tenant.pais ?? null);
+      const enlace = construirEnlaceWhatsAppGrupo(destinatario?.telefono ?? null, mensaje, session.tenant.pais ?? null);
       if (enlace) window.open(enlace.url, "_blank");
       await marcarWhatsappGrupoEnviado(supabase, grupoActivo.id);
       setGrupoActivo({ ...grupoActivo, whatsappEnviado: true });
@@ -284,7 +291,7 @@ export default function RegisterPackagePage() {
       grupoActivo.codigoGrupo ?? grupoActivo.token,
       urlVerQr,
     );
-    const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(unidadSeleccionada?.contactoTelefono ?? null, mensaje, session.tenant.pais ?? null);
+    const enlaceWhatsApp = construirEnlaceWhatsAppGrupo(destinatario?.telefono ?? null, mensaje, session.tenant.pais ?? null);
 
     return (
       <div className="flex h-full flex-col">
@@ -362,7 +369,7 @@ export default function RegisterPackagePage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar unidad, residente o teléfono…"
+                placeholder="Buscar dirección o residente…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-14 pl-11 text-lg"
@@ -377,14 +384,18 @@ export default function RegisterPackagePage() {
                 {unidades.map((u) => (
                   <button
                     key={u.id}
-                    onClick={() => setUnidadSeleccionada(u)}
+                    onClick={() => {
+                      setUnidadSeleccionada(u);
+                      setDestinatarioClave(null);
+                    }}
                     className="min-h-touch flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left hover:bg-muted"
                   >
                     <span className="font-medium">{u.identificador}</span>
                     <span className="text-sm text-muted-foreground">
                       {u.residentes.length > 0
                         ? u.residentes[0]!.nombreCompleto
-                        : (u.contactoNombre ?? "Sin residente registrado")}
+                        : (u.contactoNombre ?? u.adicionales?.[0]?.nombre ?? "Sin residente registrado")}
+                      {(u.adicionales?.length ?? 0) > 0 && (u.contactoNombre || u.residentes.length > 0) && ` +${u.adicionales!.length}`}
                     </span>
                   </button>
                 ))}
@@ -397,6 +408,7 @@ export default function RegisterPackagePage() {
               onClick={() => {
                 setUnidadSeleccionada(null);
                 setResidenteId(null);
+                setDestinatarioClave(null);
               }}
               className="flex w-full items-center justify-between rounded-xl border border-primary bg-primary/5 px-4 py-3 text-left"
             >
@@ -414,6 +426,25 @@ export default function RegisterPackagePage() {
                   {decisionAgrupacion === "existente" && " Este se agregará al mismo grupo."}
                   {decisionAgrupacion === "separado" && " Este irá en un grupo separado."}
                 </span>
+              </div>
+            )}
+
+            {!residenteId && destinatarios.length > 1 && (
+              <div data-testid="guard-destinatarios">
+                <p className="mb-1.5 text-sm font-medium text-muted-foreground">¿A quién avisar por WhatsApp?</p>
+                <div className="flex flex-wrap gap-2">
+                  {destinatarios.map((d) => (
+                    <button
+                      key={d.clave}
+                      onClick={() => setDestinatarioClave(d.clave)}
+                      className={`min-h-touch rounded-full border px-4 text-sm ${
+                        destinatario?.clave === d.clave ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"
+                      }`}
+                    >
+                      {d.nombre}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

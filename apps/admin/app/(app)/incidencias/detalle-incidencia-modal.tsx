@@ -98,7 +98,7 @@ export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: Det
                 <dt className="text-muted-foreground">Residente</dt>
                 <dd className="text-right font-medium">{detalle.paquete.residenteNombre ?? "—"}</dd>
 
-                <dt className="text-muted-foreground">Unidad</dt>
+                <dt className="text-muted-foreground">Dirección</dt>
                 <dd className="text-right font-medium">{detalle.paquete.unidadIdentificador}</dd>
 
                 <dt className="text-muted-foreground">Empresa de paquetería</dt>

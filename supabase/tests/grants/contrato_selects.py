@@ -127,7 +127,11 @@ def resolver_embebido(padre, nombre, pistas, columnas, fks, errores, donde):
 
 def revisar_select(tabla, texto, columnas, fks, errores, donde, solo_embebidos=False):
     if tabla not in columnas:
-        errores.append(f"{donde}: tabla/vista inexistente {tabla}")
+        # En un esquema intermedio una tabla de una migración posterior
+        # todavía no existe: no puede tener embebidos ambiguos. El
+        # contrato completo (esquema final) sí la exige.
+        if not solo_embebidos:
+            errores.append(f"{donde}: tabla/vista inexistente {tabla}")
         return
     for item in partir(" ".join(texto.split())):
         if item == "*":

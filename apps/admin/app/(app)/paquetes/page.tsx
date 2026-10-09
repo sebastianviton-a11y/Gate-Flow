@@ -63,7 +63,7 @@ export default async function PaquetesPage({
           <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-2.5">Código</th>
-              <th className="px-4 py-2.5">Unidad</th>
+              <th className="px-4 py-2.5">Dirección</th>
               <th className="px-4 py-2.5">Residente</th>
               <th className="px-4 py-2.5">Remitente / Guía</th>
               <th className="px-4 py-2.5">Ubicación</th>
@@ -100,7 +100,7 @@ export default async function PaquetesPage({
                   </Link>
                 </td>
                 <td className="px-4 py-2.5 font-medium">{p.unidadIdentificador}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{p.residenteNombre ?? "—"}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{p.residenteNombre ?? p.destinatarioNombre ?? "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">
                   {p.remitente ?? p.empresaPaqueteria ?? "—"}
                   {p.numeroGuia ? ` · ${p.numeroGuia}` : ""}
