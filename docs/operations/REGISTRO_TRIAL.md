@@ -90,25 +90,40 @@ cambia esa función. Nunca se activa el signup público.
 | `TURNSTILE_SITE_KEY` | sí en clientes (pública) | clave del widget; la lee el servidor y se la pasa al formulario |
 | `TURNSTILE_SECRET_KEY` | sí en clientes (secreta) | verificación del token (siteverify) |
 
-**Netlify: contextos y alcances.**
-- Una variable marcada como secreta («Contains secret values») no admite
-  «el mismo valor para todos los contextos»: hay que cargar un valor en
-  cada contexto donde se use. Sin un valor en **Deploy Previews**, las
-  previews de los PR no reciben `REGISTRO_HASH_PEPPER`,
-  `SUPABASE_SERVICE_ROLE_KEY` ni `TURNSTILE_SECRET_KEY`.
-- Alcance: *Functions* (o *All scopes*). `/registro` y su acción corren
-  en la función del servidor de Next.
-- `NEXT_PUBLIC_ADMIN_APP_URL`: si en ejecución no está (por ejemplo,
-  porque solo tiene el alcance *Builds*), el antibot usa el valor del
-  build. Sin valor en ninguno de los dos, cuenta como entorno de
-  clientes.
-- Si `/registro` está cerrado, el log de la función lo dice con un código
-  y sin valores (`[GateFlow] /registro cerrado: …`):
-  - `sin_REGISTRO_HASH_PEPPER`;
-  - `REGISTRO_HASH_PEPPER_corta`;
-  - `turnstile_sin_claves`;
-  - `turnstile_claves_incompletas`;
-  - `turnstile_claves_de_prueba_fuera_de_pruebas`.
+**Netlify: contextos y previews.**
+- Los secretos (`REGISTRO_HASH_PEPPER`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `TURNSTILE_SECRET_KEY`) van **solo** en el contexto *Production* de cada
+  sitio (staging y producción), con alcance *Functions*. El repositorio es
+  público: **no** se cargan en *Deploy Previews* ni en *Branch deploys*.
+- Por eso, en una Deploy Preview `/registro` muestra «El registro no está
+  disponible por ahora». Es lo esperado: las previews son para revisar la
+  interfaz; el alta de punta a punta se prueba en staging.
+- Si `/registro` está cerrado, el motivo es un código, nunca un valor. En
+  localhost, staging y previews se ve en la misma página («Entorno de
+  pruebas · …»); en el entorno de clientes solo queda en el log de la
+  función (`[GateFlow] /registro cerrado: …`):
+  - `sin_REGISTRO_HASH_PEPPER` / `REGISTRO_HASH_PEPPER_corta`;
+  - `sin_NEXT_PUBLIC_ADMIN_APP_URL`;
+  - `turnstile_sin_claves`, `turnstile_claves_incompletas`,
+    `turnstile_claves_de_prueba_fuera_de_pruebas`.
+- `NEXT_PUBLIC_ADMIN_APP_URL`: primero el valor en ejecución y, si no está
+  (por ejemplo, alcance solo *Builds*), el del build. Sin valor en ninguno
+  de los dos: entorno de clientes y registro cerrado.
+
+**Enlaces de los correos, por entorno.** Cada enlace vuelve al sitio del
+mismo entorno; si falta la URL, no se manda el correo (un enlace relativo
+haría que Supabase use la *Site URL*, que puede ser de otro entorno).
+
+| Correo | Vuelve a | Sale de |
+|---|---|---|
+| Confirmación del alta | `<Admin>/confirmar-cuenta` | `NEXT_PUBLIC_ADMIN_APP_URL` (ejecución o build) |
+| Invitación (guardia, Super Admin) | `<Admin>/aceptar-invitacion` | ídem |
+| Recuperación en Admin | `<Admin>/restablecer-password` | el sitio donde se pidió (`window.location.origin`) |
+| Recuperación en Guard | `<Guard>/restablecer-password` | ídem |
+| «Probar gratis», «Ingresar» y legales de la landing | `<Admin>/registro`, `/login`, `/privacidad`, `/terminos` | `NEXT_PUBLIC_ADMIN_APP_URL` del sitio de la landing (build) |
+
+Supabase solo acepta esos destinos si están en *Redirect URLs* del
+proyecto de ese entorno.
 
 Auth (Supabase): signups OFF; Confirm email ON; Redirect URLs deben
 cubrir `<admin>/confirmar-cuenta`.

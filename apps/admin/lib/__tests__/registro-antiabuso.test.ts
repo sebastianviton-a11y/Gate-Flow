@@ -3,7 +3,7 @@
  *   npx tsx apps/admin/lib/__tests__/registro-antiabuso.test.ts
  */
 import { configuracionAntibot, esClaveDePruebaTurnstile, motivoRegistroCerrado, verificarDesafio } from "../registro/antibot";
-import { esEntornoDePruebas } from "../entorno";
+import { esEntornoDePruebas, urlPublicaAdmin } from "../entorno";
 import { emitirTokenTiempo, hashEmail, hashIp, ipDesdeHeaders, TIEMPO_MAXIMO_MS, TIEMPO_MINIMO_MS, verificarTokenTiempo } from "../registro/hash";
 
 let pasadas = 0;
@@ -140,14 +140,22 @@ async function main() {
 
     // Motivo para el log: solo un código, nunca valores.
     const omitido = configuracionAntibot({ ...STG });
-    assert(motivoRegistroCerrado(undefined, omitido) === "sin_REGISTRO_HASH_PEPPER" && motivoRegistroCerrado("corta", omitido) === "REGISTRO_HASH_PEPPER_corta",
+    assert(motivoRegistroCerrado(undefined, omitido, "https://gateflow-admin-staging.netlify.app") === "sin_REGISTRO_HASH_PEPPER" && motivoRegistroCerrado("corta", omitido, "https://gateflow-admin-staging.netlify.app") === "REGISTRO_HASH_PEPPER_corta",
       "motivo: falta el pepper o es corto");
-    assert(motivoRegistroCerrado("p".repeat(16), configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA })) === "turnstile_claves_incompletas"
-      && motivoRegistroCerrado("p".repeat(16), c1) === "turnstile_sin_claves" && motivoRegistroCerrado("p".repeat(16), omitido) === null,
+    assert(motivoRegistroCerrado("p".repeat(16), configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA }), "https://gateflow-admin-staging.netlify.app") === "turnstile_claves_incompletas"
+      && motivoRegistroCerrado("p".repeat(16), c1, "https://gateflow.mx") === "turnstile_sin_claves" && motivoRegistroCerrado("p".repeat(16), omitido, "https://gateflow-admin-staging.netlify.app") === null,
       "motivo: Turnstile incompleto o ausente en clientes; abierto → null");
     const secretoLargo = "s".repeat(40);
-    assert(!String(motivoRegistroCerrado(secretoLargo, configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY }))).includes(secretoLargo.slice(0, 8))
-      && !String(motivoRegistroCerrado(secretoLargo, c4)).includes("0x4AAA"), "el motivo nunca incluye el pepper ni claves");
+    assert(!String(motivoRegistroCerrado(secretoLargo, configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY }), "https://gateflow.mx")).includes(secretoLargo.slice(0, 8))
+      && !String(motivoRegistroCerrado(secretoLargo, c4, "https://gateflow.mx")).includes("0x4AAA"), "el motivo nunca incluye el pepper ni claves");
+    assert(motivoRegistroCerrado("p".repeat(16), omitido, null) === "sin_NEXT_PUBLIC_ADMIN_APP_URL",
+      "motivo: sin URL pública del panel el registro se cierra (el correo no podría volver a este Admin)");
+    assert(urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: " https://a.example.com/ " }, "https://b.example.com") === "https://a.example.com"
+      && urlPublicaAdmin({}, "https://gateflow-admin-staging.netlify.app/") === "https://gateflow-admin-staging.netlify.app"
+      && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "no-es-url" }, "https://b.example.com") === "https://b.example.com"
+      && urlPublicaAdmin({}, undefined) === null && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "/registro" }, "") === null
+      && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "https://x.com/registro" }, undefined) === null,
+      "URL del panel: primero la de ejecución, si no la del build; sin una URL http(s) de host → null (nunca un enlace relativo)");
   });
 
   await seccion("Servidor y formulario conectados al desafío", async () => {
@@ -160,12 +168,34 @@ async function main() {
     assert(/configuracionAntibot\(process\.env\)/.test(accion) && /modo === "deshabilitado"[\s\S]*MENSAJES_ALTA\.noDisponible/.test(accion), "la acción del servidor rechaza si el entorno no tiene desafío válido");
     assert(accion.indexOf("configuracionAntibot(process.env)") < accion.indexOf("createServiceRoleClient()"), "el desafío se decide antes de tocar la base o Auth");
     assert(/verificarDesafio\([^)]*secreto: configAntibot\.secreto/.test(accion) && /MENSAJES_ALTA\.desafio/.test(accion), "con Turnstile, el token se verifica en el servidor con el secreto configurado");
-    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /const motivo = motivoRegistroCerrado\(pepper, antibot\)/.test(pagina) && /if \(!pepper \|\| motivo\)/.test(pagina),
+    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /const motivo = motivoRegistroCerrado\(pepper, antibot, urlAdmin\)/.test(pagina) && /if \(!pepper \|\| motivo\)/.test(pagina),
       "/registro no muestra el formulario si falta el pepper o el entorno no tiene desafío válido");
     assert(/console\.error\(`\[GateFlow\] \/registro cerrado: \$\{motivo\}`\)/.test(pagina) && !/console\.[a-z]+\([^)]*pepper\b/.test(pagina),
       "/registro cerrado deja en el log el motivo (código), nunca el pepper");
     assert(/turnstileSiteKey=\{antibot\.modo === "turnstile" \? antibot\.siteKey : null\}/.test(pagina), "solo la clave pública llega al navegador");
     assert(!/TURNSTILE_SECRET_KEY/.test(formulario) && !/TURNSTILE_SECRET_KEY/.test(pagina.replace(/configuracionAntibot\(process\.env\)/, "")), "el secreto nunca llega al formulario");
+    assert(/\{esEntornoDePruebas\(urlAdmin\) && \(/.test(pagina) && /Entorno de pruebas · \{motivo\}/.test(pagina),
+      "/registro cerrado: el código del motivo se ve solo en entornos de pruebas (nunca en el de clientes)");
+    assert(/redirectTo = `\$\{urlAdmin\}\/confirmar-cuenta`/.test(accion) && accion.indexOf("if (!urlAdmin)") < accion.indexOf("createServiceRoleClient()"),
+      "alta: el enlace de confirmación vuelve a la URL pública de ESTE Admin; sin ella no se crea nada");
+    const invitarGuardia = readFileSync(join(raiz, "app/(app)/onboarding/invitar-usuario-action.ts"), "utf8");
+    const invitarAdmin = readFileSync(join(raiz, "app/superadmin/invitacion-actions.ts"), "utf8");
+    const recuperarAdmin = readFileSync(join(raiz, "app/recuperar-password/recuperar-password-form.tsx"), "utf8");
+    const recuperarGuard = readFileSync(join(raiz, "../guard/app/recuperar-password/recuperar-password-form.tsx"), "utf8");
+    assert([invitarGuardia, invitarAdmin].every((f) => /redirectTo: `\$\{urlAdmin\}\/aceptar-invitacion`/.test(f) && /if \(!urlAdmin\)/.test(f)),
+      "invitaciones (guardia y Super Admin): vuelven a ESTE Admin; sin su URL no se envían");
+    assert(![accion, invitarGuardia, invitarAdmin, recuperarAdmin, recuperarGuard].some((f) => /NEXT_PUBLIC_(ADMIN|GUARD)_APP_URL \?\? ""/.test(f)),
+      "ningún correo arma su enlace con una URL vacía (enlace relativo → Site URL de otro entorno)");
+    assert([recuperarAdmin, recuperarGuard].every((f) => /redirectTo: `\$\{window\.location\.origin\}\/restablecer-password`/.test(f)),
+      "recuperación (Admin y Guard): el enlace vuelve al sitio donde se pidió");
+    assert([recuperarAdmin, recuperarGuard].every((f) => /createEmailLinkClient\(\)/.test(f) && !/createBrowserSupabaseClient/.test(f)),
+      "recuperación (Admin y Guard): flujo implícito, el enlace sirve aunque se abra en otro dispositivo (PKCE solo servía en el mismo navegador)");
+    const restablecerAdmin = readFileSync(join(raiz, "app/restablecer-password/restablecer-password-form.tsx"), "utf8");
+    const restablecerGuard = readFileSync(join(raiz, "../guard/app/restablecer-password/restablecer-password-form.tsx"), "utf8");
+    assert([restablecerAdmin, restablecerGuard].every((f) => /if \(code && !yaCanjeado\)/.test(f)),
+      "restablecer (Admin y Guard): un código ya canjeado por el cliente no se vuelve a canjear (antes: «enlace no válido» con sesión válida)");
+    assert(!/DIAGN|Response body crudo|auth\/v1\/invite/.test(invitarAdmin) && !/console\.[a-z]+\([^)]*correoAdministrador/.test(invitarAdmin),
+      "invitación de Super Admin: sin diagnóstico (no repite la llamada ni registra el correo o la respuesta)");
     assert(/name="cf-turnstile-response"/.test(formulario) && /disabled=\{enviando \|\| faltaDesafio\}/.test(formulario) && /desafio\.current\?\.reset\(\)/.test(formulario), "formulario: manda el token, no deja enviar sin él y pide uno nuevo tras un rechazo");
   });
 

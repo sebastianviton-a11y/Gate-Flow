@@ -21,7 +21,28 @@ export function esEntornoStaging(env: Record<string, string | undefined> = proce
  * Sin URL, con una URL inválida o con cualquier otro host (gateflow.mx)
  * es entorno de clientes.
  */
-export function esEntornoDePruebas(urlAdmin: string | undefined): boolean {
+/**
+ * URL pública de ESTE Admin, sin "/" final, para los enlaces de los
+ * correos (confirmación, invitación) y para decidir el entorno. Primero
+ * el valor en tiempo de ejecución; si no está, el fijado en el build (en
+ * Netlify una NEXT_PUBLIC_* puede existir solo en el alcance "Builds").
+ * null si no hay una URL http(s): entonces no se manda ningún correo, porque
+ * con un enlace relativo Supabase usa la Site URL del proyecto, que puede
+ * ser de otro entorno.
+ */
+export function urlPublicaAdmin(
+  entorno: Readonly<Record<string, string | undefined>> = process.env,
+  // Referencia literal: Next la reemplaza en el build por el valor de ese deploy.
+  urlBuild: string | undefined = process.env.NEXT_PUBLIC_ADMIN_APP_URL,
+): string | null {
+  for (const valor of [entorno.NEXT_PUBLIC_ADMIN_APP_URL, urlBuild]) {
+    const url = (valor ?? "").trim().replace(/\/+$/, "");
+    if (/^https?:\/\/[^/\s]+$/.test(url)) return url;
+  }
+  return null;
+}
+
+export function esEntornoDePruebas(urlAdmin: string | undefined | null): boolean {
   let host: string;
   try {
     host = new URL(urlAdmin ?? "").hostname.toLowerCase();

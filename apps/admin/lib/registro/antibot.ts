@@ -21,7 +21,7 @@
  * entorno de clientes y cerraba /registro. Sin valor en ninguno de los
  * dos, sigue siendo entorno de clientes (falla cerrado).
  */
-import { esEntornoDePruebas } from "../entorno";
+import { esEntornoDePruebas, urlPublicaAdmin } from "../entorno";
 
 export interface ResultadoAntibot {
   ok: boolean;
@@ -43,9 +43,11 @@ export type ConfigAntibot =
  * Por qué /registro está cerrado, para el log del servidor: solo un código,
  * nunca valores. null si está abierto.
  */
-export function motivoRegistroCerrado(pepper: string | undefined, antibot: ConfigAntibot): string | null {
+export function motivoRegistroCerrado(pepper: string | undefined, antibot: ConfigAntibot, urlAdmin: string | null): string | null {
   if (!pepper) return "sin_REGISTRO_HASH_PEPPER";
   if (pepper.length < 16) return "REGISTRO_HASH_PEPPER_corta";
+  // Sin URL pública el correo de confirmación no podría volver a este Admin.
+  if (!urlAdmin) return "sin_NEXT_PUBLIC_ADMIN_APP_URL";
   if (antibot.modo === "deshabilitado") return `turnstile_${antibot.motivo}`;
   return null;
 }
@@ -61,7 +63,7 @@ export function configuracionAntibot(
 ): ConfigAntibot {
   const siteKey = (entorno.TURNSTILE_SITE_KEY ?? "").trim();
   const secreto = (entorno.TURNSTILE_SECRET_KEY ?? "").trim();
-  const pruebas = esEntornoDePruebas(entorno.NEXT_PUBLIC_ADMIN_APP_URL?.trim() || urlAdminBuild);
+  const pruebas = esEntornoDePruebas(urlPublicaAdmin(entorno, urlAdminBuild));
   if (!siteKey && !secreto) return pruebas ? { modo: "omitido" } : { modo: "deshabilitado", motivo: "sin_claves" };
   if (!siteKey || !secreto) return { modo: "deshabilitado", motivo: "claves_incompletas" };
   const dePrueba = esClaveDePruebaTurnstile(siteKey) || esClaveDePruebaTurnstile(secreto);

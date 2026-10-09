@@ -1,4 +1,5 @@
 import { GateFlowLogo } from "@gateflow/ui";
+import { esEntornoDePruebas, urlPublicaAdmin } from "@/lib/entorno";
 import { configuracionAntibot, motivoRegistroCerrado } from "@/lib/registro/antibot";
 import { emitirTokenTiempo } from "@/lib/registro/hash";
 import { RegistroForm } from "./registro-form";
@@ -15,7 +16,8 @@ export default function RegistroPage() {
   const pepper = process.env.REGISTRO_HASH_PEPPER;
   // Turnstile obligatorio con claves reales en el entorno de clientes.
   const antibot = configuracionAntibot(process.env);
-  const motivo = motivoRegistroCerrado(pepper, antibot);
+  const urlAdmin = urlPublicaAdmin();
+  const motivo = motivoRegistroCerrado(pepper, antibot, urlAdmin);
   if (!pepper || motivo) {
     // Sin el secreto o sin desafío anti-bot válido no hay antiabuso: el
     // formulario no se muestra. El log dice cuál falta (sin valores).
@@ -26,6 +28,13 @@ export default function RegistroPage() {
           <GateFlowLogo size={48} onDark />
           <p className="font-display text-lg font-semibold">El registro no está disponible por ahora</p>
           <p className="text-sm text-white/60">Inténtalo más tarde o escribe a soporte@gateflow.mx.</p>
+          {/* Solo en localhost, staging y previews: el código de lo que falta
+              (nunca un valor) para que el equipo lo vea sin abrir los logs. */}
+          {esEntornoDePruebas(urlAdmin) && (
+            <p className="mt-2 rounded bg-white/10 px-2 py-1 font-mono text-xs text-white/70" data-testid="registro-cerrado-motivo">
+              Entorno de pruebas · {motivo}
+            </p>
+          )}
         </div>
       </div>
     );

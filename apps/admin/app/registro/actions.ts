@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createServiceRoleClient } from "@gateflow/supabase";
 import { ejecutarAlta, MENSAJES_ALTA, type DepsAlta, type ResultadoAlta } from "@/lib/registro/alta";
 import { configuracionAntibot, verificarDesafio } from "@/lib/registro/antibot";
+import { urlPublicaAdmin } from "@/lib/entorno";
 import { enviarCorreoConfirmacion } from "@/lib/registro/confirmacion";
 import { ipDesdeHeaders } from "@/lib/registro/hash";
 import { leerCampos } from "@/lib/registro/validacion";
@@ -20,6 +21,12 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
   const pepper = process.env.REGISTRO_HASH_PEPPER;
   if (!pepper || pepper.length < 16) {
     console.error("[GateFlow] /registro: falta REGISTRO_HASH_PEPPER (mínimo 16 caracteres); el registro queda deshabilitado.");
+    return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
+  }
+
+  const urlAdmin = urlPublicaAdmin();
+  if (!urlAdmin) {
+    console.error("[GateFlow] /registro: falta NEXT_PUBLIC_ADMIN_APP_URL; el registro queda deshabilitado.");
     return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
   }
 
@@ -53,7 +60,7 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
     return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/confirmar-cuenta`;
+  const redirectTo = `${urlAdmin}/confirmar-cuenta`;
 
   const deps: DepsAlta = {
     async intentoPermitido(emailHash, ipHash) {

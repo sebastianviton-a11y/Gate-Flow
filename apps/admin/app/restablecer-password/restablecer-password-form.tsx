@@ -25,14 +25,18 @@ export function RestablecerPasswordForm() {
     async function verificarSesion() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
-      if (code) {
+      // Enlace PKCE (de antes del flujo implícito): el cliente del navegador
+      // ya canjea el código al iniciarse; canjearlo otra vez falla aunque
+      // la sesión exista. Solo se canjea si todavía no hay sesión.
+      const yaCanjeado = code ? (await supabase.auth.getSession()).data.session : null;
+      if (code && !yaCanjeado) {
         const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
         if (errorCambio) {
           console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
           setEstado("invalida");
           return;
         }
-      } else {
+      } else if (!code) {
         // Ver la nota completa en aceptar-invitacion-form.tsx — si el
         // navegador ya tenía una sesión guardada, detectSessionInUrl
         // no siempre la reemplaza con el token nuevo del enlace. Se
