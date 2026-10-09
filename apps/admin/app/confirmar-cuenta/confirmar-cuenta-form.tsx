@@ -79,7 +79,10 @@ export function ConfirmarCuentaForm() {
         <GateFlowLogo size={48} onDark />
         <ShieldAlert className="mt-4 h-10 w-10 text-warn" />
         <p className="font-display text-lg font-semibold">Este enlace ya no es válido</p>
-        <p className="text-sm text-white/60">Puede haber expirado o ya haberse usado. Si ya confirmaste tu cuenta, inicia sesión.</p>
+        <p className="text-sm text-white/60">
+          Puede haber expirado o ya haberse usado. Inicia sesión: si tu correo todavía no está confirmado, desde ahí puedes pedir un nuevo
+          correo de confirmación.
+        </p>
         <div className="mt-2 flex gap-4 text-sm">
           <Link href="/login" className="text-primary underline">
             Iniciar sesión

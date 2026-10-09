@@ -9,15 +9,26 @@ import { createAnonServerClient } from "@gateflow/supabase";
  * up" sigue OFF: el usuario ya existe (lo creó el servidor con la
  * clave secreta); aquí solo se reenvía la verificación.
  *
+ * Lo usan el alta (/registro) y el reenvío desde /login
+ * (lib/registro/reenvio-servidor.ts): un solo mecanismo.
+ *
  * Si resend resultara bloqueado con signups OFF, el reemplazo es
  * auth.admin.generateLink({type:'signup'}) + envío propio, y solo
  * cambia esta función.
  */
-export async function enviarCorreoConfirmacion(email: string, redirectTo: string): Promise<{ ok: true } | { ok: false; detalle: string }> {
+export async function enviarCorreoConfirmacion(
+  email: string,
+  redirectTo: string,
+): Promise<{ ok: true } | { ok: false; detalle: string; estado?: number; codigo?: string }> {
   const supabase = createAnonServerClient();
   const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectTo } });
   if (error) {
-    return { ok: false, detalle: [error.status, error.code, error.message].filter(Boolean).join(" ") };
+    return {
+      ok: false,
+      detalle: [error.status, error.code, error.message].filter(Boolean).join(" "),
+      estado: error.status,
+      codigo: error.code,
+    };
   }
   return { ok: true };
 }

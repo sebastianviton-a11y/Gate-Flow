@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, MailCheck } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
 import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
+import { reenviarCorreoConfirmacion } from "@/app/login/actions";
+import { ESPERA_REENVIO_MS, crearControlReenvio, ofreceReenvioConfirmacion, type ResultadoReenvio } from "@/lib/registro/reenvio";
 
 export function LoginForm() {
   const router = useRouter();
@@ -15,6 +17,13 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Correo cuyo login respondió "pendiente de confirmación": solo entonces
+  // se ofrece reenviar el correo (nunca para credenciales incorrectas).
+  const [correoPendiente, setCorreoPendiente] = useState<string | null>(null);
+  const [reenviando, setReenviando] = useState(false);
+  const [resultadoReenvio, setResultadoReenvio] = useState<ResultadoReenvio | null>(null);
+  const [reenvioEnPausa, setReenvioEnPausa] = useState(false);
+  const controlReenvio = useRef(crearControlReenvio(reenviarCorreoConfirmacion));
 
   const passwordCreated = searchParams.get("password_created") === "1";
 
@@ -22,6 +31,8 @@ export function LoginForm() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setCorreoPendiente(null);
+    setResultadoReenvio(null);
 
     const supabase = createBrowserSupabaseClient();
     const emailNormalizado = email.trim().toLowerCase();
@@ -40,7 +51,9 @@ export function LoginForm() {
         "status:",
         signInError.status,
       );
-      setError(mensajeErrorLogin((signInError as { code?: string }).code));
+      const codigo = (signInError as { code?: string }).code;
+      setError(mensajeErrorLogin(codigo));
+      if (ofreceReenvioConfirmacion(codigo)) setCorreoPendiente(emailNormalizado);
       setLoading(false);
       return;
     }
@@ -69,6 +82,21 @@ export function LoginForm() {
 
     router.replace(next);
     router.refresh();
+  }
+
+  async function reenviarConfirmacion() {
+    // Un segundo clic mientras hay una solicitud en curso, o durante la
+    // pausa posterior a un envío, no llega al servidor.
+    if (!correoPendiente || !controlReenvio.current.puedeIntentar()) return;
+    setReenviando(true);
+    const r = await controlReenvio.current.intentar(correoPendiente);
+    setReenviando(false);
+    if (!r) return;
+    setResultadoReenvio(r);
+    if (r.estado !== "error") {
+      setReenvioEnPausa(true);
+      window.setTimeout(() => setReenvioEnPausa(false), ESPERA_REENVIO_MS);
+    }
   }
 
   return (
@@ -128,6 +156,34 @@ export function LoginForm() {
             <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
+          )}
+
+          {correoPendiente && (
+            <div className="space-y-2" data-testid="reenvio-confirmacion">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={reenviarConfirmacion}
+                disabled={reenviando || reenvioEnPausa}
+                aria-busy={reenviando}
+                className="h-auto min-h-10 w-full whitespace-normal border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              >
+                {reenviando ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <MailCheck className="h-4 w-4 shrink-0" />}
+                {reenviando ? "Enviando..." : "Reenviar correo de confirmación"}
+              </Button>
+              {resultadoReenvio && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  data-estado={resultadoReenvio.estado}
+                  className={`rounded-md px-3 py-2 text-sm ${
+                    resultadoReenvio.estado === "enviado" ? "bg-success/10 text-success" : "bg-white/5 text-white/80"
+                  }`}
+                >
+                  {resultadoReenvio.mensaje}
+                </p>
+              )}
+            </div>
           )}
 
           <Button type="submit" disabled={loading} className="w-full">

@@ -20,7 +20,16 @@ Argentina que no paga nada:
    - residencial AR, zona de Buenos Aires;
    - suscripción `trialing` de 30 días, sin proveedor de pago;
    - correo sin confirmar.
-3. Login antes de confirmar → mensaje para personas.
+3. Login antes de confirmar → mensaje para personas y botón «Reenviar
+   correo de confirmación» (dentro de la pantalla también en móvil):
+   - enseguida del registro, Supabase limita (60 s por usuario) →
+     «Espera un momento antes de volver a intentarlo.», sin correo extra;
+   - pasado ese minuto, doble clic → una sola solicitud y un solo correo
+     nuevo, con otro enlace a `<Admin>/confirmar-cuenta`;
+   - el reenvío no crea usuarios, residenciales, suscripciones,
+     membresías ni empresas;
+   - el enlace anterior ya no sirve (la cuenta sigue sin confirmar).
+   El recorrido sigue con el enlace nuevo.
 4. Correo de confirmación (buzón local) → `/confirmar-cuenta` →
    `/onboarding`, sin tokens en la URL. El enlace pasa por el Auth de este
    entorno y vuelve a `<Admin>/confirmar-cuenta` (sin otros dominios).

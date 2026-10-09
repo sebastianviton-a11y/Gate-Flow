@@ -75,6 +75,11 @@ export function normalizarTexto(valor: string): string {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/** Correo ya normalizado con forma válida (mismo criterio que /registro). */
+export function correoValido(emailNormalizado: string): boolean {
+  return emailNormalizado.length <= 254 && EMAIL_RE.test(emailNormalizado);
+}
+
 /** Nombre IANA que el motor de Intl reconoce (p. ej. "America/Cancun"). */
 export function timezoneValida(tz: string): boolean {
   if (!/^[A-Za-z0-9_+/-]{1,64}$/.test(tz)) return false;

@@ -598,7 +598,70 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   await page.waitForFunction(() => /Tu correo todavía|Correo o contraseña|No pudimos iniciar/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => null);
   t = await texto(page);
   ok(e("32"), t.includes("Tu correo todavía no está confirmado") && !t.includes("[DEBUG]") && !/email_not_confirmed|status: 400/.test(t), `[${p}] login antes de confirmar: mensaje para personas`, t.slice(0, 200));
+
+  // Reenvío del correo de confirmación desde el login (sin volver a registrarse).
+  const mOriginal = await smtp.esperar(admin.email, { ms: 20_000 });
+  const enlaceOriginal = mOriginal ? enlaces(mOriginal).find((l) => l.includes("/verify") && l.includes("type=signup")) : null;
+  const conteos = () =>
+    sql(`select concat_ws('|', (select count(*) from auth.users), (select count(*) from public.tenants), (select count(*) from public.suscripciones), (select count(*) from public.user_tenants), (select count(*) from public.empresas))`);
+  const conteosAntes = conteos();
+  const botonReenvio = page.getByRole("button", { name: "Reenviar correo de confirmación" });
+  const caja = await botonReenvio.boundingBox().catch(() => null);
+  const anchoPantalla = page.viewportSize()?.width ?? 0;
+  ok(e("32"), Boolean(caja) && caja.x >= 0 && caja.x + caja.width <= anchoPantalla + 1 && caja.height >= 36,
+    `[${p}] login sin confirmar: botón «Reenviar correo de confirmación» visible y dentro de la pantalla (${anchoPantalla}px)`, JSON.stringify(caja));
+  await captura(page, `${p}-01b-login-reenvio`);
+  // Recién registrado: Supabase permite un correo por usuario cada 60 s → «Espera un momento…».
+  const recien = sql(`select (now() - confirmation_sent_at < interval '50 seconds')::text from auth.users where email = '${admin.email}'`) === "true";
+  await botonReenvio.click();
+  await page.waitForSelector('[data-testid="reenvio-confirmacion"] [role="status"]', { timeout: 15_000 }).catch(() => null);
+  t = await texto(page);
+  if (recien) {
+    ok(e("32"), t.includes("Espera un momento antes de volver a intentarlo.") && (await botonReenvio.isDisabled()),
+      `[${p}] reenvío enseguida del registro: límite de Supabase → «Espera un momento…», botón en pausa`, t.slice(0, 300));
+  } else {
+    res("32", "SKIP", `[${p}] reenvío enseguida del registro: pasaron más de 50 s desde el registro`);
+  }
+  ok(e("32"), smtp.mensajes.filter((m) => m.para.includes(admin.email.toLowerCase())).length === 1, `[${p}] sin correo extra mientras rige el límite`);
+  await page.waitForTimeout(61_000);
+  // Pasado el límite: nuevo intento de login → doble clic → una sola solicitud y un solo correo.
+  await page.goto(`${URL_ADMIN}/login`, { waitUntil: "networkidle" });
+  await page.locator("#email").fill(admin.email);
+  await page.locator("#password").fill(admin.password);
+  await page.locator('button[type="submit"]').click();
+  await botonReenvio.waitFor({ timeout: 15_000 }).catch(() => null);
+  const acciones = [];
+  const contarAccion = (r) => r.method() === "POST" && r.headers()["next-action"] && acciones.push(r.url());
+  page.on("request", contarAccion);
+  const antesReenvio = Date.now();
+  await botonReenvio.dblclick();
+  await page.waitForSelector('[data-testid="reenvio-confirmacion"] [role="status"]', { timeout: 15_000 }).catch(() => null);
+  t = await texto(page);
+  ok(e("32"), t.includes("Te enviamos un nuevo correo de confirmación.") && (await botonReenvio.isDisabled()),
+    `[${p}] reenvío: «Te enviamos un nuevo correo de confirmación.» y botón en pausa`, t.slice(0, 300));
+  await captura(page, `${p}-01c-login-reenviado`);
+  const mNuevo = await smtp.esperar(admin.email, { ms: 20_000, despuesDe: antesReenvio });
+  await page.waitForTimeout(3_000);
+  page.off("request", contarAccion);
+  const nuevos = smtp.mensajes.filter((m) => m.para.includes(admin.email.toLowerCase()) && m.recibido.getTime() >= antesReenvio).length;
+  ok(e("32"), acciones.length === 1 && nuevos === 1, `[${p}] doble clic → una sola solicitud al servidor y un solo correo`, `solicitudes ${acciones.length}, correos ${nuevos}`);
+  const enlaceNuevo = mNuevo ? enlaces(mNuevo).find((l) => l.includes("/verify") && l.includes("type=signup")) : null;
+  ok(e("32"), Boolean(enlaceNuevo) && enlaceNuevo !== enlaceOriginal && destinoEnlace(enlaceNuevo) === `${URL_ADMIN}/confirmar-cuenta` && enlacesLocales(mNuevo),
+    `[${p}] el correo nuevo trae otro enlace, que vuelve a ${URL_ADMIN}/confirmar-cuenta`, `${enlaceNuevo} → ${destinoEnlace(enlaceNuevo ?? "")}`);
+  ok(e("32"), conteos() === conteosAntes, `[${p}] el reenvío no crea usuarios, residenciales, suscripciones, membresías ni empresas`, `${conteosAntes} → ${conteos()}`);
   await ctx.close();
+  if (enlaceOriginal) {
+    // El enlace anterior queda invalidado por Supabase al generar el nuevo.
+    ctx = await nuevo();
+    page = await ctx.newPage();
+    await page.goto(enlaceOriginal, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => /Este enlace ya no es válido|GateFlow está|Comenzar/.test(document.body.innerText), null, { timeout: 20_000 }).catch(() => null);
+    t = await texto(page);
+    ok(e("32"), t.includes("Este enlace ya no es válido") && t.includes("puedes pedir un nuevo correo de confirmación") &&
+      sql(`select (email_confirmed_at is null)::text from auth.users where email = '${admin.email}'`) === "true",
+      `[${p}] el enlace anterior ya no sirve (la cuenta sigue sin confirmar) y la pantalla indica cómo pedir otro`, t.slice(0, 200));
+    await ctx.close();
+  }
 
   // 21 · correo de confirmación → /confirmar-cuenta → onboarding
   const mConfirmacion = await smtp.esperar(admin.email, { ms: 20_000 });
