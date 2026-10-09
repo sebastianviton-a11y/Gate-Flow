@@ -15,7 +15,7 @@ export function UnidadesClient({ tenantId, unidades, pais }: { tenantId: string;
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <ImportarUnidades tenantId={tenantId} onImportado={() => router.refresh()} />
+        <ImportarUnidades tenantId={tenantId} onImportado={() => router.refresh()} pais={pais} />
         <AgregarUnidadManual tenantId={tenantId} onAgregada={() => router.refresh()} pais={pais} />
       </div>
 

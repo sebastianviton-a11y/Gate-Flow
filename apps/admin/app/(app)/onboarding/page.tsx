@@ -36,6 +36,7 @@ export default async function OnboardingPage() {
       logoUrlInicial={(tenantRow?.configuracion as { logoUrl?: string } | null)?.logoUrl ?? null}
       ubicacionesIniciales={ubicaciones}
       enlaceResidentes={enlaceResidentes}
+      pais={session.tenant.pais ?? null}
     />
   );
 }

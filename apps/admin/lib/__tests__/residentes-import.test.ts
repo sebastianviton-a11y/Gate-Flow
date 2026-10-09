@@ -7,6 +7,9 @@
  * ya rompió un build anterior en esta sesión.
  */
 import { validarCSVUnidades, parseCSV } from "../csv";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { contenidoPlantillaCSV, filasPlantilla } from "../generar-plantilla";
 import { COLUMNAS_ANTERIORES, RESIDENT_IMPORT_COLUMNS } from "../residentes-import-columns";
 
 let pasadas = 0;
@@ -104,6 +107,27 @@ seccion("Archivo vacío no truena, reporta columnas faltantes", () => {
   const { encabezadoValido, columnasFaltantes } = validarCSVUnidades("");
   assert(!encabezadoValido, "un archivo vacío debe marcarse como inválido, no lanzar excepción");
   assert(columnasFaltantes.length === 3, "debe reportar las 3 columnas requeridas como faltantes");
+});
+
+seccion("Plantillas descargables: Dirección y vuelta completa por el importador", () => {
+  for (const pais of ["MX", "AR", null]) {
+    const csv = contenidoPlantillaCSV(pais);
+    assert(csv.split("\n")[0] === "Dirección,Nombre del residente,Teléfono", `${pais ?? "sin país"}: encabezados de la plantilla CSV`);
+    const { encabezadoValido, filas } = validarCSVUnidades(csv);
+    assert(encabezadoValido && filas.length === 1 && filas[0]!.errores.length === 0 && filas[0]!.datos.identificador === "MZA 2 LTE 6",
+      `${pais ?? "sin país"}: la plantilla descargada se importa sin cambios (Dirección → identificador)`);
+  }
+  assert(filasPlantilla("AR").ejemplo[2] === "11 2345-6789" && filasPlantilla("MX").ejemplo[2] === "9981234567", "ejemplo de teléfono según el país del residencial");
+  assert(!/Identificador|Tipo/.test(filasPlantilla("MX").encabezado.join(",")), "la plantilla ya no muestra Identificador ni Tipo");
+  // La plantilla estática de /public (nadie la enlaza, pero es pública) dice lo mismo.
+  const estatica = readFileSync(join(__dirname, "..", "..", "public", "plantilla-unidades.csv"), "utf8").replace(/^\uFEFF/, "");
+  const r = validarCSVUnidades(estatica);
+  assert(estatica.startsWith("Dirección,Nombre del residente,Teléfono\n") && r.encabezadoValido && r.filas.every((f) => f.errores.length === 0),
+    "plantilla estática /plantilla-unidades.csv con Dirección e importable");
+  // Archivos guardados con plantillas anteriores: se siguen importando igual.
+  const anterior = validarCSVUnidades("tipo,identificador,residente_nombre,residente_telefono\ncasa,Casa 1,Juan Pérez,9981234567");
+  assert(anterior.encabezadoValido && anterior.filas[0]?.datos.identificador === "Casa 1" && anterior.filas[0]?.datos.tipo === "casa",
+    "plantilla anterior con claves técnicas: se importa y conserva el Tipo");
 });
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

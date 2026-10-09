@@ -123,6 +123,7 @@ export function ResidentesClient({
             archivoExterno={archivoParaImportar}
             onArchivoConsumido={() => setArchivoParaImportar(null)}
             onSolicitarArchivo={() => inputFileRef.current?.click()}
+            pais={pais}
           />
           <button onClick={() => setMostrarImportar(false)} className="mt-3 text-sm text-muted-foreground underline">
             Cerrar

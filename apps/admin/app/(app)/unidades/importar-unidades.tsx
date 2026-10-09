@@ -7,6 +7,7 @@ import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { importarUnidadesMasivo, type FilaImportarUnidad, type ResultadoImportacion } from "@gateflow/paquetes";
 import { validarCSVUnidades, type FilaValidada } from "@/lib/csv";
 import { cargarXLSXDesdeCDN, descargarPlantillaCSV, descargarPlantillaXLSX } from "@/lib/generar-plantilla";
+import { RESIDENT_IMPORT_COLUMNS } from "@/lib/residentes-import-columns";
 
 type Paso = "inicio" | "revisando" | "importando" | "resumen";
 
@@ -19,6 +20,8 @@ interface ImportarUnidadesProps {
   archivoExterno?: File | null;
   onArchivoConsumido?: () => void;
   onSolicitarArchivo?: () => void;
+  /** País del residencial: solo cambia el ejemplo de teléfono de la plantilla. */
+  pais?: string | null;
 }
 
 /** Botones de plantilla — se muestran en TODOS los pasos (inicio,
@@ -26,7 +29,7 @@ interface ImportarUnidadesProps {
  * primero. Es la corrección directa del punto 1: antes vivían dentro
  * del bloque `if (paso === "inicio")`, así que desaparecían en cuanto
  * el usuario avanzaba o encontraba un error. */
-function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
+function BotonesPlantilla({ compacto = false, pais = null }: { compacto?: boolean; pais?: string | null }) {
   const [descargandoXlsx, setDescargandoXlsx] = useState(false);
   const [errorXlsx, setErrorXlsx] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
     setErrorXlsx(null);
     setDescargandoXlsx(true);
     try {
-      await descargarPlantillaXLSX();
+      await descargarPlantillaXLSX(pais);
     } catch {
       setErrorXlsx("No se pudo generar el Excel. Descarga el CSV mientras tanto.");
     } finally {
@@ -48,7 +51,7 @@ function BotonesPlantilla({ compacto = false }: { compacto?: boolean }) {
         {descargandoXlsx ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
         Descargar plantilla (Excel)
       </Button>
-      <Button variant="outline" size="sm" onClick={descargarPlantillaCSV} type="button">
+      <Button variant="outline" size="sm" onClick={() => descargarPlantillaCSV(pais)} type="button">
         <FileText className="h-4 w-4" />
         Descargar plantilla (CSV)
       </Button>
@@ -63,6 +66,7 @@ export function ImportarUnidades({
   archivoExterno,
   onArchivoConsumido,
   onSolicitarArchivo,
+  pais = null,
 }: ImportarUnidadesProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [paso, setPaso] = useState<Paso>("inicio");
@@ -170,7 +174,11 @@ export function ImportarUnidades({
         <p className="text-sm text-muted-foreground">
           Descarga la plantilla, complétala y súbela — acepta CSV, XLSX o XLS.
         </p>
-        <BotonesPlantilla />
+        <p className="text-xs text-muted-foreground" data-testid="plantilla-columnas">
+          Columnas: {RESIDENT_IMPORT_COLUMNS.map((c) => c.label).join(", ")}. Si tienes un archivo hecho con una plantilla anterior, también
+          sirve.
+        </p>
+        <BotonesPlantilla pais={pais} />
       </div>
 
       {paso === "inicio" && (

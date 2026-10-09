@@ -24,6 +24,8 @@ interface Props {
   logoUrlInicial: string | null;
   ubicacionesIniciales: UbicacionAdmin[];
   enlaceResidentes: Enlace | null;
+  /** País del residencial: ejemplo de teléfono de la plantilla. */
+  pais?: string | null;
 }
 
 export function OnboardingWizard(props: Props) {
@@ -45,6 +47,7 @@ export function OnboardingWizard(props: Props) {
         <PasoImportarResidentes
           tenantId={props.tenantId}
           enlace={props.enlaceResidentes}
+          pais={props.pais ?? null}
           onImportado={() => setResidentesImportados(true)}
           onContinuar={() => setPaso(4)}
         />
@@ -207,11 +210,13 @@ function PasoInformacion({
 function PasoImportarResidentes({
   tenantId,
   enlace,
+  pais,
   onImportado,
   onContinuar,
 }: {
   tenantId: string;
   enlace: Enlace | null;
+  pais: string | null;
   onImportado: () => void;
   onContinuar: () => void;
 }) {
@@ -230,6 +235,7 @@ function PasoImportarResidentes({
       </p>
       <ImportarUnidades
         tenantId={tenantId}
+        pais={pais}
         onImportado={() => {
           setImportoAlgo(true);
           onImportado();

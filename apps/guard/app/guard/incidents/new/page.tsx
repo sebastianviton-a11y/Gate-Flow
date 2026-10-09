@@ -106,7 +106,7 @@ export default function NewIncidentPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               autoFocus
-              placeholder="Unidad, nombre o código GateFlow…"
+              placeholder="Dirección, nombre o código GateFlow…"
               value={query}
               onChange={(e) => handleBuscar(e.target.value)}
               className="h-14 pl-11 text-lg"

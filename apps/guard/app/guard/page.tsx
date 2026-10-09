@@ -33,7 +33,7 @@ export default function GuardHomePage() {
         <ActionTile
           href="/guard/packages/search"
           label="Buscar paquete"
-          description="Por unidad, nombre o código"
+          description="Por dirección, nombre o código"
           icon={Search}
         />
         <ActionTile
