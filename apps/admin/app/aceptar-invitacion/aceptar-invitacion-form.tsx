@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
+import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
 import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
@@ -24,17 +24,11 @@ export function AceptarInvitacionForm() {
 
   useEffect(() => {
     async function verificarSesion() {
-      console.log("STEP 1: aceptar-invitacion montado. URL completa:", window.location.href);
-      console.log("STEP 1b: hash presente:", window.location.hash ? "SÍ" : "NO", "| search presente:", window.location.search ? "SÍ" : "NO");
-
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
-      console.log("STEP 2: ?code= en la URL:", code ? `presente (${code.slice(0, 8)}...)` : "ausente");
 
       if (code) {
-        const { data: dataExchange, error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
-        console.log("STEP 2b: exchangeCodeForSession data:", JSON.stringify({ hasSession: !!dataExchange?.session, userId: dataExchange?.user?.id }));
-        console.log("STEP 2c: exchangeCodeForSession error:", errorCambio ? `${errorCambio.message} | status: ${errorCambio.status}` : "ninguno");
+        const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
         if (errorCambio) {
           console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
           setEstado("invalida");
@@ -44,30 +38,19 @@ export function AceptarInvitacionForm() {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
-        console.log("STEP 2d: token en el fragmento ->", JSON.stringify({ hayAccessToken: !!accessToken, hayRefreshToken: !!refreshToken }));
 
         if (accessToken && refreshToken) {
-          const { data: dataSetSession, error: errorSetSession } = await supabase.auth.setSession({
+          const { error: errorSetSession } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          console.log(
-            "STEP 2e: setSession() forzado ->",
-            JSON.stringify({ userId: dataSetSession?.user?.id, email: dataSetSession?.user?.email, error: errorSetSession?.message }),
-          );
+          if (errorSetSession) console.error("[GateFlow] aceptar-invitacion: setSession falló:", errorSetSession.message, errorSetSession.status);
         }
       }
 
       const { data, error: errorSesion } = await supabase.auth.getSession();
-      console.log(
-        "STEP 3: getSession() ->",
-        JSON.stringify({
-          haySesion: !!data.session,
-          userId: data.session?.user?.id,
-          email: data.session?.user?.email,
-          expiresAt: data.session?.expires_at,
-        }),
-      );
+      // Sin tokens en la URL ni en la consola una vez leídos.
+      window.history.replaceState(null, "", window.location.pathname);
       if (errorSesion) {
         console.error("[GateFlow] getSession falló:", errorSesion.message, errorSesion.status);
       }
@@ -98,23 +81,11 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: sesionAntes } = await supabase.auth.getSession();
-    console.log(
-      "STEP 4: sesión justo antes de establecerPasswordInvitado ->",
-      JSON.stringify({ haySesion: !!sesionAntes.session, userId: sesionAntes.session?.user?.id, email: sesionAntes.session?.user?.email }),
-    );
-
-    const resultado = await establecerPasswordInvitado(password);
-    console.log("STEP 5: resultado de establecerPasswordInvitado ->", JSON.stringify(resultado));
-
-    if (!resultado.ok) {
-      setError(resultado.mensaje);
-      setEstado("lista");
-      return;
-    }
-
+    // Perfil y destino ANTES de la contraseña: Supabase Auth cierra todas
+    // las sesiones del usuario al cambiarla (admin.updateUserById), así
+    // que después ya no hay sesión para leer membresías ni guardar el
+    // nombre y la aceptación de términos.
     const { data: userData } = await supabase.auth.getUser();
-    console.log("STEP 6: getUser() después del éxito ->", JSON.stringify({ userId: userData.user?.id, email: userData.user?.email }));
     // Un guardia invitado inicia sesión en la app Guard, no en Admin.
     // Con membresías previas se evalúan TODAS: si alguna es de Admin, va
     // al login de Admin y después a /seleccionar-residencial.
@@ -135,14 +106,19 @@ export function AceptarInvitacionForm() {
         .from("users")
         .update({ nombre_completo: nombreCompleto.trim(), terminos_aceptados_en: new Date().toISOString() })
         .eq("id", userData.user.id);
-      console.log("STEP 6b: update perfil (nombre + términos) error:", errorPerfil ? errorPerfil.message : "ninguno");
+      if (errorPerfil) console.error("[GateFlow] aceptar-invitacion: no se guardó el perfil:", errorPerfil.message);
+    }
+
+    const resultado = await establecerPasswordInvitado(password);
+
+    if (!resultado.ok) {
+      setError(resultado.mensaje);
+      setEstado("lista");
+      return;
     }
 
     await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
-    const { data: sesionDespues } = await supabase.auth.getSession();
-    console.log("STEP 7: signOut() ejecutado. Sesión residual:", sesionDespues.session ? "TODAVÍA HAY SESIÓN (inesperado)" : "ninguna, correcto");
-    console.log("STEP 7b: redirigiendo a", destino.enGuard ? "la app Guard" : destino.url);
     if (destino.enGuard) {
       window.location.assign(destino.url);
       return;
@@ -155,7 +131,6 @@ export function AceptarInvitacionForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-950">
         <Loader2 className="h-6 w-6 animate-spin text-white/60" />
-        <DebugConsole />
       </div>
     );
   }
@@ -168,7 +143,6 @@ export function AceptarInvitacionForm() {
           <p className="font-display text-lg font-semibold">Este enlace ya no es válido</p>
           <p className="text-sm text-white/60">Puede haber expirado o ya haberse usado. Solicita una nueva invitación.</p>
         </div>
-        <DebugConsole />
       </div>
     );
   }
@@ -223,7 +197,6 @@ export function AceptarInvitacionForm() {
           </Button>
         </div>
       </div>
-      <DebugConsole />
     </div>
   );
 }

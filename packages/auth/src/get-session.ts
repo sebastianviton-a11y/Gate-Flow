@@ -62,7 +62,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   // tenant_id); la que manda la elige seleccionarMembresia con gf_tenant.
   const { data: filas, error } = await supabase
     .from("user_tenants")
-    .select("tenant_id, rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo, configuracion, empresa_id)")
+    .select("tenant_id, rol_id, roles(clave), tenants(id, nombre, tipo, plan, activo, configuracion, empresa_id, pais)")
     .eq("user_id", user.id)
     .eq("activo", true);
 
@@ -97,6 +97,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     activo: boolean;
     configuracion: { logoUrl?: string } | null;
     empresa_id: string;
+    pais: string | null;
   } | null;
   const role = (membership.roles as unknown as { clave: RoleKey } | null)?.clave;
 
@@ -119,6 +120,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     activo: tenantRow.activo,
     logoUrl: tenantRow.configuracion?.logoUrl ?? null,
     empresaId: tenantRow.empresa_id,
+    pais: tenantRow.pais,
   };
 
   // "Entrar como soporte": solo aplica si el rol REAL es super_admin —
@@ -131,7 +133,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     if (tenantSoporteId && tenantSoporteId !== tenant.id) {
       const { data: tenantSoporte, error: errorSoporte } = await supabase
         .from("tenants")
-        .select("id, nombre, tipo, plan, activo, configuracion, empresa_id")
+        .select("id, nombre, tipo, plan, activo, configuracion, empresa_id, pais")
         .eq("id", tenantSoporteId)
         .maybeSingle();
 
@@ -152,6 +154,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
           activo: tenantSoporte.activo,
           logoUrl: (tenantSoporte.configuracion as { logoUrl?: string } | null)?.logoUrl ?? null,
           empresaId: tenantSoporte.empresa_id,
+          pais: (tenantSoporte as { pais?: string | null }).pais ?? null,
         };
         return {
           user: baseUser,

@@ -128,8 +128,12 @@ export function validarRegistro(campos: CamposCrudos): ResultadoValidacion {
     errores.nombreResidencial = "Escribe el nombre del residencial (3 a 80 caracteres).";
   }
 
+  // Sin valor por defecto: el país define cómo se cobra la suscripción y
+  // el formato de los teléfonos, así que se elige explícitamente.
   const pais = campos.pais.trim();
-  if (!esPais(pais)) {
+  if (!pais) {
+    errores.pais = "Elige el país del residencial.";
+  } else if (!esPais(pais)) {
     errores.pais = "Por ahora solo México y Argentina.";
   }
 

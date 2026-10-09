@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
-import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
+import { createEmailLinkClient } from "@gateflow/supabase/client";
 import { Button, Input, Label, GateFlowLogo } from "@gateflow/ui";
 
 /**
@@ -25,9 +25,12 @@ export function RecuperarPasswordForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createBrowserSupabaseClient();
+    // Flujo implícito: el enlace funciona aunque se abra en otro dispositivo.
+    const supabase = createEmailLinkClient();
     const { error: errorEnvio } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/restablecer-password`,
+      // El enlace vuelve al mismo sitio donde se pidió (el entorno que se
+      // está usando); Supabase lo acepta solo si está en sus Redirect URLs.
+      redirectTo: `${window.location.origin}/restablecer-password`,
     });
 
     setLoading(false);

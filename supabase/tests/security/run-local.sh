@@ -7,6 +7,9 @@
 #
 # Uso:
 #   PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/security/run-local.sh
+#   GF_BASE_PRODUCCION=1 …  → parte de la forma de producción (ver supabase/tests/produccion).
+#   Los rollbacks del repo no restauran la forma de producción: ahí se
+#   esperan diferencias de catálogo en rollback_O/T/C/A.
 #
 # Recorrido:
 #   0  esquema actual (sin la fase A)   → informativo: muestra los riesgos
@@ -135,14 +138,26 @@ echo "Base: $DB   Salida: $OUT"
 
 dropdb --if-exists "$DB" && createdb "$DB"
 sql_file "$DIR/harness/supabase_stub.sql"
-for m in "$SUPA"/migrations/*.sql; do
-  [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" ]] && continue
-  # Estas suites modelan producción (grants amplios de Supabase, RLS
-  # como única barrera). Los grants de mínimo privilegio tienen su
-  # propia suite: supabase/tests/grants/run-local.sh.
-  [[ "$(basename "$m")" == "$MIG_G" ]] && continue
-  sql_file "$m"
-done
+if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
+  # Ensayo de producción (supabase/tests/produccion): la base parte de la
+  # forma real de producción (migraciones hasta 20260729000000 + el drift
+  # leído de su catálogo) y la reconciliación, en vez de la del repo.
+  for m in "$SUPA"/migrations/*.sql; do
+    [[ "$(basename "$m")" > "20260729000000_zzz" ]] && continue
+    sql_file "$m"
+  done
+  sql_file "$SUPA/tests/produccion/parche_forma_produccion.sql"
+  sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
+else
+  for m in "$SUPA"/migrations/*.sql; do
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" ]] && continue
+    # Estas suites modelan producción (grants amplios de Supabase, RLS
+    # como única barrera). Los grants de mínimo privilegio tienen su
+    # propia suite: supabase/tests/grants/run-local.sh.
+    [[ "$(basename "$m")" == "$MIG_G" ]] && continue
+    sql_file "$m"
+  done
+fi
 sql_file "$SUPA/seed.sql"
 sql_file "$DIR/00_fixtures.sql"
 sql_file "$DIR/01_helpers.sql"

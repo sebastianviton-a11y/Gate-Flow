@@ -67,6 +67,7 @@ export type ResultadoAlta =
 
 export const MENSAJES_ALTA = {
   bloqueado: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
+  desafio: "No pudimos comprobar que no eres un robot. Vuelve a intentarlo.",
   expirado: "El formulario expiró. Recarga la página e inténtalo de nuevo.",
   generico: "No pudimos crear tu cuenta. Inténtalo de nuevo en unos minutos.",
   correo: "No pudimos enviar el correo de confirmación. Inténtalo de nuevo en unos minutos.",

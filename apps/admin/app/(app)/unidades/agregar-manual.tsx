@@ -12,8 +12,23 @@ import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
  * (identificador duplicado, tipo válido) que ya usa la carga por
  * plantilla, así que las dos vías nunca pueden divergir en sus reglas.
  */
-export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string; onAgregada: () => void }) {
-  const [abierto, setAbierto] = useState(false);
+export function AgregarUnidadManual({
+  tenantId,
+  onAgregada,
+  pais = null,
+  abiertoInicial = false,
+  onCerrar,
+}: {
+  tenantId: string;
+  onAgregada: () => void;
+  /** País del residencial: solo cambia el ejemplo del teléfono. */
+  pais?: string | null;
+  /** Desde Residentes ("Nuevo residente") el formulario abre directo. */
+  abiertoInicial?: boolean;
+  /** Si se pasa, "Cerrar" lo maneja quien abrió el formulario. */
+  onCerrar?: () => void;
+}) {
+  const [abierto, setAbierto] = useState(abiertoInicial);
   const [tipo, setTipo] = useState<"casa" | "departamento">("casa");
   const [identificador, setIdentificador] = useState("");
   const [contactoNombre, setContactoNombre] = useState("");
@@ -74,7 +89,7 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
     <div className="space-y-4 rounded-lg border border-border p-5">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">Agregar unidad y residente</p>
-        <button onClick={() => setAbierto(false)} className="text-xs text-muted-foreground hover:text-foreground">
+        <button onClick={() => (onCerrar ? onCerrar() : setAbierto(false))} className="text-xs text-muted-foreground hover:text-foreground">
           Cerrar
         </button>
       </div>
@@ -121,7 +136,7 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
           <Input
             id="telefono-manual"
             type="tel"
-            placeholder="9981234567"
+            placeholder={pais === "AR" ? "11 2345-6789" : "998 123 4567"}
             value={contactoTelefono}
             onChange={(e) => setContactoTelefono(e.target.value)}
             className="mt-1.5"

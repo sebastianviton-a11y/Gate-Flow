@@ -24,7 +24,7 @@ export default async function ResidentesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Residentes" description="Personas de contacto de cada unidad — mismos datos que Unidades, organizados para encontrar a alguien rápido." />
-      <ResidentesClient tenantId={session.tenant.id} unidades={unidades} />
+      <ResidentesClient tenantId={session.tenant.id} unidades={unidades} pais={session.tenant.pais ?? null} />
     </div>
   );
 }

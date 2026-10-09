@@ -8,7 +8,7 @@ import { ImportarUnidades } from "./importar-unidades";
 import { AgregarUnidadManual } from "./agregar-manual";
 import { EditarUnidad } from "./editar-unidad";
 
-export function UnidadesClient({ tenantId, unidades }: { tenantId: string; unidades: UnidadListItem[] }) {
+export function UnidadesClient({ tenantId, unidades, pais = null }: { tenantId: string; unidades: UnidadListItem[]; pais?: string | null }) {
   const router = useRouter();
   const [editando, setEditando] = useState<UnidadListItem | null>(null);
 
@@ -16,7 +16,7 @@ export function UnidadesClient({ tenantId, unidades }: { tenantId: string; unida
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <ImportarUnidades tenantId={tenantId} onImportado={() => router.refresh()} />
-        <AgregarUnidadManual tenantId={tenantId} onAgregada={() => router.refresh()} />
+        <AgregarUnidadManual tenantId={tenantId} onAgregada={() => router.refresh()} pais={pais} />
       </div>
 
       {editando && (

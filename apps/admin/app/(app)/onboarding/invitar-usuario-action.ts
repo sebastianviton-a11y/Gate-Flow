@@ -3,6 +3,7 @@
 import { getSessionContext } from "@gateflow/auth";
 import { ROLES_INVITABLES, puedeInvitar } from "@gateflow/paquetes";
 import { createServiceRoleClient } from "@gateflow/supabase";
+import { urlPublicaAdmin } from "@/lib/entorno";
 import type { RoleKey } from "@gateflow/types";
 import { MENSAJE_SERVICIO_INACTIVO, residencialPuedeOperar } from "@/lib/operacion";
 
@@ -49,8 +50,15 @@ export async function invitarUsuarioResidencial(input: InvitarUsuarioResidencial
     return { ok: false, mensaje: e instanceof Error ? e.message : "Falta configurar SUPABASE_SERVICE_ROLE_KEY." };
   }
 
+  // El enlace del correo vuelve a ESTE Admin; sin su URL pública no se envía.
+  const urlAdmin = urlPublicaAdmin();
+  if (!urlAdmin) {
+    console.error("[GateFlow] invitación: falta NEXT_PUBLIC_ADMIN_APP_URL; no se envió.");
+    return { ok: false, mensaje: "No se pudo enviar la invitación: falta configurar la dirección del panel. Escribe a soporte@gateflow.mx." };
+  }
+
   const { data: dataInvite, error } = await servicioClient.auth.admin.inviteUserByEmail(input.correo.trim(), {
-    redirectTo: `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/aceptar-invitacion`,
+    redirectTo: `${urlAdmin}/aceptar-invitacion`,
   });
 
   if (error) {

@@ -3,6 +3,7 @@
 import { getSessionContext } from "@gateflow/auth";
 import { puedeInvitar } from "@gateflow/paquetes";
 import { createServerSupabaseClient, createServiceRoleClient } from "@gateflow/supabase";
+import { urlPublicaAdmin } from "@/lib/entorno";
 
 export interface InvitarAdministradorInput {
   empresaId: string;
@@ -83,81 +84,24 @@ export async function invitarAdministrador(input: InvitarAdministradorInput): Pr
     return { ok: false, mensaje: `No se pudo crear la suscripción del residencial: ${errorSuscripcion.message}` };
   }
 
-  // ── DIAGNÓSTICO 1: entorno en tiempo de ejecución ─────────────
-  const urlBase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-  const redirectTo = `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/aceptar-invitacion`;
-  console.error("=== DIAGNOSTICO ENTORNO ===");
-  console.error("SUPABASE_URL presente:", Boolean(urlBase), "| valor:", urlBase);
-  console.error("SERVICE_ROLE_KEY presente:", Boolean(serviceKey));
-  console.error("NEXT_PUBLIC_ADMIN_APP_URL:", process.env.NEXT_PUBLIC_ADMIN_APP_URL);
-  console.error("redirectTo calculado:", redirectTo);
+  // El enlace del correo vuelve a ESTE Admin; sin su URL pública no se envía.
+  const urlAdmin = urlPublicaAdmin();
+  if (!urlAdmin) {
+    console.error("[GateFlow] superadmin: falta NEXT_PUBLIC_ADMIN_APP_URL; invitación no enviada.");
+    await supabase.from("tenants").delete().eq("id", tenant.id);
+    return { ok: false, mensaje: "No se pudo enviar la invitación: falta configurar NEXT_PUBLIC_ADMIN_APP_URL." };
+  }
 
   const { data: dataInvite, error: errorInvite } = await servicioClient.auth.admin.inviteUserByEmail(input.correoAdministrador.trim(), {
-    redirectTo,
+    redirectTo: `${urlAdmin}/aceptar-invitacion`,
   });
 
   if (errorInvite) {
-    // ── DIAGNÓSTICO 2: el error tal como lo entrega supabase-js ──
-    console.error("=== ERROR COMPLETO DE inviteUserByEmail ===");
-    console.error(errorInvite);
-    console.error("message:", errorInvite.message);
-    console.error("stack:", (errorInvite as Error).stack);
-    console.error("cause:", (errorInvite as Error).cause);
-    console.error("typeof:", typeof errorInvite);
-    console.error("propiedades:", Object.getOwnPropertyNames(errorInvite));
-    const e = errorInvite as unknown as Record<string, unknown>;
-    console.error("status:", e.status);
-    console.error("statusCode:", e.statusCode);
-    console.error("code:", e.code);
-    console.error("error:", e.error);
-    console.error("details:", e.details);
-    console.error("body:", e.body);
-    console.error("response:", e.response);
-    console.error("dataInvite:", JSON.stringify(dataInvite));
-    console.error("=== FIN ERROR COMPLETO ===");
-
-    // ── DIAGNÓSTICO 3: repetir la MISMA llamada HTTP directa al ──
-    // endpoint, sin pasar por supabase-js, para capturar el cuerpo
-    // crudo de la respuesta que la librería no expone. Solo lectura
-    // de diagnóstico — usa un correo inexistente a propósito NO:
-    // usa el mismo correo; la primera llamada ya falló, así que no
-    // duplica invitaciones (GoTrue falla igual las dos veces).
-    let cuerpoCrudo = "(no capturado)";
-    let statusCrudo = 0;
-    try {
-      const respuestaDirecta = await fetch(`${urlBase}/auth/v1/invite`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({ email: input.correoAdministrador.trim() }),
-      });
-      statusCrudo = respuestaDirecta.status;
-      cuerpoCrudo = await respuestaDirecta.text();
-      console.error("=== RESPUESTA HTTP DIRECTA /auth/v1/invite ===");
-      console.error("HTTP status:", statusCrudo);
-      console.error("Response body crudo:", cuerpoCrudo);
-      console.error("Headers:", JSON.stringify(Object.fromEntries(respuestaDirecta.headers.entries())));
-      console.error("=== FIN RESPUESTA DIRECTA ===");
-    } catch (fetchError) {
-      console.error("La llamada directa también falló a nivel de red:", fetchError);
-      cuerpoCrudo = `fetch falló: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
-    }
-
-    const detalle = [
-      `message=${String(errorInvite.message)}`,
-      `name=${String((errorInvite as Error).name)}`,
-      `status=${String(e.status)}`,
-      `code=${String(e.code)}`,
-      `httpDirecto=${statusCrudo}`,
-      `bodyCrudo=${cuerpoCrudo.slice(0, 300)}`,
-    ].join(" | ");
-
+    // Solo estado y código: nunca el correo ni la respuesta completa.
+    const e = errorInvite as { status?: number; code?: string };
+    console.error("[GateFlow] superadmin: invitación rechazada por Auth", JSON.stringify({ status: e.status ?? null, code: e.code ?? null }));
     await supabase.from("tenants").delete().eq("id", tenant.id);
-    return { ok: false, mensaje: `No se pudo enviar la invitación: ${detalle}` };
+    return { ok: false, mensaje: `No se pudo enviar la invitación: ${errorInvite.message}` };
   }
 
   const { error: errorMembresia } = await servicioClient.rpc("otorgar_membresia", {

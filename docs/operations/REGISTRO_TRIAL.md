@@ -66,8 +66,18 @@ cambia esa función. Nunca se activa el signup público.
 - Límites: 3/h por correo, 5/h por IP, 20/24 h por IP (advisory locks
   por correo e IP; el intento siempre se registra).
 - Honeypot `sitio_web`; token de tiempo firmado: mínimo 4 s, máximo 1 h.
-- Turnstile: `lib/registro/antibot.ts`. Sin `TURNSTILE_SECRET_KEY` se
-  omite y queda en el log. **Obligatorio antes de producción.**
+- Turnstile (`lib/registro/antibot.ts`, widget `app/registro/turnstile-widget.tsx`):
+  el formulario no deja enviar sin token; el servidor lo verifica en
+  siteverify antes de tocar la base o Auth; cada token sirve una vez (el
+  widget se reinicia tras un rechazo). Por entorno (`lib/entorno.ts`,
+  según el host de `NEXT_PUBLIC_ADMIN_APP_URL`):
+  - **clientes** (gateflow.mx o cualquier host que no sea de pruebas,
+    también sin URL): las dos claves son obligatorias y **no** pueden ser
+    las claves de prueba de Cloudflare (`1x…`, `2x…`, `3x…`). Si faltan,
+    están incompletas o son de prueba, `/registro` queda deshabilitado
+    (formulario y servidor): nunca abierto sin desafío real.
+  - **pruebas** (localhost, staging, Deploy Previews): sin claves se omite
+    (aviso en el log); con claves, de prueba o reales, se exige.
 - Logs: solo eventos y códigos; nunca correo, IP ni contraseña.
 
 ## Variables de entorno (Admin)
@@ -77,7 +87,43 @@ cambia esa función. Nunca se activa el signup público.
 | `REGISTRO_HASH_PEPPER` | sí (≥ 16 caracteres, secreta) | hashes del rate limit y token de tiempo; sin ella `/registro` se deshabilita |
 | `SUPABASE_SERVICE_ROLE_KEY` | ya existe | createUser/deleteUser y las RPC service-only |
 | `NEXT_PUBLIC_ADMIN_APP_URL` | ya existe | `redirectTo` de la confirmación |
-| `TURNSTILE_SECRET_KEY` | no (todavía) | desafío anti-bot |
+| `TURNSTILE_SITE_KEY` | sí en clientes (pública) | clave del widget; la lee el servidor y se la pasa al formulario |
+| `TURNSTILE_SECRET_KEY` | sí en clientes (secreta) | verificación del token (siteverify) |
+
+**Netlify: contextos y previews.**
+- Los secretos (`REGISTRO_HASH_PEPPER`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `TURNSTILE_SECRET_KEY`) van **solo** en el contexto *Production* de cada
+  sitio (staging y producción), con alcance *Functions*. El repositorio es
+  público: **no** se cargan en *Deploy Previews* ni en *Branch deploys*.
+- Por eso, en una Deploy Preview `/registro` muestra «El registro no está
+  disponible por ahora». Es lo esperado: las previews son para revisar la
+  interfaz; el alta de punta a punta se prueba en staging.
+- Si `/registro` está cerrado, el motivo es un código, nunca un valor. En
+  localhost, staging y previews se ve en la misma página («Entorno de
+  pruebas · …»); en el entorno de clientes solo queda en el log de la
+  función (`[GateFlow] /registro cerrado: …`):
+  - `sin_REGISTRO_HASH_PEPPER` / `REGISTRO_HASH_PEPPER_corta`;
+  - `sin_NEXT_PUBLIC_ADMIN_APP_URL`;
+  - `turnstile_sin_claves`, `turnstile_claves_incompletas`,
+    `turnstile_claves_de_prueba_fuera_de_pruebas`.
+- `NEXT_PUBLIC_ADMIN_APP_URL`: primero el valor en ejecución y, si no está
+  (por ejemplo, alcance solo *Builds*), el del build. Sin valor en ninguno
+  de los dos: entorno de clientes y registro cerrado.
+
+**Enlaces de los correos, por entorno.** Cada enlace vuelve al sitio del
+mismo entorno; si falta la URL, no se manda el correo (un enlace relativo
+haría que Supabase use la *Site URL*, que puede ser de otro entorno).
+
+| Correo | Vuelve a | Sale de |
+|---|---|---|
+| Confirmación del alta | `<Admin>/confirmar-cuenta` | `NEXT_PUBLIC_ADMIN_APP_URL` (ejecución o build) |
+| Invitación (guardia, Super Admin) | `<Admin>/aceptar-invitacion` | ídem |
+| Recuperación en Admin | `<Admin>/restablecer-password` | el sitio donde se pidió (`window.location.origin`) |
+| Recuperación en Guard | `<Guard>/restablecer-password` | ídem |
+| «Probar gratis», «Ingresar» y legales de la landing | `<Admin>/registro`, `/login`, `/privacidad`, `/terminos` | `NEXT_PUBLIC_ADMIN_APP_URL` del sitio de la landing (build) |
+
+Supabase solo acepta esos destinos si están en *Redirect URLs* del
+proyecto de ese entorno.
 
 Auth (Supabase): signups OFF; Confirm email ON; Redirect URLs deben
 cubrir `<admin>/confirmar-cuenta`.

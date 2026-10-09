@@ -39,6 +39,9 @@ export interface Tenant {
   /** Toda tenant pertenece a una empresa desde la migración de
    * empresas — obligatorio a nivel de base de datos, no opcional. */
   empresaId: string;
+  /** País del residencial (MX/AR): define el código de país de los
+   * teléfonos (WhatsApp) y el proveedor de cobro. */
+  pais?: string | null;
 }
 
 /**

@@ -3,7 +3,8 @@
 import { headers } from "next/headers";
 import { createServiceRoleClient } from "@gateflow/supabase";
 import { ejecutarAlta, MENSAJES_ALTA, type DepsAlta, type ResultadoAlta } from "@/lib/registro/alta";
-import { verificarDesafio } from "@/lib/registro/antibot";
+import { configuracionAntibot, verificarDesafio } from "@/lib/registro/antibot";
+import { urlPublicaAdmin } from "@/lib/entorno";
 import { enviarCorreoConfirmacion } from "@/lib/registro/confirmacion";
 import { ipDesdeHeaders } from "@/lib/registro/hash";
 import { leerCampos } from "@/lib/registro/validacion";
@@ -23,17 +24,32 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
     return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
   }
 
+  const urlAdmin = urlPublicaAdmin();
+  if (!urlAdmin) {
+    console.error("[GateFlow] /registro: falta NEXT_PUBLIC_ADMIN_APP_URL; el registro queda deshabilitado.");
+    return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
+  }
+
+  // Turnstile: en el entorno de clientes es obligatorio y con claves
+  // reales; si no, el registro queda cerrado (lib/registro/antibot.ts).
+  const configAntibot = configuracionAntibot(process.env);
+  if (configAntibot.modo === "deshabilitado") {
+    console.error(`[GateFlow] /registro: Turnstile no configurado para este entorno (${configAntibot.motivo}); el registro queda deshabilitado.`);
+    return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
+  }
+
   const cabeceras = headers();
   const ip = ipDesdeHeaders((nombre) => cabeceras.get(nombre));
 
-  const desafio = formData.get("cf-turnstile-response");
-  const antibot = await verificarDesafio(typeof desafio === "string" ? desafio : null, {
-    secreto: process.env.TURNSTILE_SECRET_KEY,
-    ip,
-  });
-  if (!antibot.ok) {
-    console.warn("[GateFlow] /registro: desafío anti-bot rechazado:", antibot.motivo);
-    return { tipo: "error", mensaje: MENSAJES_ALTA.bloqueado };
+  if (configAntibot.modo === "omitido") {
+    console.warn("[GateFlow] /registro: Turnstile omitido (entorno de pruebas sin claves).");
+  } else {
+    const desafio = formData.get("cf-turnstile-response");
+    const antibot = await verificarDesafio(typeof desafio === "string" ? desafio : null, { secreto: configAntibot.secreto, ip });
+    if (!antibot.ok) {
+      console.warn("[GateFlow] /registro: desafío anti-bot rechazado:", antibot.motivo);
+      return { tipo: "error", mensaje: MENSAJES_ALTA.desafio };
+    }
   }
 
   let servicio: ReturnType<typeof createServiceRoleClient>;
@@ -44,7 +60,7 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
     return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_ADMIN_APP_URL ?? ""}/confirmar-cuenta`;
+  const redirectTo = `${urlAdmin}/confirmar-cuenta`;
 
   const deps: DepsAlta = {
     async intentoPermitido(emailHash, ipHash) {

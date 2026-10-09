@@ -1,4 +1,6 @@
 import { GateFlowLogo } from "@gateflow/ui";
+import { esEntornoDePruebas, urlPublicaAdmin } from "@/lib/entorno";
+import { configuracionAntibot, motivoRegistroCerrado } from "@/lib/registro/antibot";
 import { emitirTokenTiempo } from "@/lib/registro/hash";
 import { RegistroForm } from "./registro-form";
 
@@ -12,18 +14,31 @@ export const dynamic = "force-dynamic";
  */
 export default function RegistroPage() {
   const pepper = process.env.REGISTRO_HASH_PEPPER;
-  if (!pepper || pepper.length < 16) {
-    // Sin el secreto no hay antiabuso: el formulario no se muestra.
+  // Turnstile obligatorio con claves reales en el entorno de clientes.
+  const antibot = configuracionAntibot(process.env);
+  const urlAdmin = urlPublicaAdmin();
+  const motivo = motivoRegistroCerrado(pepper, antibot, urlAdmin);
+  if (!pepper || motivo) {
+    // Sin el secreto o sin desafío anti-bot válido no hay antiabuso: el
+    // formulario no se muestra. El log dice cuál falta (sin valores).
+    console.error(`[GateFlow] /registro cerrado: ${motivo}`);
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-950 px-4">
         <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white">
           <GateFlowLogo size={48} onDark />
           <p className="font-display text-lg font-semibold">El registro no está disponible por ahora</p>
           <p className="text-sm text-white/60">Inténtalo más tarde o escribe a soporte@gateflow.mx.</p>
+          {/* Solo en localhost, staging y previews: el código de lo que falta
+              (nunca un valor) para que el equipo lo vea sin abrir los logs. */}
+          {esEntornoDePruebas(urlAdmin) && (
+            <p className="mt-2 rounded bg-white/10 px-2 py-1 font-mono text-xs text-white/70" data-testid="registro-cerrado-motivo">
+              Entorno de pruebas · {motivo}
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
-  return <RegistroForm tokenTiempo={emitirTokenTiempo(pepper)} />;
+  return <RegistroForm tokenTiempo={emitirTokenTiempo(pepper)} turnstileSiteKey={antibot.modo === "turnstile" ? antibot.siteKey : null} />;
 }

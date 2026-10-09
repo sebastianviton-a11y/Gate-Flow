@@ -2,7 +2,8 @@
  * Hashes, token de tiempo, IP y desafío anti-bot de /registro.
  *   npx tsx apps/admin/lib/__tests__/registro-antiabuso.test.ts
  */
-import { verificarDesafio } from "../registro/antibot";
+import { configuracionAntibot, esClaveDePruebaTurnstile, motivoRegistroCerrado, verificarDesafio } from "../registro/antibot";
+import { esEntornoDePruebas, urlPublicaAdmin } from "../entorno";
 import { emitirTokenTiempo, hashEmail, hashIp, ipDesdeHeaders, TIEMPO_MAXIMO_MS, TIEMPO_MINIMO_MS, verificarTokenTiempo } from "../registro/hash";
 
 let pasadas = 0;
@@ -84,6 +85,118 @@ async function main() {
     }) as unknown as typeof fetch;
     const caido = await verificarDesafio("token", { secreto: "clave", fetchFn: fetchCae });
     assert(!caido.ok && caido.motivo === "verificador_no_disponible", "verificador caído → falla cerrado");
+  });
+
+  seccion("Turnstile por entorno: claves de prueba solo en pruebas; clientes, siempre con desafío real", () => {
+    const SITE_PRUEBA = "1x00000000000000000000AA";
+    const SECRETO_PRUEBA = "1x0000000000000000000000000000000AA";
+    for (const k of [SITE_PRUEBA, "2x00000000000000000000AB", "1x00000000000000000000BB", "3x00000000000000000000FF", SECRETO_PRUEBA, "2x0000000000000000000000000000000AA", "3x0000000000000000000000000000000AA"]) {
+      assert(esClaveDePruebaTurnstile(k), `clave de prueba de Cloudflare reconocida: ${k.slice(0, 4)}…`);
+    }
+    assert(!esClaveDePruebaTurnstile("0x4AAAAAAAzZzZzZzZzZzZzZ") && !esClaveDePruebaTurnstile("0x4AAAAAAAzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZ"), "una clave real (0x4AAA…) no es de prueba");
+
+    assert(esEntornoDePruebas("http://localhost:3963") && esEntornoDePruebas("https://gateflow-admin-staging.netlify.app") && esEntornoDePruebas("https://deploy-preview-2--gateflow-admin-staging.netlify.app") && esEntornoDePruebas("https://staging--gateflow-admin-staging.netlify.app"), "localhost, staging y previews son entornos de pruebas");
+    assert(!esEntornoDePruebas("https://gateflow.mx") && !esEntornoDePruebas("https://app.gateflow.mx") && !esEntornoDePruebas(undefined) && !esEntornoDePruebas("") && !esEntornoDePruebas("no-es-url"), "gateflow.mx, sin URL o URL inválida → entorno de clientes");
+
+    const PROD = { NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow.mx" };
+    const STG = { NEXT_PUBLIC_ADMIN_APP_URL: "https://gateflow-admin-staging.netlify.app" };
+    const REAL = { TURNSTILE_SITE_KEY: "0x4AAAAAAAsitekeyReal", TURNSTILE_SECRET_KEY: "0x4AAAAAAAsecretoReal" };
+    const PRUEBA = { TURNSTILE_SITE_KEY: SITE_PRUEBA, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA };
+
+    const c1 = configuracionAntibot({ ...PROD });
+    assert(c1.modo === "deshabilitado" && c1.motivo === "sin_claves", "clientes sin claves → registro DESHABILITADO (nunca abierto sin desafío)");
+    const c2 = configuracionAntibot({ ...PROD, ...PRUEBA });
+    assert(c2.modo === "deshabilitado" && c2.motivo === "claves_de_prueba_fuera_de_pruebas", "clientes con claves de prueba → registro DESHABILITADO");
+    const c3 = configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA });
+    assert(c3.modo === "deshabilitado", "clientes con un secreto de prueba (aunque el sitekey sea real) → DESHABILITADO");
+    const c4 = configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY });
+    assert(c4.modo === "deshabilitado" && c4.motivo === "claves_incompletas", "una sola clave → DESHABILITADO");
+    const c5 = configuracionAntibot({ ...PROD, ...REAL });
+    assert(c5.modo === "turnstile" && c5.siteKey === REAL.TURNSTILE_SITE_KEY && !c5.dePrueba, "clientes con claves reales → Turnstile obligatorio");
+    const c6 = configuracionAntibot({ ...REAL });
+    assert(c6.modo === "turnstile", "sin NEXT_PUBLIC_ADMIN_APP_URL se trata como clientes: con claves reales, Turnstile");
+    const c7 = configuracionAntibot({ ...PRUEBA });
+    assert(c7.modo === "deshabilitado", "sin NEXT_PUBLIC_ADMIN_APP_URL y con claves de prueba → DESHABILITADO");
+
+    assert(configuracionAntibot({ ...STG }).modo === "omitido", "staging sin claves → omitido (como hoy), con aviso en el log");
+    const c8 = configuracionAntibot({ ...STG, ...PRUEBA });
+    assert(c8.modo === "turnstile" && c8.dePrueba, "staging con claves de prueba → Turnstile (de prueba) exigido");
+    assert(configuracionAntibot({ NEXT_PUBLIC_ADMIN_APP_URL: "http://localhost:3963", ...PRUEBA }).modo === "turnstile", "local con claves de prueba → Turnstile exigido");
+    assert(configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA }).modo === "deshabilitado", "staging con una sola clave → DESHABILITADO");
+
+    // Deploy Preview de Netlify con NEXT_PUBLIC_ADMIN_APP_URL solo en el
+    // alcance "Builds": en ejecución no está, pero quedó fijada en el build.
+    const PREVIEW = "https://deploy-preview-2--gateflow-admin-staging.netlify.app";
+    assert(configuracionAntibot({}, PREVIEW).modo === "omitido", "sin la URL en ejecución, usa la del build: una preview sin claves sigue siendo pruebas (antes cerraba /registro)");
+    assert(configuracionAntibot({ NEXT_PUBLIC_ADMIN_APP_URL: "" }, STG.NEXT_PUBLIC_ADMIN_APP_URL).modo === "omitido", "URL vacía en ejecución → la del build");
+    const c9 = configuracionAntibot({ ...PROD }, STG.NEXT_PUBLIC_ADMIN_APP_URL);
+    assert(c9.modo === "deshabilitado" && c9.motivo === "sin_claves", "la URL de ejecución manda: gateflow.mx en ejecución es clientes aunque el build diga staging");
+    const c10 = configuracionAntibot({ ...PRUEBA }, PREVIEW);
+    assert(c10.modo === "turnstile" && c10.dePrueba, "preview con claves de prueba y la URL solo del build → Turnstile de prueba exigido");
+    const c11 = configuracionAntibot({}, undefined);
+    assert(c11.modo === "deshabilitado" && c11.motivo === "sin_claves", "sin URL en ejecución ni en el build → clientes: cerrado (falla cerrado)");
+    const c12 = configuracionAntibot({ ...PRUEBA }, "https://gateflow.mx");
+    assert(c12.modo === "deshabilitado", "build de clientes sin URL en ejecución y con claves de prueba → DESHABILITADO");
+
+    // Motivo para el log: solo un código, nunca valores.
+    const omitido = configuracionAntibot({ ...STG });
+    assert(motivoRegistroCerrado(undefined, omitido, "https://gateflow-admin-staging.netlify.app") === "sin_REGISTRO_HASH_PEPPER" && motivoRegistroCerrado("corta", omitido, "https://gateflow-admin-staging.netlify.app") === "REGISTRO_HASH_PEPPER_corta",
+      "motivo: falta el pepper o es corto");
+    assert(motivoRegistroCerrado("p".repeat(16), configuracionAntibot({ ...STG, TURNSTILE_SECRET_KEY: SECRETO_PRUEBA }), "https://gateflow-admin-staging.netlify.app") === "turnstile_claves_incompletas"
+      && motivoRegistroCerrado("p".repeat(16), c1, "https://gateflow.mx") === "turnstile_sin_claves" && motivoRegistroCerrado("p".repeat(16), omitido, "https://gateflow-admin-staging.netlify.app") === null,
+      "motivo: Turnstile incompleto o ausente en clientes; abierto → null");
+    const secretoLargo = "s".repeat(40);
+    assert(!String(motivoRegistroCerrado(secretoLargo, configuracionAntibot({ ...PROD, TURNSTILE_SITE_KEY: REAL.TURNSTILE_SITE_KEY }), "https://gateflow.mx")).includes(secretoLargo.slice(0, 8))
+      && !String(motivoRegistroCerrado(secretoLargo, c4, "https://gateflow.mx")).includes("0x4AAA"), "el motivo nunca incluye el pepper ni claves");
+    assert(motivoRegistroCerrado("p".repeat(16), omitido, null) === "sin_NEXT_PUBLIC_ADMIN_APP_URL",
+      "motivo: sin URL pública del panel el registro se cierra (el correo no podría volver a este Admin)");
+    assert(urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: " https://a.example.com/ " }, "https://b.example.com") === "https://a.example.com"
+      && urlPublicaAdmin({}, "https://gateflow-admin-staging.netlify.app/") === "https://gateflow-admin-staging.netlify.app"
+      && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "no-es-url" }, "https://b.example.com") === "https://b.example.com"
+      && urlPublicaAdmin({}, undefined) === null && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "/registro" }, "") === null
+      && urlPublicaAdmin({ NEXT_PUBLIC_ADMIN_APP_URL: "https://x.com/registro" }, undefined) === null,
+      "URL del panel: primero la de ejecución, si no la del build; sin una URL http(s) de host → null (nunca un enlace relativo)");
+  });
+
+  await seccion("Servidor y formulario conectados al desafío", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const raiz = join(__dirname, "../..");
+    const accion = readFileSync(join(raiz, "app/registro/actions.ts"), "utf8");
+    const pagina = readFileSync(join(raiz, "app/registro/page.tsx"), "utf8");
+    const formulario = readFileSync(join(raiz, "app/registro/registro-form.tsx"), "utf8");
+    assert(/configuracionAntibot\(process\.env\)/.test(accion) && /modo === "deshabilitado"[\s\S]*MENSAJES_ALTA\.noDisponible/.test(accion), "la acción del servidor rechaza si el entorno no tiene desafío válido");
+    assert(accion.indexOf("configuracionAntibot(process.env)") < accion.indexOf("createServiceRoleClient()"), "el desafío se decide antes de tocar la base o Auth");
+    assert(/verificarDesafio\([^)]*secreto: configAntibot\.secreto/.test(accion) && /MENSAJES_ALTA\.desafio/.test(accion), "con Turnstile, el token se verifica en el servidor con el secreto configurado");
+    assert(/configuracionAntibot\(process\.env\)/.test(pagina) && /const motivo = motivoRegistroCerrado\(pepper, antibot, urlAdmin\)/.test(pagina) && /if \(!pepper \|\| motivo\)/.test(pagina),
+      "/registro no muestra el formulario si falta el pepper o el entorno no tiene desafío válido");
+    assert(/console\.error\(`\[GateFlow\] \/registro cerrado: \$\{motivo\}`\)/.test(pagina) && !/console\.[a-z]+\([^)]*pepper\b/.test(pagina),
+      "/registro cerrado deja en el log el motivo (código), nunca el pepper");
+    assert(/turnstileSiteKey=\{antibot\.modo === "turnstile" \? antibot\.siteKey : null\}/.test(pagina), "solo la clave pública llega al navegador");
+    assert(!/TURNSTILE_SECRET_KEY/.test(formulario) && !/TURNSTILE_SECRET_KEY/.test(pagina.replace(/configuracionAntibot\(process\.env\)/, "")), "el secreto nunca llega al formulario");
+    assert(/\{esEntornoDePruebas\(urlAdmin\) && \(/.test(pagina) && /Entorno de pruebas · \{motivo\}/.test(pagina),
+      "/registro cerrado: el código del motivo se ve solo en entornos de pruebas (nunca en el de clientes)");
+    assert(/redirectTo = `\$\{urlAdmin\}\/confirmar-cuenta`/.test(accion) && accion.indexOf("if (!urlAdmin)") < accion.indexOf("createServiceRoleClient()"),
+      "alta: el enlace de confirmación vuelve a la URL pública de ESTE Admin; sin ella no se crea nada");
+    const invitarGuardia = readFileSync(join(raiz, "app/(app)/onboarding/invitar-usuario-action.ts"), "utf8");
+    const invitarAdmin = readFileSync(join(raiz, "app/superadmin/invitacion-actions.ts"), "utf8");
+    const recuperarAdmin = readFileSync(join(raiz, "app/recuperar-password/recuperar-password-form.tsx"), "utf8");
+    const recuperarGuard = readFileSync(join(raiz, "../guard/app/recuperar-password/recuperar-password-form.tsx"), "utf8");
+    assert([invitarGuardia, invitarAdmin].every((f) => /redirectTo: `\$\{urlAdmin\}\/aceptar-invitacion`/.test(f) && /if \(!urlAdmin\)/.test(f)),
+      "invitaciones (guardia y Super Admin): vuelven a ESTE Admin; sin su URL no se envían");
+    assert(![accion, invitarGuardia, invitarAdmin, recuperarAdmin, recuperarGuard].some((f) => /NEXT_PUBLIC_(ADMIN|GUARD)_APP_URL \?\? ""/.test(f)),
+      "ningún correo arma su enlace con una URL vacía (enlace relativo → Site URL de otro entorno)");
+    assert([recuperarAdmin, recuperarGuard].every((f) => /redirectTo: `\$\{window\.location\.origin\}\/restablecer-password`/.test(f)),
+      "recuperación (Admin y Guard): el enlace vuelve al sitio donde se pidió");
+    assert([recuperarAdmin, recuperarGuard].every((f) => /createEmailLinkClient\(\)/.test(f) && !/createBrowserSupabaseClient/.test(f)),
+      "recuperación (Admin y Guard): flujo implícito, el enlace sirve aunque se abra en otro dispositivo (PKCE solo servía en el mismo navegador)");
+    const restablecerAdmin = readFileSync(join(raiz, "app/restablecer-password/restablecer-password-form.tsx"), "utf8");
+    const restablecerGuard = readFileSync(join(raiz, "../guard/app/restablecer-password/restablecer-password-form.tsx"), "utf8");
+    assert([restablecerAdmin, restablecerGuard].every((f) => /if \(code && !yaCanjeado\)/.test(f)),
+      "restablecer (Admin y Guard): un código ya canjeado por el cliente no se vuelve a canjear (antes: «enlace no válido» con sesión válida)");
+    assert(!/DIAGN|Response body crudo|auth\/v1\/invite/.test(invitarAdmin) && !/console\.[a-z]+\([^)]*correoAdministrador/.test(invitarAdmin),
+      "invitación de Super Admin: sin diagnóstico (no repite la llamada ni registra el correo o la respuesta)");
+    assert(/name="cf-turnstile-response"/.test(formulario) && /disabled=\{enviando \|\| faltaDesafio\}/.test(formulario) && /desafio\.current\?\.reset\(\)/.test(formulario), "formulario: manda el token, no deja enviar sin él y pide uno nuevo tras un rechazo");
   });
 
   console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

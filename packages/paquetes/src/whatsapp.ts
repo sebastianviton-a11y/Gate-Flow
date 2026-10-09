@@ -2,20 +2,40 @@ import type { Paquete } from "@gateflow/types";
 
 /**
  * Normaliza un teléfono capturado en cualquier formato humano (espacios,
- * guiones, paréntesis, +52 opcional) al formato que exige wa.me: solo
- * dígitos, con código de país. Sin esto, wa.me abre un chat vacío o falla
- * silenciosamente si el número trae caracteres no numéricos.
+ * guiones, paréntesis, código de país opcional) al formato que exige
+ * wa.me: solo dígitos, con código de país. Sin esto, wa.me abre un chat
+ * vacío o con OTRA persona.
  *
- * Asume México (52) cuando el número no incluye ya un código de país —
- * es una asunción razonable para el mercado actual de GateFlow, no una
- * regla universal; si el producto se expande a otros países, esto debe
- * volverse configurable por tenant en vez de hardcodeado.
+ * El país es el del residencial (tenants.pais), nunca una suposición:
+ *   MX  10 dígitos → 52 + número; 52… de 12+ dígitos se respeta.
+ *   AR  móviles de WhatsApp: 54 9 + código de área + número (10 dígitos,
+ *       sin el 0 ni el 15). Acepta "11 2345-6789", "011 15 2345-6789",
+ *       "+54 11 2345 6789" y "+54 9 11 …". Un formato que no se puede
+ *       interpretar sin adivinar → null (sin enlace: mejor no avisar que
+ *       avisar a otro número).
  */
-export function normalizarTelefonoWhatsApp(telefono: string): string {
+export function normalizarTelefonoWhatsApp(telefono: string, pais: string | null = "MX"): string | null {
   const soloDigitos = telefono.replace(/\D/g, "");
+  if (!soloDigitos) return null;
+  if (pais === "AR") return normalizarArgentina(soloDigitos);
   if (soloDigitos.startsWith("52") && soloDigitos.length >= 12) return soloDigitos;
   if (soloDigitos.length === 10) return `52${soloDigitos}`;
   return soloDigitos;
+}
+
+function normalizarArgentina(digitos: string): string | null {
+  let n = digitos;
+  if (n.startsWith("549") && n.length === 13) return n;
+  if (n.startsWith("54") && n.length === 12) return `549${n.slice(2)}`;
+  if (n.startsWith("0")) n = n.slice(1);
+  if (n.length === 10) return `549${n}`;
+  // Código de área (2 a 4 dígitos) + "15" + número local: se quita el 15.
+  if (n.length === 12) {
+    for (const largoArea of [2, 3, 4]) {
+      if (n.slice(largoArea, largoArea + 2) === "15") return `549${n.slice(0, largoArea)}${n.slice(largoArea + 2)}`;
+    }
+  }
+  return null;
 }
 
 export interface EnlaceWhatsApp {
@@ -107,11 +127,13 @@ export function construirEnlaceWhatsApp(
   residencialNombre: string,
   destinatarioNombre: string,
   urlVerQr?: string,
+  /** País del residencial (tenants.pais): define el código de país del teléfono. */
+  pais: string | null = "MX",
 ): EnlaceWhatsApp | null {
   const telefonoCrudo = paquete.residenteTelefono ?? paquete.contactoTelefono;
   if (!telefonoCrudo) return null;
 
-  const telefono = normalizarTelefonoWhatsApp(telefonoCrudo);
+  const telefono = normalizarTelefonoWhatsApp(telefonoCrudo, pais);
   if (!telefono) return null;
 
   const mensaje = construirMensajeNotificacion(paquete, residencialNombre, destinatarioNombre, urlVerQr);
