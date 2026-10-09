@@ -9,8 +9,8 @@ Argentina que no paga nada:
    - honesta para Argentina: sin importes en USD, sin prometer que al
      terminar se puede contratar, sin borrado automático de datos;
    - preview sin indexar (meta robots, `robots.txt` y `X-Robots-Tag`);
-   - "Probar gratis" lleva a `/registro` del panel; Ingresar y Privacidad
-     apuntan al panel.
+   - "Probar gratis" lleva a `/registro` del panel; todos los enlaces al
+     panel (Probar gratis, Ingresar, legales) van al Admin de ESTE entorno.
 2. `/registro`: sin país preseleccionado; sin país no se crea nada.
    Turnstile (claves de prueba de Cloudflare): sin token el botón está
    deshabilitado; forzando el envío sin token el servidor rechaza antes
@@ -22,7 +22,8 @@ Argentina que no paga nada:
    - correo sin confirmar.
 3. Login antes de confirmar → mensaje para personas.
 4. Correo de confirmación (buzón local) → `/confirmar-cuenta` →
-   `/onboarding`, sin tokens en la URL.
+   `/onboarding`, sin tokens en la URL. El enlace pasa por el Auth de este
+   entorno y vuelve a `<Admin>/confirmar-cuenta` (sin otros dominios).
 5. Onboarding:
    - datos del residencial;
    - CSV de 2 unidades con teléfonos de Argentina;
@@ -35,13 +36,21 @@ Argentina que no paga nada:
    que en staging.
 6. `/suscripcion` durante la prueba: "no se cobra nada ni se pide tarjeta",
    sin planes ni botones de pago.
+   Carga manual de un residente (Residentes → Nuevo residente): el
+   formulario abre en un paso, con ejemplo de teléfono de Argentina.
 7. Guardia:
    - correo de invitación → `/aceptar-invitacion` (sin consola de
      diagnóstico ni tokens);
    - su nombre y la aceptación de términos quedan guardados;
-   - login de Guard → registra un paquete;
-   - el aviso por WhatsApp sale a `wa.me/549…`.
-8. Login del administrador con contraseña (si es incorrecta, mensaje claro).
+   - el enlace de invitación vuelve a `<Admin>/aceptar-invitacion`;
+   - login de Guard → registra un paquete para el residente cargado a mano;
+   - el aviso por WhatsApp sale a `wa.me/549…`;
+   - entrega el paquete con nombre de quien recibe y firma (queda
+     `entregado`, con la firma guardada).
+8. Recuperación de contraseña en Admin y en Guard: el enlace vuelve a
+   `<sitio>/restablecer-password` de este entorno, abre "Crea tu nueva
+   contraseña" y con la contraseña nueva se vuelve a entrar.
+   Login del administrador con contraseña (si es incorrecta, mensaje claro).
 9. La prueba vence (con SQL local):
    - `/suscripcion` dice que la contratación en línea todavía no está
      disponible y que la información se conserva, sin "Activar plan",

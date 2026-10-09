@@ -4,9 +4,12 @@
 // datos sintéticos, en navegador desktop y móvil:
 //   landing V2 → "Probar gratis" → /registro (país Argentina) → correo de
 //   confirmación → /confirmar-cuenta → onboarding (residentes, guardia,
-//   bodega) → panel con 30 días de prueba → el guardia acepta la
-//   invitación y opera en Guard (WhatsApp con +54 9) → la prueba vence:
-//   bloqueo sin contratación falsa, información conservada.
+//   bodega) → panel con 30 días de prueba → carga manual de un residente →
+//   el guardia acepta la invitación, registra un paquete para ese residente
+//   (WhatsApp con +54 9) y lo entrega con firma → recuperación de contraseña
+//   en Admin y en Guard → la prueba vence: bloqueo sin contratación falsa,
+//   información conservada. Cada enlace de correo (confirmación, invitación,
+//   recuperación) vuelve al Admin o al Guard de ESTE entorno.
 // Stripe configurado como en staging (claves ficticias; la salida a
 // stripe.com está bloqueada y se registra): Argentina no puede contratar
 // ni desde la interfaz ni llamando a la server action del checkout.
@@ -454,6 +457,17 @@ async function entornoClientes(navegador, { run, correo, servicio, tenants }) {
 }
 
 // ── Un recorrido completo (un dispositivo) ──
+// Adónde vuelve un enlace de correo de Auth (redirect_to de /verify).
+const destinoEnlace = (enlace) => {
+  try {
+    return new URL(enlace).searchParams.get("redirect_to") ?? "";
+  } catch {
+    return "";
+  }
+};
+// Todos los enlaces del correo apuntan a esta máquina (nada de otro entorno).
+const enlacesLocales = (mensaje) => enlaces(mensaje).every((l) => l.startsWith("mailto:") || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(l));
+
 async function recorrido(navegador, perfil, { run, correo, servicio, desde, tenants }) {
   const p = perfil.id;
   const e = (n) => `${n}`;
@@ -503,6 +517,9 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     ok(e("31"), /noindex/.test(robotsMeta) && /Disallow: \//.test(robotsTxt) && /noindex/.test(cabecera), `[${p}] preview sin indexar (meta robots, robots.txt y X-Robots-Tag)`, `${robotsMeta} | ${robotsTxt.replace(/\s+/g, " ")} | ${cabecera}`);
     const cta = page.locator(`a[href^="${URL_ADMIN}/registro"]:visible`).first();
     ok(e("31"), (await cta.count()) === 1, `[${p}] CTA "Probar gratis" visible y hacia /registro`);
+    const hrefsPanel = await page.locator('a[href*="/registro"], a[href*="/login"], a[href*="/privacidad"], a[href*="/terminos"]').evaluateAll((as) => as.map((a) => a.href));
+    ok(e("31"), hrefsPanel.length >= 3 && hrefsPanel.every((h) => h.startsWith(`${URL_ADMIN}/`)),
+      `[${p}] todos los enlaces al panel (Probar gratis, Ingresar, legales: ${hrefsPanel.length}) van al Admin de este entorno`, hrefsPanel.filter((h) => !h.startsWith(URL_ADMIN)).join(","));
     await Promise.all([page.waitForURL(`${URL_ADMIN}/registro**`, { timeout: 30_000 }), cta.click()]);
     await page.waitForLoadState("networkidle");
   } else {
@@ -587,6 +604,8 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   const mConfirmacion = await smtp.esperar(admin.email, { ms: 20_000 });
   const enlaceConfirmar = mConfirmacion ? enlaces(mConfirmacion).find((l) => l.includes("/verify") && l.includes("type=signup")) : null;
   ok(e("32"), Boolean(enlaceConfirmar) && enlaceConfirmar.includes(encodeURIComponent(`${URL_ADMIN}/confirmar-cuenta`).replace(/%2F/g, "/")) || (enlaceConfirmar ?? "").includes(`${URL_ADMIN}/confirmar-cuenta`), `[${p}] correo de confirmación (buzón local) con enlace a /confirmar-cuenta`, enlaceConfirmar);
+  ok(e("32"), Boolean(enlaceConfirmar) && enlaceConfirmar.startsWith(`${URL_SUPABASE}/auth/v1/verify`) && destinoEnlace(enlaceConfirmar) === `${URL_ADMIN}/confirmar-cuenta` && enlacesLocales(mConfirmacion),
+    `[${p}] confirmación: Auth de este entorno y vuelta a ${URL_ADMIN}/confirmar-cuenta`, `${enlaceConfirmar} → ${destinoEnlace(enlaceConfirmar ?? "")}`);
   if (!enlaceConfirmar) return;
   ctx = await nuevo();
   page = await ctx.newPage();
@@ -643,12 +662,32 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   t = await texto(page);
   await captura(page, `${p}-02b-suscripcion-en-prueba`);
   ok(e("34"), t.includes("Estás en tu prueba gratuita") && t.includes("Durante la prueba no se cobra nada ni se pide tarjeta.") && !t.includes("Activar plan") && !t.includes("Precio"), `[${p}] /suscripcion en prueba: sin tarjeta, sin contratación ofrecida`, t.slice(0, 200));
+
+  // Carga manual de un residente (Residentes → Nuevo residente).
+  await page.goto(`${URL_ADMIN}/residentes`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Nuevo residente" }).click();
+  await page.locator("#identificador-manual").waitFor({ timeout: 10_000 }).catch(() => null);
+  const ejemploTelefono = await page.locator("#telefono-manual").getAttribute("placeholder").catch(() => null);
+  const cerrarManual = await page.getByRole("button", { name: "Cerrar" }).count();
+  await page.locator("#identificador-manual").fill("ZZ Casa 5");
+  await page.locator("#nombre-manual").fill("Residente Manual");
+  await page.locator("#telefono-manual").fill("11 3456-7890");
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
+  await page.waitForFunction(() => /agregada correctamente/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => null);
+  await captura(page, `${p}-02c-residente-manual`);
+  t = await texto(page);
+  ok(e("33"), ejemploTelefono === "11 2345-6789" && cerrarManual === 1
+    && sql(`select contacto_nombre || '|' || contacto_telefono from public.unidades where tenant_id = '${tenantId}' and identificador = 'ZZ Casa 5'`) === "Residente Manual|11 3456-7890"
+    && t.includes("Residente Manual"),
+    `[${p}] carga manual: el formulario abre en un paso (un solo "Cerrar"), con ejemplo de teléfono de Argentina, y el residente aparece en la lista`,
+    `ejemplo=${ejemploTelefono} cerrar=${cerrarManual} · ${t.slice(0, 200)}`);
   await ctx.close();
 
   // 22 · el guardia acepta la invitación y opera en Guard (móvil)
   const mInvitacion = await smtp.esperar(guardia.email, { ms: 20_000 });
   const enlaceInvitacion = mInvitacion ? enlaces(mInvitacion).find((l) => l.includes("type=invite")) : null;
-  ok(e("33"), Boolean(enlaceInvitacion), `[${p}] correo de invitación al guardia (buzón local)`);
+  ok(e("33"), Boolean(enlaceInvitacion) && enlaceInvitacion.startsWith(`${URL_SUPABASE}/auth/v1/verify`) && destinoEnlace(enlaceInvitacion) === `${URL_ADMIN}/aceptar-invitacion` && enlacesLocales(mInvitacion),
+    `[${p}] invitación al guardia: Auth de este entorno y vuelta a ${URL_ADMIN}/aceptar-invitacion`, `${enlaceInvitacion} → ${destinoEnlace(enlaceInvitacion ?? "")}`);
   if (enlaceInvitacion) {
     const ctxG = await navegador.newContext({ ...playwright.devices["Pixel 7"], locale: "es-AR", timezoneId: "America/Argentina/Buenos_Aires" });
     await ctxG.route("https://wa.me/**", (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<html>wa</html>" }));
@@ -673,10 +712,10 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     await pg.locator('input[type="password"]').fill(guardia.password);
     await Promise.all([pg.waitForURL(`${URL_GUARD}/guard**`, { timeout: 30_000 }).catch(() => null), pg.locator('button[type="submit"]').click()]);
     ok(e("33"), new URL(pg.url()).pathname === "/guard", `[${p}] guardia opera en Guard durante la prueba`, pg.url());
-    // Registrar un paquete para "ZZ Lote 1" y avisar por WhatsApp (+54 9).
+    // Registrar un paquete para el residente cargado a mano y avisar por WhatsApp (+54 9).
     await pg.goto(`${URL_GUARD}/guard/packages/register`, { waitUntil: "networkidle" });
-    await pg.getByPlaceholder("Buscar unidad, residente o teléfono…").fill("ZZ Lote 1");
-    await pg.getByRole("button", { name: /ZZ Lote 1/ }).first().click({ timeout: 20_000 });
+    await pg.getByPlaceholder("Buscar unidad, residente o teléfono…").fill("ZZ Casa 5");
+    await pg.getByRole("button", { name: /ZZ Casa 5/ }).first().click({ timeout: 20_000 });
     await pg.getByRole("button", { name: /Estante A/ }).click({ timeout: 20_000 });
     await captura(pg, `${p}-06a-guard-antes-de-confirmar`);
     await pg.getByRole("button", { name: /Confirmar recepción/ }).click();
@@ -684,10 +723,70 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     const [ventana] = await Promise.all([pg.waitForEvent("popup", { timeout: 20_000 }).catch(() => null), pg.getByRole("button", { name: /Guardar y enviar notificación/ }).click().catch(() => null)]);
     await captura(pg, `${p}-06b-guard-tras-notificar`);
     const urlWa = ventana?.url() ?? "";
-    ok(e("33"), urlWa.startsWith("https://wa.me/5491123456789?text="), `[${p}] aviso por WhatsApp al residente con +54 9 (no +52)`, urlWa.slice(0, 60));
+    ok(e("33"), urlWa.startsWith("https://wa.me/5491134567890?text=") && decodeURIComponent(urlWa).includes("Residente Manual"),
+      `[${p}] aviso por WhatsApp al residente cargado a mano, con +54 9 (no +52)`, urlWa.slice(0, 60));
     ok(e("33"), Number(sql(`select count(*) from public.paquetes where tenant_id = '${tenantId}'`)) === 1, `[${p}] paquete registrado en la prueba`);
+    // Entrega con nombre de quien recibe y firma.
+    const idPaquete = sql(`select id from public.paquetes where tenant_id = '${tenantId}' order by fecha_recepcion desc limit 1`);
+    await pg.goto(`${URL_GUARD}/guard/packages/deliver`, { waitUntil: "networkidle" });
+    await pg.getByPlaceholder("Unidad, nombre o código GateFlow…").fill("ZZ Casa 5");
+    await pg.getByRole("button", { name: /ZZ Casa 5/ }).first().click({ timeout: 20_000 });
+    await pg.getByPlaceholder("Nombre de quien recibe").fill("Residente Manual");
+    const lienzo = pg.locator("canvas").first();
+    await lienzo.scrollIntoViewIfNeeded();
+    const caja = await lienzo.boundingBox();
+    if (caja) {
+      await pg.mouse.move(caja.x + 20, caja.y + 30);
+      await pg.mouse.down();
+      await pg.mouse.move(caja.x + 120, caja.y + 90, { steps: 10 });
+      await pg.mouse.move(caja.x + 220, caja.y + 40, { steps: 10 });
+      await pg.mouse.up();
+    }
+    await pg.getByRole("button", { name: "Confirmar entrega" }).click({ timeout: 10_000 }).catch(() => null);
+    await pg.getByText(/— entregado/).waitFor({ timeout: 20_000 }).catch(() => null);
+    await captura(pg, `${p}-06c-guard-entregado`);
+    ok(e("33"), sql(`select p.estado_id || '|' || coalesce(p.entregado_a_nombre, '') || '|' || (p.fecha_entrega is not null)::text || '|' || (select count(*) from public.paquete_firmas f where f.paquete_id = p.id)
+        from public.paquetes p where p.id = '${idPaquete}'`) === "entregado|Residente Manual|true|1",
+      `[${p}] el guardia entrega el paquete con firma: queda entregado, con quién lo recibió y la firma`, (await texto(pg)).slice(0, 200));
     await ctxG.close();
   }
+
+  // Recuperación de contraseña: el enlace vuelve al sitio de este entorno.
+  async function recuperar(base, cuenta, etiqueta) {
+    const antes = Date.now();
+    const c = await nuevo();
+    const pr = await c.newPage();
+    await pr.goto(`${base}/recuperar-password`, { waitUntil: "networkidle" });
+    await pr.locator('input[type="email"]').fill(cuenta.email);
+    await pr.locator('button[type="submit"]').click();
+    const m = await smtp.esperar(cuenta.email, { ms: 20_000, despuesDe: antes });
+    const enlace = m ? enlaces(m).find((l) => l.includes("type=recovery")) : null;
+    ok(e("32"), Boolean(enlace) && enlace.startsWith(`${URL_SUPABASE}/auth/v1/verify`) && destinoEnlace(enlace) === `${base}/restablecer-password` && enlacesLocales(m),
+      `[${p}] recuperación (${etiqueta}): Auth de este entorno y vuelta a ${base}/restablecer-password`, `${enlace} → ${destinoEnlace(enlace ?? "")}`);
+    if (!enlace) return c.close();
+    const consolaRec = [];
+    pr.on("console", (m) => m.type() === "error" && consolaRec.push(m.text().slice(0, 200)));
+    await pr.goto(enlace, { waitUntil: "domcontentloaded" });
+    await pr.waitForURL(`${base}/restablecer-password**`, { timeout: 30_000 }).catch(() => null);
+    const formulario = await pr.locator("#rp-password").waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    await captura(pr, `${p}-09-recuperacion-${etiqueta.toLowerCase()}`);
+    ok(e("32"), formulario, `[${p}] recuperación (${etiqueta}): el enlace abre "Crea tu nueva contraseña"`,
+      `${pr.url().replace(/(code|token|access_token|refresh_token)=[^&#]+/g, "$1=…")} · ${(await texto(pr)).slice(0, 200)} · consola: ${consolaRec.join(" / ")}`);
+    if (!formulario) return c.close();
+    const nueva = `Zz-${crypto.randomBytes(6).toString("hex")}`;
+    await pr.locator("#rp-password").fill(nueva);
+    await pr.locator("#rp-password2").fill(nueva);
+    await Promise.all([pr.waitForURL(`${base}/login**`, { timeout: 30_000 }).catch(() => null), pr.getByRole("button", { name: "Guardar y continuar" }).click()]);
+    await pr.locator('input[type="email"]').fill(cuenta.email);
+    await pr.locator('input[type="password"]').fill(nueva);
+    await Promise.all([pr.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30_000 }).catch(() => null), pr.locator('button[type="submit"]').click()]);
+    const dentro = !new URL(pr.url()).pathname.startsWith("/login");
+    ok(e("32"), dentro, `[${p}] recuperación (${etiqueta}): con la contraseña nueva vuelve a entrar`, pr.url());
+    if (dentro) cuenta.password = nueva;
+    await c.close();
+  }
+  await recuperar(URL_ADMIN, admin, "Admin");
+  await recuperar(URL_GUARD, guardia, "Guard");
 
   // Login del administrador con contraseña (después de confirmar).
   ctx = await nuevo();
@@ -712,7 +811,7 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   await captura(page, `${p}-08-suscripcion-vencida`);
   ok(e("34"), new URL(page.url()).pathname === "/suscripcion" && t.includes("Tu prueba gratuita de 30 días terminó") && t.includes("La contratación en línea todavía no está disponible") && t.includes("Tu información se conserva"), `[${p}] prueba vencida → /suscripcion con aviso honesto`, `${page.url()} ${t.slice(0, 200)}`);
   ok(e("34"), (await page.locator('button:has-text("Activar plan")').count()) === 0 && !/Mercado Pago|Stripe|tarjeta/i.test(t), `[${p}] sin botones de pago ni medio alternativo`);
-  ok(e("34"), sql(`select count(*) from public.unidades where tenant_id = '${tenantId}'`) === "2" && sql(`select count(*) from public.paquetes where tenant_id = '${tenantId}'`) !== "0", `[${p}] la información del residencial se conserva`);
+  ok(e("34"), sql(`select count(*) from public.unidades where tenant_id = '${tenantId}'`) === "3" && sql(`select count(*) from public.paquetes where tenant_id = '${tenantId}'`) !== "0", `[${p}] la información del residencial se conserva`);
   // Servidor: la server action del checkout, invocada como la invoca un
   // formulario ("Next-Action"), rechaza Argentina aunque Stripe esté
   // configurado: ni billing_checkout ni petición a Stripe.
