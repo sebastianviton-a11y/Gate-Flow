@@ -27,6 +27,8 @@ const ESTADO_RESOLUCION_CLASE: Record<EstadoIncidencia, string> = {
 interface DetalleIncidenciaModalProps {
   incidenciaId: string;
   paqueteId: string;
+  /** tenants.timezone del residencial. */
+  zonaHoraria: string | null;
   onClose: () => void;
 }
 
@@ -36,7 +38,7 @@ interface DetalleIncidenciaModalProps {
  * es el botón explícito "Ir al paquete" del pie, nunca un clic sobre
  * texto dentro del modal.
  */
-export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: DetalleIncidenciaModalProps) {
+export function DetalleIncidenciaModal({ incidenciaId, paqueteId, zonaHoraria, onClose }: DetalleIncidenciaModalProps) {
   const supabase = createBrowserSupabaseClient();
   const [detalle, setDetalle] = useState<DetalleIncidencia | null | undefined>(undefined);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: Det
 
                 <dt className="text-muted-foreground">Fecha y hora de recepción</dt>
                 <dd className="text-right font-medium">
-                  {formatearFechaHora(detalle.paquete.fechaRecepcion)}
+                  {formatearFechaHora(detalle.paquete.fechaRecepcion, zonaHoraria)}
                 </dd>
 
                 <dt className="text-muted-foreground">Guardia que recibió</dt>
@@ -148,7 +150,7 @@ export function DetalleIncidenciaModal({ incidenciaId, paqueteId, onClose }: Det
 
                 <dt className="text-muted-foreground">Fecha de resolución</dt>
                 <dd className="text-right font-medium">
-                  {formatearFechaHora(detalle.incidencia.resueltaEn)}
+                  {formatearFechaHora(detalle.incidencia.resueltaEn, zonaHoraria)}
                 </dd>
 
                 <dt className="col-span-2 text-muted-foreground">Observaciones de resolución</dt>

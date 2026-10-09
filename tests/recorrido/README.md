@@ -32,8 +32,9 @@ Argentina que no paga nada:
 
    Termina en el panel con la prueba en curso. El dashboard carga completo:
    el gráfico de 30 días aparece vacío ("Todavía no hay datos para
-   mostrar.") porque `authenticated` no lee `mv_dashboard_diario`, igual
-   que en staging.
+   mostrar.") porque todavía no hay paquetes. El gráfico ya no lee
+   `mv_dashboard_diario` (día UTC): agrupa los paquetes del residencial
+   por su día local.
 6. `/suscripcion` durante la prueba: "no se cobra nada ni se pide tarjeta",
    sin planes ni botones de pago.
    Carga manual de un residente (Residentes → Nuevo residente): el

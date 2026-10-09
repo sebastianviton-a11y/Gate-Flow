@@ -651,7 +651,7 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
   await Promise.all([page.waitForURL(`${URL_ADMIN}/dashboard**`, { timeout: 30_000 }).catch(() => null), page.getByRole("button", { name: /Ir al Dashboard/ }).click()]);
   t = await texto(page);
   ok(e("32"), new URL(page.url()).pathname === "/dashboard" && /Prueba gratuita · 30 días restantes|30 días/.test(t), `[${p}] panel operativo con la prueba de 30 días en curso`, `${page.url()} ${t.slice(0, 160)}`);
-  // mv_dashboard_diario: sin SELECT para authenticated (como en staging) → gráfico vacío, dashboard usable.
+  // Admin nuevo, todavía sin paquetes → gráfico vacío (por día local del residencial, sin mv_dashboard_diario), dashboard usable.
   await page.waitForFunction(() => /Volumen de paquetes/.test(document.body.innerText), null, { timeout: 20_000 }).catch(() => null);
   t = await texto(page);
   await captura(page, `${p}-02-dashboard`);

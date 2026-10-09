@@ -10,11 +10,12 @@ import {
   Tooltip,
 } from "recharts";
 import type { VolumenDiario } from "@gateflow/paquetes";
-import { Card, CardContent, CardHeader, CardTitle, formatearFecha } from "@gateflow/ui";
+import { Card, CardContent, CardHeader, CardTitle, formatearClaveDia } from "@gateflow/ui";
 
 export function PackagesChart({ data }: { data: VolumenDiario[] }) {
   const puntos = data.map((d) => ({
-    fecha: formatearFecha(d.fecha, { day: "2-digit", month: "short" }),
+    // d.fecha ya es el día local del residencial ("YYYY-MM-DD").
+    fecha: formatearClaveDia(d.fecha, { day: "2-digit", month: "short" }),
     recibidos: d.recibidosTotal,
     entregados: d.entregados,
   }));
@@ -27,7 +28,7 @@ export function PackagesChart({ data }: { data: VolumenDiario[] }) {
       <CardContent className="h-72 pl-0">
         {puntos.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {/* Sin filas: vista de agregación sin refrescar o sin permiso (obtenerVolumen30Dias devuelve []). */}
+            {/* Sin filas: sin paquetes en el periodo o la consulta falló (obtenerVolumen30Dias devuelve []). */}
             Todavía no hay datos para mostrar.
           </div>
         ) : (

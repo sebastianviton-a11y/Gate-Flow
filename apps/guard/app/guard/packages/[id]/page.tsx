@@ -166,7 +166,7 @@ export default function GuardPackageDetailPage() {
             </>
           )}
           <dt className="text-muted-foreground">Recibido</dt>
-          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
+          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion, session.tenant.timezone)}</dd>
           {paquete.recibidoPorNombre && (
             <>
               <dt className="text-muted-foreground">Registrado por</dt>
@@ -176,7 +176,7 @@ export default function GuardPackageDetailPage() {
           {paquete.fechaEntrega && (
             <>
               <dt className="text-muted-foreground">Entregado</dt>
-              <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaEntrega)}</dd>
+              <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaEntrega, session.tenant.timezone)}</dd>
               {paquete.entregadoANombre && (
                 <>
                   <dt className="text-muted-foreground">Recibió</dt>
@@ -235,7 +235,7 @@ export default function GuardPackageDetailPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={firma.firmaData} alt={`Firma de ${firma.firmanteNombre}`} className="mx-auto h-24" />
               <p className="mt-1 text-center text-xs text-muted-foreground">
-                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn)}
+                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn, session.tenant.timezone)}
               </p>
             </div>
           </div>
@@ -260,13 +260,13 @@ export default function GuardPackageDetailPage() {
                     </p>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {inc.reportadaPorNombre ?? "Guardia"} · {formatearFechaHora(inc.createdAt)}
+                    {inc.reportadaPorNombre ?? "Guardia"} · {formatearFechaHora(inc.createdAt, session.tenant.timezone)}
                   </p>
 
                   {inc.resueltaEn && (
                     <div className="mt-2 rounded-lg bg-success/10 p-2 text-xs">
                       <p className="font-medium text-success">
-                        Resuelta {formatearFechaHora(inc.resueltaEn)}
+                        Resuelta {formatearFechaHora(inc.resueltaEn, session.tenant.timezone)}
                         {inc.resueltaPorNombre ? ` · ${inc.resueltaPorNombre}` : ""}
                       </p>
                       {inc.comentarioResolucion && <p className="mt-0.5 text-muted-foreground">{inc.comentarioResolucion}</p>}
@@ -317,7 +317,7 @@ export default function GuardPackageDetailPage() {
                 <div key={h.id}>
                   <p className="text-sm font-medium">{ESTADO_LABEL[h.estadoNuevoId] ?? h.estadoNuevoId}</p>
                   <p className="text-xs text-muted-foreground">
-                    {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
+                    {h.usuarioNombre} · {formatearFechaHora(h.creadoEn, session.tenant.timezone)}
                   </p>
                 </div>
               ))}

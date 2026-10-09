@@ -7,7 +7,7 @@ export {
   ErrorTiempoAgotado,
   formatearFecha,
   formatearFechaHora,
-  ZONA_HORARIA_GATEFLOW,
+  formatearClaveDia,
 } from "./utils";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export { Card, CardHeader, CardTitle, CardContent } from "./card";

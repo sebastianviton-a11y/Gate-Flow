@@ -42,6 +42,9 @@ export interface Tenant {
   /** País del residencial (MX/AR): define el código de país de los
    * teléfonos (WhatsApp) y el proveedor de cobro. */
   pais?: string | null;
+  /** Zona horaria IANA del residencial (tenants.timezone): en ella se
+   * muestran todas las fechas y se define qué es "hoy". */
+  timezone?: string | null;
 }
 
 /**
@@ -322,3 +325,12 @@ export interface Suscripcion {
   /** Hay cliente en el proveedor: habilita "Administrar suscripción". */
   tieneClienteProveedor: boolean;
 }
+
+export {
+  ZONA_HORARIA_RESPALDO,
+  esZonaHorariaValida,
+  resolverZonaHoraria,
+  claveDiaLocal,
+  sumarDias,
+  inicioDiaLocal,
+} from "./zona-horaria";

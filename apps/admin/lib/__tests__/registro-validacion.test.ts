@@ -108,9 +108,9 @@ seccion("25-26. Timezone", () => {
   assert(!timezoneValida("Marte/Olympus") && !timezoneValida("") && !timezoneValida("x".repeat(65)), "nombres inválidos");
   assert(!timezoneValida("America/Cancun; drop"), "caracteres fuera del alfabeto IANA → inválida");
   const r = validarRegistro(campos({ timezone: "Marte/Olympus" }));
-  assert(r.ok && r.datos.timezone === null, "timezone inválida → null (la RPC usa la del país)");
+  assert(r.ok && r.datos.timezone === "America/Mexico_City", "timezone inválida → la del país");
   const r2 = validarRegistro(campos({ timezone: "" }));
-  assert(r2.ok && r2.datos.timezone === null, "sin timezone → null");
+  assert(r2.ok && r2.datos.timezone === "America/Mexico_City", "sin timezone → la del país");
 });
 
 seccion("7-8. Campos manipulados desde el cliente se ignoran", () => {

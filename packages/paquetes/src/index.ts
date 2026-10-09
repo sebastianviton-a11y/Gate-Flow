@@ -13,6 +13,8 @@ export {
   obtenerPorUbicacion,
   obtenerCatalogos,
   obtenerVolumen30Dias,
+  agruparVolumenPorDia,
+  limitesDiaLocal,
   obtenerActividadReciente,
   listarUnidades,
   obtenerFirmaEntrega,

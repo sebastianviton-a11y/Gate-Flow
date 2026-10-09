@@ -109,9 +109,9 @@ export default async function PaquetesPage({
                 <td className="px-4 py-2.5">
                   <EstadoBadge estado={p.estado} />
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(p.fechaRecepcion)}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(p.fechaRecepcion, session.tenant.timezone)}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">
-                  {formatearFecha(p.fechaEntrega)}
+                  {formatearFecha(p.fechaEntrega, session.tenant.timezone)}
                 </td>
               </tr>
             ))}

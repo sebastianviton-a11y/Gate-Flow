@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes, FotografiaPaquete } from "@gateflow/types";
+import { claveDiaLocal, inicioDiaLocal, sumarDias } from "@gateflow/types";
 import { mapPaqueteRow, mapPaqueteResumenRow, mapHistorialRow, type PaqueteRow, type PaqueteResumenRow, type HistorialRow } from "./mappers";
 import { listarUbicacionesActivas } from "./ubicaciones";
 
@@ -433,21 +434,64 @@ export interface DashboardResumen {
   horasPromedioEntrega30d: number | null;
 }
 
-export async function obtenerResumenDashboard(supabase: SupabaseClient, tenantId: string): Promise<DashboardResumen> {
-  const { data, error } = await supabase
-    .from("v_dashboard_resumen")
-    .select("pendientes, recibidos_hoy, entregados_hoy, olvidados, horas_promedio_entrega_30d")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
+/** Límites [desde, hasta) del día local de `ahora` en la zona del residencial. */
+export function limitesDiaLocal(ahora: Date, zonaHoraria: string | null | undefined): { desde: string; hasta: string } {
+  const hoy = claveDiaLocal(ahora, zonaHoraria);
+  return {
+    desde: inicioDiaLocal(hoy, zonaHoraria).toISOString(),
+    hasta: inicioDiaLocal(sumarDias(hoy, 1), zonaHoraria).toISOString(),
+  };
+}
 
-  if (error) throw error;
+/**
+ * "Hoy" es el día local del residencial (`tenants.timezone`), no el día
+ * UTC: v_dashboard_resumen compara con CURRENT_DATE de la base (UTC), así
+ * que en Argentina un paquete de las 21:00 contaba para mañana. De la
+ * vista se toman solo los datos que no dependen del día (pendientes,
+ * olvidados, promedio de 30 días); recibidos y entregados de hoy se
+ * cuentan aquí con los mismos criterios que la vista (recibido: estado
+ * `recibido` y recepción hoy; entregado: estado `entregado` y entrega
+ * hoy) y los límites del día local. La base no cambia.
+ */
+export async function obtenerResumenDashboard(
+  supabase: SupabaseClient,
+  tenantId: string,
+  zonaHoraria: string | null | undefined,
+  ahora: Date = new Date(),
+): Promise<DashboardResumen> {
+  const { desde, hasta } = limitesDiaLocal(ahora, zonaHoraria);
+  const [vista, recibidos, entregados] = await Promise.all([
+    supabase
+      .from("v_dashboard_resumen")
+      .select("pendientes, olvidados, horas_promedio_entrega_30d")
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
+    supabase
+      .from("paquetes")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("estado_id", "recibido")
+      .gte("fecha_recepcion", desde)
+      .lt("fecha_recepcion", hasta),
+    supabase
+      .from("paquetes")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("estado_id", "entregado")
+      .gte("fecha_entrega", desde)
+      .lt("fecha_entrega", hasta),
+  ]);
+
+  if (vista.error) throw vista.error;
+  if (recibidos.error) throw recibidos.error;
+  if (entregados.error) throw entregados.error;
 
   return {
-    pendientes: data?.pendientes ?? 0,
-    recibidosHoy: data?.recibidos_hoy ?? 0,
-    entregadosHoy: data?.entregados_hoy ?? 0,
-    olvidados: data?.olvidados ?? 0,
-    horasPromedioEntrega30d: data?.horas_promedio_entrega_30d ?? null,
+    pendientes: vista.data?.pendientes ?? 0,
+    recibidosHoy: recibidos.count ?? 0,
+    entregadosHoy: entregados.count ?? 0,
+    olvidados: vista.data?.olvidados ?? 0,
+    horasPromedioEntrega30d: vista.data?.horas_promedio_entrega_30d ?? null,
   };
 }
 
@@ -569,24 +613,63 @@ export interface VolumenDiario {
   entregados: number;
 }
 
-/** Lee de la vista MATERIALIZADA (mv_dashboard_diario, migración
- * 20260713230300) — a diferencia de v_dashboard_resumen, esta sí
- * requiere refresh periódico (supabase/README.md). Si nunca se refrescó,
- * devuelve un array vacío en vez de fallar — el gráfico simplemente
- * queda vacío hasta el primer refresh, no rompe el dashboard. */
-export async function obtenerVolumen30Dias(supabase: SupabaseClient, tenantId: string): Promise<VolumenDiario[]> {
-  const desde = new Date();
-  desde.setDate(desde.getDate() - 30);
+export interface RecepcionParaVolumen {
+  fecha_recepcion: string;
+  estado_id: string;
+}
 
-  const { data, error } = await supabase
-    .from("mv_dashboard_diario")
-    .select("fecha, recibidos_total, entregados")
-    .eq("tenant_id", tenantId)
-    .gte("fecha", desde.toISOString().slice(0, 10))
-    .order("fecha", { ascending: true });
+/**
+ * Agrupa por el día local del residencial. Mismos criterios que la vista
+ * mv_dashboard_diario (recibidos = todos los recibidos ese día;
+ * entregados = los de ese día que hoy están entregados), pero con el día
+ * de `zonaHoraria`, no el de UTC. Solo aparecen días con paquetes.
+ */
+export function agruparVolumenPorDia(filas: RecepcionParaVolumen[], zonaHoraria: string | null | undefined): VolumenDiario[] {
+  const porDia = new Map<string, VolumenDiario>();
+  for (const f of filas) {
+    const fecha = claveDiaLocal(f.fecha_recepcion, zonaHoraria);
+    const dia = porDia.get(fecha) ?? { fecha, recibidosTotal: 0, entregados: 0 };
+    dia.recibidosTotal += 1;
+    if (f.estado_id === "entregado") dia.entregados += 1;
+    porDia.set(fecha, dia);
+  }
+  return [...porDia.values()].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+}
 
-  if (error) return []; // ver nota arriba — vista sin refrescar no debe romper el dashboard
-  return (data ?? []).map((d) => ({ fecha: d.fecha, recibidosTotal: d.recibidos_total, entregados: d.entregados }));
+const VOLUMEN_POR_PAGINA = 1000;
+const VOLUMEN_MAX_PAGINAS = 50;
+
+/**
+ * Últimos 30 días (más hoy) por día local del residencial. Antes leía la
+ * vista materializada mv_dashboard_diario, que agrupa por día UTC y no
+ * conoce la zona del residencial; ahora se agrupa aquí, sobre las
+ * recepciones del periodo (con RLS, en páginas). La vista no se toca.
+ * Si la consulta falla devuelve [] en vez de romper el dashboard: el
+ * gráfico queda vacío.
+ */
+export async function obtenerVolumen30Dias(
+  supabase: SupabaseClient,
+  tenantId: string,
+  zonaHoraria: string | null | undefined,
+  ahora: Date = new Date(),
+): Promise<VolumenDiario[]> {
+  const desde = inicioDiaLocal(sumarDias(claveDiaLocal(ahora, zonaHoraria), -30), zonaHoraria).toISOString();
+  const filas: RecepcionParaVolumen[] = [];
+  for (let pagina = 0; pagina < VOLUMEN_MAX_PAGINAS; pagina++) {
+    const inicio = pagina * VOLUMEN_POR_PAGINA;
+    const { data, error } = await supabase
+      .from("paquetes")
+      .select("fecha_recepcion, estado_id")
+      .eq("tenant_id", tenantId)
+      .gte("fecha_recepcion", desde)
+      .order("fecha_recepcion", { ascending: true })
+      .range(inicio, inicio + VOLUMEN_POR_PAGINA - 1);
+    if (error) return [];
+    const lote = (data ?? []) as RecepcionParaVolumen[];
+    filas.push(...lote);
+    if (lote.length < VOLUMEN_POR_PAGINA) break;
+  }
+  return agruparVolumenPorDia(filas, zonaHoraria);
 }
 
 export interface ActividadRecienteItem {

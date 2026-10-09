@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { resolverZonaHoraria } from "@gateflow/types";
 
 /** Combina clases de Tailwind resolviendo conflictos (patrón estándar shadcn/ui). */
 export function cn(...inputs: ClassValue[]) {
@@ -86,53 +87,42 @@ export function obtenerMensajeErrorConTimeout(error: unknown, mensajePorDefecto:
 }
 
 /**
- * ÚNICO punto de toda la app donde se decide en qué zona horaria se
- * MUESTRAN las fechas. Todo lo que se guarda en Supabase es
- * `timestamptz` (instante absoluto en UTC, generado siempre por
- * `now()` en Postgres) — eso ya está bien y no se toca. El bug real
- * encontrado en producción fue que varias pantallas de admin, al ser
- * Server Components que corren en el servidor de Netlify (UTC), hacían
- * `toLocaleString()` SIN especificar `timeZone`, así que mostraban los
- * dígitos crudos de UTC como si fueran hora local.
+ * Formato de fechas visibles. La zona es SIEMPRE la del residencial
+ * (`tenants.timezone`, en `session.tenant.timezone`), que se pasa en cada
+ * llamada: un residencial de Argentina ve la hora de Buenos Aires y uno
+ * de Cancún la de Cancún, aunque el código corra en el servidor de
+ * Netlify (UTC) o en un navegador de otra zona. La resolución de la zona
+ * (y su respaldo para datos sin zona) vive en @gateflow/types.
  *
  * No crear ningún otro `toLocaleString`/`toLocaleDateString` suelto en
- * ninguna pantalla — siempre pasar por `formatearFecha`/
- * `formatearFechaHora` para que exista un único criterio, sin importar
- * si el componente corre en el servidor o en el navegador.
+ * ninguna pantalla — siempre pasar por estas funciones.
  */
-export const ZONA_HORARIA_GATEFLOW = "America/Cancun";
 
-/** true durante la validación en producción del fix de fechas — deja
- * trazas en la consola (servidor y navegador) para confirmar que la
- * conversión de zona horaria funciona en cada pantalla. Poner en
- * `false` una vez validado (ver README del delta de fechas). */
-const LOG_FECHAS_TEMPORAL = true;
-
-function logFechaTemporal(fn: string, iso: string, resultado: string) {
-  if (!LOG_FECHAS_TEMPORAL) return;
-  // eslint-disable-next-line no-console
-  console.log(`[GateFlow][fechas] ${fn}`, {
-    isoRecibido: iso,
-    timezoneEntorno: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    horaLocalEntorno: new Date().toString(),
-    zonaUsadaParaFormatear: ZONA_HORARIA_GATEFLOW,
-    resultadoMostrado: resultado,
-    entorno: typeof window === "undefined" ? "servidor" : "navegador",
-  });
+/** Fecha + hora en la zona del residencial (ej. "3/8/2026, 2:46:49 p.m."). */
+export function formatearFechaHora(
+  iso: string | null | undefined,
+  zonaHoraria: string | null | undefined,
+  opciones?: Intl.DateTimeFormatOptions,
+): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("es-MX", { timeZone: resolverZonaHoraria(zonaHoraria), ...opciones });
 }
 
-/** Fecha + hora en la zona horaria de GateFlow (ej. "3/8/2026, 2:46:49 p.m."). */
-export function formatearFechaHora(iso: string | null | undefined, opciones?: Intl.DateTimeFormatOptions): string {
+/** Solo fecha, sin hora, en la zona del residencial (ej. "3/8/2026"). */
+export function formatearFecha(
+  iso: string | null | undefined,
+  zonaHoraria: string | null | undefined,
+  opciones?: Intl.DateTimeFormatOptions,
+): string {
   if (!iso) return "—";
-  const resultado = new Date(iso).toLocaleString("es-MX", { timeZone: ZONA_HORARIA_GATEFLOW, ...opciones });
-  logFechaTemporal("formatearFechaHora", iso, resultado);
-  return resultado;
+  return new Date(iso).toLocaleDateString("es-MX", { timeZone: resolverZonaHoraria(zonaHoraria), ...opciones });
 }
 
-/** Solo fecha, sin hora, en la zona horaria de GateFlow (ej. "3/8/2026"). */
-export function formatearFecha(iso: string | null | undefined, opciones?: Intl.DateTimeFormatOptions): string {
-  if (!iso) return "—";
-  const resultado = new Date(iso).toLocaleDateString("es-MX", { timeZone: ZONA_HORARIA_GATEFLOW, ...opciones });
-  logFechaTemporal("formatearFecha", iso, resultado);
-  return resultado;
+/**
+ * Un día que YA es local ("YYYY-MM-DD", p. ej. del dashboard). Se formatea
+ * en UTC a propósito: la clave no es un instante, y convertirla a otra
+ * zona la correría un día (el 9 se vería como 8 en Argentina).
+ */
+export function formatearClaveDia(clave: string, opciones?: Intl.DateTimeFormatOptions): string {
+  return new Date(`${clave}T12:00:00Z`).toLocaleDateString("es-MX", { timeZone: "UTC", ...opciones });
 }

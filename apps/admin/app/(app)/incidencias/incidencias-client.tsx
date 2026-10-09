@@ -16,7 +16,14 @@ const ESTADO_CLASE: Record<EstadoIncidencia, string> = {
   resuelta: "bg-success/10 text-success",
 };
 
-export function IncidenciasClient({ incidenciasIniciales }: { incidenciasIniciales: Incidencia[] }) {
+export function IncidenciasClient({
+  incidenciasIniciales,
+  zonaHoraria,
+}: {
+  incidenciasIniciales: Incidencia[];
+  /** tenants.timezone del residencial: las fechas se muestran en su hora. */
+  zonaHoraria: string | null;
+}) {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const [filtro, setFiltro] = useState<EstadoIncidencia | "todas">("todas");
@@ -83,7 +90,7 @@ export function IncidenciasClient({ incidenciasIniciales }: { incidenciasInicial
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">{TIPO_INCIDENCIA_LABEL[i.tipo]}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{i.reportadaPorNombre}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(i.creadaEn)}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(i.creadaEn, zonaHoraria)}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${ESTADO_CLASE[i.estado]}`}>{ESTADO_LABEL[i.estado]}</span>
                 </td>
@@ -127,6 +134,7 @@ export function IncidenciasClient({ incidenciasIniciales }: { incidenciasInicial
         <DetalleIncidenciaModal
           incidenciaId={detalleAbierto.incidenciaId}
           paqueteId={detalleAbierto.paqueteId}
+          zonaHoraria={zonaHoraria}
           onClose={() => setDetalleAbierto(null)}
         />
       )}

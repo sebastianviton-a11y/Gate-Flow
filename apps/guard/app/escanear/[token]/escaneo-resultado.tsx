@@ -112,7 +112,7 @@ export function EscaneoResultado({
             </>
           )}
           <dt className="text-muted-foreground">Recibido</dt>
-          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
+          <dd className="text-right font-medium">{formatearFechaHora(paquete.fechaRecepcion, session.tenant.timezone)}</dd>
         </dl>
 
         {otrosPendientes.length > 0 && (

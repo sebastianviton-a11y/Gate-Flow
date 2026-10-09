@@ -20,8 +20,8 @@ export default async function DashboardPage() {
   const supabase = createServerSupabaseClient();
 
   const [resumen, volumen, actividad] = await Promise.all([
-    obtenerResumenDashboard(supabase, session.tenant.id),
-    obtenerVolumen30Dias(supabase, session.tenant.id),
+    obtenerResumenDashboard(supabase, session.tenant.id, session.tenant.timezone),
+    obtenerVolumen30Dias(supabase, session.tenant.id, session.tenant.timezone),
     obtenerActividadReciente(supabase, session.tenant.id),
   ]);
 

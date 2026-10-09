@@ -1,4 +1,5 @@
 import type { Paquete } from "@gateflow/types";
+import { resolverZonaHoraria } from "@gateflow/types";
 
 /**
  * Normaliza un teléfono capturado en cualquier formato humano (espacios,
@@ -58,10 +59,14 @@ export function construirMensajeNotificacion(
   paquete: Paquete,
   residencialNombre: string,
   destinatarioNombre: string,
-  urlVerQr?: string,
+  urlVerQr: string | undefined,
+  /** Zona del residencial (tenants.timezone): la hora que lee el residente
+   * es la de su residencial, no la del navegador de quien registra. */
+  zonaHoraria: string | null | undefined,
 ): string {
-  const fecha = new Date(paquete.fechaRecepcion).toLocaleDateString("es-MX");
-  const hora = new Date(paquete.fechaRecepcion).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const timeZone = resolverZonaHoraria(zonaHoraria);
+  const fecha = new Date(paquete.fechaRecepcion).toLocaleDateString("es-MX", { timeZone });
+  const hora = new Date(paquete.fechaRecepcion).toLocaleTimeString("es-MX", { timeZone, hour: "2-digit", minute: "2-digit" });
 
   const lineas = [
     `Hola, ${destinatarioNombre}.`,
@@ -126,9 +131,11 @@ export function construirEnlaceWhatsApp(
   paquete: Paquete,
   residencialNombre: string,
   destinatarioNombre: string,
-  urlVerQr?: string,
+  urlVerQr: string | undefined,
   /** País del residencial (tenants.pais): define el código de país del teléfono. */
-  pais: string | null = "MX",
+  pais: string | null,
+  /** Zona del residencial (tenants.timezone), para la fecha del mensaje. */
+  zonaHoraria: string | null | undefined,
 ): EnlaceWhatsApp | null {
   const telefonoCrudo = paquete.residenteTelefono ?? paquete.contactoTelefono;
   if (!telefonoCrudo) return null;
@@ -136,7 +143,7 @@ export function construirEnlaceWhatsApp(
   const telefono = normalizarTelefonoWhatsApp(telefonoCrudo, pais);
   if (!telefono) return null;
 
-  const mensaje = construirMensajeNotificacion(paquete, residencialNombre, destinatarioNombre, urlVerQr);
+  const mensaje = construirMensajeNotificacion(paquete, residencialNombre, destinatarioNombre, urlVerQr, zonaHoraria);
 
   return {
     telefono,

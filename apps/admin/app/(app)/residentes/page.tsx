@@ -35,7 +35,7 @@ export default async function ResidentesPage() {
     <div className="space-y-6">
       <PageHeader title="Residentes" description="Personas de contacto de cada vivienda — mismos datos que Unidades, organizados para encontrar a alguien rápido." />
       <EnlaceResidentes tenantId={tenantId} enlaceInicial={enlace} />
-      <SolicitudesResidentes solicitudes={solicitudes} viviendas={viviendas} pais={pais} />
+      <SolicitudesResidentes solicitudes={solicitudes} viviendas={viviendas} pais={pais} zonaHoraria={session.tenant.timezone ?? null} />
       <ResidentesClient tenantId={tenantId} unidades={unidades} adicionales={adicionales} pais={pais} />
     </div>
   );

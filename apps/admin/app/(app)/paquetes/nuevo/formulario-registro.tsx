@@ -105,9 +105,9 @@ export function FormularioRegistroPaquete({ session }: { session: SessionContext
     const baseUrl = process.env.NEXT_PUBLIC_GUARD_APP_URL || "";
     const scanUrl = paquete.pickupToken && baseUrl ? construirUrlEscaneo(paquete.pickupToken, baseUrl) : "";
     const urlVerQr = paquete.pickupToken && baseUrl ? construirUrlVerQr(paquete.pickupToken, baseUrl) : undefined;
-    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr);
+    const mensaje = construirMensajeNotificacion(paquete, session.tenant.nombre, nombreDestinatario, urlVerQr, session.tenant.timezone);
     const enlaceWhatsApp = notificacion
-      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr, session.tenant.pais ?? null)
+      ? construirEnlaceWhatsApp(paquete, session.tenant.nombre, notificacion.destinatario, urlVerQr, session.tenant.pais ?? null, session.tenant.timezone)
       : null;
 
     return (

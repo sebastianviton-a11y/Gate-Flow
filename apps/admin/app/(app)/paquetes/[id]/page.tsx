@@ -86,14 +86,14 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
               <dd className="font-medium">{paquete.recibidoPorNombre ?? "—"}</dd>
 
               <dt className="text-muted-foreground">Fecha de recepción</dt>
-              <dd className="font-medium">{formatearFechaHora(paquete.fechaRecepcion)}</dd>
+              <dd className="font-medium">{formatearFechaHora(paquete.fechaRecepcion, session.tenant.timezone)}</dd>
 
               {paquete.fechaEntrega && (
                 <>
                   <dt className="text-muted-foreground">Entregado por</dt>
                   <dd className="font-medium">{paquete.entregadoPorNombre ?? "—"}</dd>
                   <dt className="text-muted-foreground">Fecha de entrega</dt>
-                  <dd className="font-medium">{formatearFechaHora(paquete.fechaEntrega)}</dd>
+                  <dd className="font-medium">{formatearFechaHora(paquete.fechaEntrega, session.tenant.timezone)}</dd>
                   <dt className="text-muted-foreground">Recibió (persona)</dt>
                   <dd className="font-medium">{paquete.entregadoANombre ?? "—"}</dd>
                 </>
@@ -116,7 +116,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                   <div key={h.id}>
                     <p className="text-sm font-medium">{ESTADO_LABEL[h.estadoNuevoId] ?? h.estadoNuevoId}</p>
                     <p className="text-xs text-muted-foreground">
-                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
+                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn, session.tenant.timezone)}
                     </p>
                   </div>
                 ))}
@@ -134,7 +134,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                       {h.ubicacionAnteriorRuta ?? "Sin ubicación"} → {h.ubicacionNuevaRuta ?? "Sin ubicación"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn)}
+                      {h.usuarioNombre} · {formatearFechaHora(h.creadoEn, session.tenant.timezone)}
                     </p>
                   </div>
                 ))}
@@ -159,7 +159,7 @@ export default async function PaqueteDetallePage({ params }: { params: { id: str
                 <img src={firma.firmaData} alt={`Firma de ${firma.firmanteNombre}`} className="mx-auto h-20" />
               </div>
               <p className="mt-1 text-center text-xs text-muted-foreground">
-                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn)}
+                {firma.firmanteNombre} · {formatearFechaHora(firma.creadoEn, session.tenant.timezone)}
               </p>
             </div>
           )}

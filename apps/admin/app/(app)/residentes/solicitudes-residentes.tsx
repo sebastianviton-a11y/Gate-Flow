@@ -15,7 +15,7 @@ import {
   type PaisResidencial,
   type SolicitudResidente,
 } from "@gateflow/paquetes";
-import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
+import { Button, Input, Label, formatearFechaHora, obtenerMensajeError } from "@gateflow/ui";
 
 export interface ViviendaOpcion {
   id: string;
@@ -55,10 +55,13 @@ export function SolicitudesResidentes({
   solicitudes,
   viviendas,
   pais,
+  zonaHoraria,
 }: {
   solicitudes: SolicitudResidente[];
   viviendas: ViviendaOpcion[];
   pais: PaisResidencial;
+  /** tenants.timezone del residencial: la fecha de cada solicitud en su hora. */
+  zonaHoraria: string | null;
 }) {
   if (solicitudes.length === 0) {
     return (
@@ -80,13 +83,23 @@ export function SolicitudesResidentes({
         </p>
       </div>
       {solicitudes.map((s) => (
-        <TarjetaSolicitud key={s.id} solicitud={s} viviendas={viviendas} pais={pais} />
+        <TarjetaSolicitud key={s.id} solicitud={s} viviendas={viviendas} pais={pais} zonaHoraria={zonaHoraria} />
       ))}
     </section>
   );
 }
 
-function TarjetaSolicitud({ solicitud, viviendas, pais }: { solicitud: SolicitudResidente; viviendas: ViviendaOpcion[]; pais: PaisResidencial }) {
+function TarjetaSolicitud({
+  solicitud,
+  viviendas,
+  pais,
+  zonaHoraria,
+}: {
+  solicitud: SolicitudResidente;
+  viviendas: ViviendaOpcion[];
+  pais: PaisResidencial;
+  zonaHoraria: string | null;
+}) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
   const [valores, setValores] = useState({
@@ -201,7 +214,7 @@ function TarjetaSolicitud({ solicitud, viviendas, pais }: { solicitud: Solicitud
     }
   }
 
-  const fecha = new Date(solicitud.recibidaEn).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" });
+  const fecha = formatearFechaHora(solicitud.recibidaEn, zonaHoraria, { dateStyle: "medium", timeStyle: "short" });
 
   return (
     <article className={`space-y-3 rounded-lg border bg-card p-4 ${terminada ? "opacity-60" : "border-border"}`} data-testid="solicitud-residente" data-solicitud={solicitud.id}>

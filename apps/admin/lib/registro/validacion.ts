@@ -46,8 +46,8 @@ export interface DatosRegistro {
   nombreResidencial: string;
   pais: PaisRegistro;
   viviendas: number;
-  /** Zona IANA válida del navegador, o null para que la RPC use la del país. */
-  timezone: string | null;
+  /** Zona del residencial: la del navegador si es de su país; si no, la del país. */
+  timezone: string;
   aceptaTerminos: true;
 }
 
@@ -88,6 +88,54 @@ export function timezoneValida(tz: string): boolean {
 
 export function timezonePorPais(pais: PaisRegistro): string {
   return pais === "MX" ? "America/Mexico_City" : "America/Argentina/Buenos_Aires";
+}
+
+/** Zonas IANA de México, actuales y alias antiguos que aún reportan algunos navegadores. */
+const ZONAS_MX = new Set([
+  "America/Mexico_City",
+  "America/Cancun",
+  "America/Merida",
+  "America/Monterrey",
+  "America/Matamoros",
+  "America/Chihuahua",
+  "America/Ciudad_Juarez",
+  "America/Ojinaga",
+  "America/Mazatlan",
+  "America/Bahia_Banderas",
+  "America/Hermosillo",
+  "America/Tijuana",
+  "America/Ensenada",
+  "America/Santa_Isabel",
+  "Mexico/General",
+  "Mexico/BajaNorte",
+  "Mexico/BajaSur",
+]);
+
+/** Alias antiguos de Argentina (las actuales son "America/Argentina/…"). */
+const ZONAS_AR_ALIAS = new Set([
+  "America/Buenos_Aires",
+  "America/Catamarca",
+  "America/Cordoba",
+  "America/Jujuy",
+  "America/Mendoza",
+  "America/Rosario",
+]);
+
+/** La zona pertenece al país elegido para el residencial. */
+export function zonaCompatibleConPais(tz: string, pais: PaisRegistro): boolean {
+  if (pais === "MX") return ZONAS_MX.has(tz);
+  return tz.startsWith("America/Argentina/") || ZONAS_AR_ALIAS.has(tz);
+}
+
+/**
+ * Zona con la que nace el residencial (tenants.timezone). La del
+ * navegador solo se usa si es del país elegido: quien registra un
+ * residencial de Argentina desde un navegador en Cancún (viaje, VPN,
+ * equipo mal configurado) no debe dejarlo con la hora de Cancún.
+ * Si no es compatible, es inválida o falta → la zona del país.
+ */
+export function zonaHorariaParaRegistro(tz: string, pais: PaisRegistro): string {
+  return tz !== "" && timezoneValida(tz) && zonaCompatibleConPais(tz, pais) ? tz : timezonePorPais(pais);
 }
 
 function esPais(valor: string): valor is PaisRegistro {
@@ -160,7 +208,7 @@ export function validarRegistro(campos: CamposCrudos): ResultadoValidacion {
       nombreResidencial,
       pais,
       viviendas,
-      timezone: tz !== "" && timezoneValida(tz) ? tz : null,
+      timezone: zonaHorariaParaRegistro(tz, pais),
       aceptaTerminos: true,
     },
   };

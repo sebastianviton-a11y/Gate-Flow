@@ -57,7 +57,7 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
     }
 
     if (paquete.estado === "entregado") {
-      const fecha = paquete.fechaEntrega ? formatearFechaHora(paquete.fechaEntrega) : "";
+      const fecha = paquete.fechaEntrega ? formatearFechaHora(paquete.fechaEntrega, session.tenant.timezone) : "";
       return <EstadoNeutral titulo={`Este paquete ya fue entregado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
     }
 
@@ -101,7 +101,7 @@ export default async function EscanearTokenPage({ params }: { params: { token: s
 
   if (grupoConPaquetes.grupo.estado === "completado") {
     const fecha = grupoConPaquetes.grupo.fechaEntrega
-      ? formatearFechaHora(grupoConPaquetes.grupo.fechaEntrega)
+      ? formatearFechaHora(grupoConPaquetes.grupo.fechaEntrega, session.tenant.timezone)
       : "";
     return <EstadoNeutral titulo={`Este retiro ya fue completado${fecha ? ` el ${fecha}` : ""}.`} tono="success" />;
   }

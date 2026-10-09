@@ -39,7 +39,7 @@ assert(construirEnlaceWhatsAppGrupo("11 2345-6789", "hola", "AR")?.url.startsWit
 assert(construirEnlaceWhatsAppGrupo("998 123 4567", "hola", "MX")?.url.startsWith("https://wa.me/529981234567?text=") === true, "Guard (grupos): MX con 52 (antes iba sin código de país)");
 assert(construirEnlaceWhatsAppGrupo("123", "hola", "AR") === null && construirEnlaceWhatsAppGrupo(null, "hola", "AR") === null, "Guard (grupos): sin número válido → sin enlace");
 const sesion = fuente("packages/auth/src/get-session.ts");
-assert(/tenants\(id, nombre, tipo, plan, activo, configuracion, empresa_id, pais\)/.test(sesion) && /pais: tenantRow\.pais/.test(sesion), "la sesión lleva el país del residencial (servidor)");
+assert(/tenants\(id, nombre, tipo, plan, activo, configuracion, empresa_id, pais, timezone\)/.test(sesion) && /pais: tenantRow\.pais/.test(sesion), "la sesión lleva el país del residencial (servidor)");
 assert(/construirEnlaceWhatsAppGrupo\([^)]*session\.tenant\.pais/.test(fuente("apps/guard/app/guard/packages/register/page.tsx")), "Guard usa el país del residencial");
 assert(/construirEnlaceWhatsApp\([^)]*session\.tenant\.pais/.test(fuente("apps/admin/app/(app)/paquetes/nuevo/formulario-registro.tsx")), "Admin usa el país del residencial");
 

@@ -55,7 +55,7 @@ export function EmpresasTable({ empresas }: { empresas: EmpresaListItem[] }) {
               </td>
               <td className="px-4 py-2.5 text-muted-foreground">{e.totalResidenciales}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{PLAN_LABEL[e.plan as PlanClave] ?? e.plan}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(e.creadaEn)}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(e.creadaEn, null)}</td>
               <td className="px-4 py-2.5">
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${ESTADO_CLASE[e.estadoServicio]}`}>
                   {ESTADO_SERVICIO_LABEL[e.estadoServicio]}
