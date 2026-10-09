@@ -118,7 +118,7 @@ export default function SearchPackagePage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
             autoFocus
-            placeholder="Nombre, unidad, tracking o código GateFlow…"
+            placeholder="Nombre, dirección, tracking o código GateFlow…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="h-14 pl-11 text-lg"

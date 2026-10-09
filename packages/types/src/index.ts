@@ -159,6 +159,9 @@ export interface Paquete {
   residenteNombre?: string | null;
   residenteTelefono?: string | null;
   contactoTelefono?: string | null;
+  /** A quién avisó la guardia (sin cuenta: contacto o persona aprobada). */
+  destinatarioNombre?: string | null;
+  destinatarioTelefono?: string | null;
   remitente?: string | null;
   empresaPaqueteria?: string | null;
   estado: EstadoPaquete;
@@ -223,6 +226,8 @@ export interface RegistrarPaqueteInput {
    * (caso común: contacto importado sin cuenta de Auth todavía). */
   destinatarioNombre?: string | null;
   destinatarioTelefono?: string | null;
+  /** Persona de residentes_unidades elegida (misma vivienda); null si es el contacto. */
+  destinatarioResidenteId?: string | null;
 }
 
 export interface EntregarPaqueteInput {
@@ -239,6 +244,8 @@ export interface UnidadConResidentes {
   id: string;
   identificador: string;
   residentes: { id: string; nombreCompleto: string }[];
+  /** Personas sin cuenta aprobadas para la vivienda (destinatarios posibles). */
+  adicionales?: { id: string; nombre: string; telefono: string }[];
   contactoNombre?: string | null;
   contactoTelefono?: string | null;
 }

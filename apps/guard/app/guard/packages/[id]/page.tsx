@@ -127,10 +127,12 @@ export default function GuardPackageDetailPage() {
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-border bg-card p-4 text-sm">
-          {paquete.residenteNombre && (
+          {(paquete.residenteNombre ?? paquete.destinatarioNombre) && (
             <>
               <dt className="text-muted-foreground">Para</dt>
-              <dd className="text-right font-medium">{paquete.residenteNombre}</dd>
+              <dd className="text-right font-medium" data-testid="paquete-destinatario">
+                {paquete.residenteNombre ?? paquete.destinatarioNombre}
+              </dd>
             </>
           )}
           {paquete.remitente && (

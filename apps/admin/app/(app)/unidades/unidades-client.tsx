@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
-import type { UnidadListItem } from "@gateflow/paquetes";
+import { telefonoParaMostrar, type PaisResidencial, type UnidadListItem } from "@gateflow/paquetes";
 import { ImportarUnidades } from "./importar-unidades";
 import { AgregarUnidadManual } from "./agregar-manual";
 import { EditarUnidad } from "./editar-unidad";
 
-export function UnidadesClient({ tenantId, unidades, pais = null }: { tenantId: string; unidades: UnidadListItem[]; pais?: string | null }) {
+export function UnidadesClient({ tenantId, unidades, pais }: { tenantId: string; unidades: UnidadListItem[]; pais: PaisResidencial }) {
   const router = useRouter();
   const [editando, setEditando] = useState<UnidadListItem | null>(null);
 
@@ -35,8 +35,7 @@ export function UnidadesClient({ tenantId, unidades, pais = null }: { tenantId: 
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-4 py-2.5">Identificador</th>
-              <th className="px-4 py-2.5">Tipo</th>
+              <th className="px-4 py-2.5">Dirección</th>
               <th className="px-4 py-2.5">Contacto</th>
               <th className="px-4 py-2.5">Teléfono</th>
               <th className="px-4 py-2.5">Estado</th>
@@ -46,7 +45,7 @@ export function UnidadesClient({ tenantId, unidades, pais = null }: { tenantId: 
           <tbody className="divide-y divide-border">
             {unidades.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                   Sin unidades todavía — importa una plantilla o agrega la primera manualmente.
                 </td>
               </tr>
@@ -54,9 +53,8 @@ export function UnidadesClient({ tenantId, unidades, pais = null }: { tenantId: 
             {unidades.map((u) => (
               <tr key={u.id} className={`hover:bg-muted/40 ${u.activo ? "" : "opacity-50"}`}>
                 <td className="px-4 py-2.5 font-medium">{u.identificador}</td>
-                <td className="px-4 py-2.5 capitalize text-muted-foreground">{u.tipo}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{u.contactoNombre ?? "—"}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{u.contactoTelefono ?? "—"}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{u.contactoTelefono ? telefonoParaMostrar(u.contactoTelefono, pais) : "—"}</td>
                 <td className="px-4 py-2.5">
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${

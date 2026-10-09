@@ -29,6 +29,11 @@ for (const ruta of ["/privacidad", "/terminos", "/confirmar-cuenta"]) {
 }
 assert((RUTAS_SOLO_INVITADOS as readonly string[]).includes("/registro") && esRutaPublica("/registro"), "/registro es pública (solo invitados)");
 assert(!esRutaPublica("/dashboard") && !esRutaPublica("/onboarding") && !esRutaPublica("/superadmin"), "las rutas del panel siguen protegidas");
+assert(
+  esRutaPublica("/alta-residente") && (RUTAS_SIEMPRE_PUBLICAS as readonly string[]).includes("/alta-residente") && existsSync(join(APP, "alta-residente", "page.tsx")),
+  "/alta-residente (formulario de residentes) es pública con o sin sesión y existe",
+);
+assert(!esRutaPublica("/residentes"), "/residentes (panel) sigue protegida");
 
 console.log("\n32. /registro enlaza /terminos y /privacidad por separado");
 const form = readFileSync(join(APP, "registro", "registro-form.tsx"), "utf8");

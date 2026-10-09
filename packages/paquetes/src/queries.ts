@@ -22,6 +22,7 @@ const PAQUETE_SELECT = `
   empresa_paqueteria_id, estado_id, tamano_id, prioridad_id, ubicacion_id,
   numero_guia, notas, recibido_por, entregado_por, entregado_a_nombre,
   fecha_recepcion, fecha_entrega, pickup_token, grupo_entrega_id,
+  destinatario_nombre, destinatario_telefono,
   unidades!paquetes_unidad_id_fkey ( identificador, contacto_telefono ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo, telefono ),
   recibido:users!paquetes_recibido_por_fkey ( nombre_completo ),
@@ -338,7 +339,43 @@ export async function obtenerHistorial(supabase: SupabaseClient, paqueteId: stri
 }
 
 /** Búsqueda de unidad para el paso de selección al registrar un paquete
- * (apps/guard). Tolerante a coincidencia parcial del identificador. */
+ * (apps/guard). Tolerante a coincidencia parcial de la dirección. Trae
+ * también a las personas adicionales de cada vivienda (sin cuenta,
+ * aprobadas desde el enlace de residentes): son destinatarios posibles.
+ * Las solicitudes pendientes nunca aparecen (la guardia no las lee). */
+const SELECT_UNIDAD_CON_RESIDENTES = `id, identificador, contacto_nombre, contacto_telefono,
+  residentes_unidades!residentes_unidades_unidad_id_fkey ( id, fecha_fin, origen, nombre, apellido, telefono, users ( id, nombre_completo ) )`;
+
+type FilaUnidadConResidentes = {
+  id: string;
+  identificador: string;
+  contacto_nombre: string | null;
+  contacto_telefono: string | null;
+  residentes_unidades: Array<{
+    id?: string;
+    fecha_fin: string | null;
+    origen?: string | null;
+    nombre?: string | null;
+    apellido?: string | null;
+    telefono?: string | null;
+    users: { id: string; nombre_completo: string } | null;
+  }>;
+};
+
+function mapUnidadConResidentes(u: FilaUnidadConResidentes): UnidadConResidentes {
+  const vigentes = u.residentes_unidades.filter((r) => !r.fecha_fin);
+  return {
+    id: u.id,
+    identificador: u.identificador,
+    residentes: vigentes.filter((r) => r.users).map((r) => ({ id: r.users!.id, nombreCompleto: r.users!.nombre_completo })),
+    adicionales: vigentes
+      .filter((r) => r.origen === "enlace" && r.id && r.telefono)
+      .map((r) => ({ id: r.id!, nombre: `${r.nombre ?? ""} ${r.apellido ?? ""}`.trim(), telefono: r.telefono! })),
+    contactoNombre: u.contacto_nombre,
+    contactoTelefono: u.contacto_telefono,
+  };
+}
+
 export async function buscarUnidades(
   supabase: SupabaseClient,
   tenantId: string,
@@ -347,34 +384,43 @@ export async function buscarUnidades(
   const texto_ = texto.trim();
   const { data, error } = await supabase
     .from("unidades")
-    .select(
-      "id, identificador, contacto_nombre, contacto_telefono, residentes_unidades!residentes_unidades_unidad_id_fkey ( fecha_fin, users ( id, nombre_completo ) )",
-    )
+    .select(SELECT_UNIDAD_CON_RESIDENTES)
     .eq("tenant_id", tenantId)
-    // Busca por identificador de unidad O por nombre del contacto informal
-    // — "buscar residente" y "buscar unidad" son, para el guardia, la
-    // misma caja de búsqueda (no dos pantallas distintas).
+    // Busca por dirección O por nombre del contacto informal — "buscar
+    // residente" y "buscar unidad" son, para el guardia, la misma caja
+    // de búsqueda (no dos pantallas distintas).
     .or(`identificador.ilike.%${texto_}%,contacto_nombre.ilike.%${texto_}%`)
     .eq("activo", true)
     .limit(10);
 
   if (error) throw error;
+  const filas = (data ?? []) as unknown as FilaUnidadConResidentes[];
 
-  return ((data ?? []) as unknown as Array<{
-    id: string;
-    identificador: string;
-    contacto_nombre: string | null;
-    contacto_telefono: string | null;
-    residentes_unidades: Array<{ fecha_fin: string | null; users: { id: string; nombre_completo: string } | null }>;
-  }>).map((u) => ({
-    id: u.id,
-    identificador: u.identificador,
-    residentes: u.residentes_unidades
-      .filter((r) => !r.fecha_fin && r.users)
-      .map((r) => ({ id: r.users!.id, nombreCompleto: r.users!.nombre_completo })),
-    contactoNombre: u.contacto_nombre,
-    contactoTelefono: u.contacto_telefono,
-  }));
+  // También por el nombre de un residente adicional de la vivienda.
+  if (texto_ && filas.length < 10) {
+    const { data: porNombre, error: errorNombre } = await supabase
+      .from("residentes_unidades")
+      .select("unidad_id")
+      .eq("tenant_id", tenantId)
+      .eq("origen", "enlace")
+      .is("fecha_fin", null)
+      .or(`nombre.ilike.%${texto_}%,apellido.ilike.%${texto_}%`)
+      .limit(10);
+    if (errorNombre) throw errorNombre;
+    const faltan = [...new Set((porNombre ?? []).map((r) => r.unidad_id as string))].filter((id) => !filas.some((f) => f.id === id));
+    if (faltan.length > 0) {
+      const { data: extra, error: errorExtra } = await supabase
+        .from("unidades")
+        .select(SELECT_UNIDAD_CON_RESIDENTES)
+        .eq("tenant_id", tenantId)
+        .eq("activo", true)
+        .in("id", faltan.slice(0, 10 - filas.length));
+      if (errorExtra) throw errorExtra;
+      filas.push(...((extra ?? []) as unknown as FilaUnidadConResidentes[]));
+    }
+  }
+
+  return filas.map(mapUnidadConResidentes);
 }
 
 // ── Dashboard (apps/admin) — lee de las vistas de la migración Sprint 02 ──
@@ -407,7 +453,8 @@ export async function obtenerResumenDashboard(supabase: SupabaseClient, tenantId
 
 export interface UnidadListItem {
   id: string;
-  tipo: string;
+  /** Casa o departamento; null en las viviendas creadas sin tipo. */
+  tipo: string | null;
   identificador: string;
   contactoNombre: string | null;
   contactoTelefono: string | null;

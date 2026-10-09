@@ -4,10 +4,11 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronRight, Loader2, Send, Upload, Building2, Users, Package, Warehouse, PartyPopper } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { ROLES_INVITABLES, type UbicacionAdmin } from "@gateflow/paquetes";
+import { ROLES_INVITABLES, type EnlaceResidentes as Enlace, type UbicacionAdmin } from "@gateflow/paquetes";
 import type { RoleKey } from "@gateflow/types";
 import { Button, Input, Label, GateFlowLogo, obtenerMensajeError } from "@gateflow/ui";
 import { ImportarUnidades } from "../unidades/importar-unidades";
+import { EnlaceResidentes } from "../residentes/enlace-residentes";
 import { BodegaClient } from "../configuracion/bodega/bodega-client";
 import { invitarUsuarioResidencial } from "./invitar-usuario-action";
 
@@ -22,6 +23,7 @@ interface Props {
   direccionInicial: string;
   logoUrlInicial: string | null;
   ubicacionesIniciales: UbicacionAdmin[];
+  enlaceResidentes: Enlace | null;
 }
 
 export function OnboardingWizard(props: Props) {
@@ -42,6 +44,7 @@ export function OnboardingWizard(props: Props) {
       {paso === 3 && (
         <PasoImportarResidentes
           tenantId={props.tenantId}
+          enlace={props.enlaceResidentes}
           onImportado={() => setResidentesImportados(true)}
           onContinuar={() => setPaso(4)}
         />
@@ -201,18 +204,29 @@ function PasoInformacion({
   );
 }
 
-function PasoImportarResidentes({ tenantId, onImportado, onContinuar }: { tenantId: string; onImportado: () => void; onContinuar: () => void }) {
+function PasoImportarResidentes({
+  tenantId,
+  enlace,
+  onImportado,
+  onContinuar,
+}: {
+  tenantId: string;
+  enlace: Enlace | null;
+  onImportado: () => void;
+  onContinuar: () => void;
+}) {
   const [importoAlgo, setImportoAlgo] = useState(false);
 
   return (
     <TarjetaPaso>
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <Users className="h-4 w-4" />
-        Paso 3 de 6 — Importar residentes
+        Paso 3 de 6 — Residentes
       </div>
+      <EnlaceResidentes tenantId={tenantId} enlaceInicial={enlace} />
       <p className="text-sm text-muted-foreground">
-        Descarga la plantilla, complétala con tus residentes y súbela — verás cuántos registros se encontraron, duplicados y errores antes de
-        confirmar nada.
+        También puedes cargarlos tú: descarga la plantilla, complétala con tus residentes y súbela — verás cuántos registros se encontraron,
+        duplicados y errores antes de confirmar nada.
       </p>
       <ImportarUnidades
         tenantId={tenantId}

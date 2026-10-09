@@ -53,9 +53,15 @@ interface Props {
   siteKey: string;
   onToken(token: string | null): void;
   onError(): void;
+  /** Acción que Cloudflare asocia al token (por omisión, "registro"). */
+  accion?: string;
+  tema?: "dark" | "light";
 }
 
-export const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function TurnstileWidget({ siteKey, onToken, onError }, ref) {
+export const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function TurnstileWidget(
+  { siteKey, onToken, onError, accion = "registro", tema = "dark" },
+  ref,
+) {
   const contenedor = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   // Los callbacks del widget se registran una vez: siempre llaman a la última versión.
@@ -76,8 +82,8 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function Turns
         if (!activo || !contenedor.current) return;
         widgetId.current = api.render(contenedor.current, {
           sitekey: siteKey,
-          action: "registro",
-          theme: "dark",
+          action: accion,
+          theme: tema,
           language: "es",
           // El formulario manda el token en su propio campo oculto.
           "response-field": false,
@@ -98,7 +104,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function Turns
       if (widgetId.current) window.turnstile?.remove(widgetId.current);
       widgetId.current = null;
     };
-  }, [siteKey]);
+  }, [siteKey, accion, tema]);
 
-  return <div ref={contenedor} data-turnstile="registro" className="flex min-h-[65px] justify-center" />;
+  return <div ref={contenedor} data-turnstile={accion} className="flex min-h-[65px] justify-center" />;
 });

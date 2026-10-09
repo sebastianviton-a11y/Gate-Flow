@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
-import { listarUbicacionesAdmin } from "@gateflow/paquetes";
+import { listarUbicacionesAdmin, obtenerEnlaceResidentes } from "@gateflow/paquetes";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 export default async function OnboardingPage() {
@@ -20,7 +20,10 @@ export default async function OnboardingPage() {
   // — se manda directo al dashboard real.
   if (tenantRow?.onboarding_completado) redirect("/dashboard");
 
-  const ubicaciones = await listarUbicacionesAdmin(supabase, session.tenant.id);
+  const [ubicaciones, enlaceResidentes] = await Promise.all([
+    listarUbicacionesAdmin(supabase, session.tenant.id),
+    obtenerEnlaceResidentes(supabase, session.tenant.id),
+  ]);
 
   return (
     <OnboardingWizard
@@ -32,6 +35,7 @@ export default async function OnboardingPage() {
       direccionInicial={tenantRow?.direccion ?? ""}
       logoUrlInicial={(tenantRow?.configuracion as { logoUrl?: string } | null)?.logoUrl ?? null}
       ubicacionesIniciales={ubicaciones}
+      enlaceResidentes={enlaceResidentes}
     />
   );
 }

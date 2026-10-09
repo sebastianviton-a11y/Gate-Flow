@@ -147,7 +147,8 @@ export function ImportarUnidades({
     const filasValidas: FilaImportarUnidad[] = filas
       .filter((f) => f.errores.length === 0)
       .map((f) => ({
-        tipo: f.datos.tipo as "casa" | "departamento",
+        // Solo si un archivo anterior trae un Tipo válido; si no, sin tipo.
+        tipo: f.datos.tipo,
         identificador: f.datos.identificador,
         contactoNombre: f.datos.contactoNombre || undefined,
         contactoTelefono: f.datos.contactoTelefono || undefined,
@@ -241,7 +242,7 @@ export function ImportarUnidades({
             <div className="max-h-48 overflow-y-auto rounded-md border border-warn/30 bg-warn/5 p-3 text-sm">
               {filasConError.map((f) => (
                 <p key={f.fila} className="text-warn-foreground">
-                  Fila {f.fila} ({f.datos.identificador || "sin identificador"}): {f.errores.join(" ")}
+                  Fila {f.fila} ({f.datos.identificador || "sin dirección"}): {f.errores.join(" ")}
                 </p>
               ))}
             </div>
@@ -251,8 +252,7 @@ export function ImportarUnidades({
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2">Tipo</th>
-                  <th className="px-3 py-2">Identificador</th>
+                  <th className="px-3 py-2">Dirección</th>
                   <th className="px-3 py-2">Residente</th>
                   <th className="px-3 py-2">Teléfono</th>
                 </tr>
@@ -260,7 +260,6 @@ export function ImportarUnidades({
               <tbody className="divide-y divide-border">
                 {filasValidas.map((f) => (
                   <tr key={f.fila}>
-                    <td className="px-3 py-1.5 capitalize">{f.datos.tipo}</td>
                     <td className="px-3 py-1.5 font-medium">{f.datos.identificador}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{f.datos.contactoNombre || "—"}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{f.datos.contactoTelefono || "—"}</td>
