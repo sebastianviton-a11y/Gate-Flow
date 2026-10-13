@@ -283,6 +283,8 @@ export async function eliminarResidencial(supabase: SupabaseClient, id: string):
 
 export interface ResidencialDetalle extends ResidencialListItem {
   pais: string;
+  /** tenants.timezone: las fechas "hasta" de la suscripción son días de esta zona. */
+  timezone: string | null;
   planPrecio: number | null;
   planFechaInicio: string | null;
   adminContactoEmail: string | null;
@@ -294,7 +296,7 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
   const { data, error } = await supabase
     .from("tenants")
     .select(
-      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, plan_precio, plan_fecha_inicio, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
+      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, timezone, plan_precio, plan_fecha_inicio, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
     )
     .eq("id", id)
     .maybeSingle();
@@ -327,6 +329,7 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
     creadoEn: data.created_at,
     planFechaRenovacion: data.plan_fecha_renovacion,
     pais: data.pais,
+    timezone: (data as { timezone?: string | null }).timezone ?? null,
     planPrecio: data.plan_precio,
     planFechaInicio: data.plan_fecha_inicio,
     adminContactoEmail: data.admin_contacto_email,
@@ -335,4 +338,91 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
     empresaId: data.empresa_id,
     empresaNombre: empresaRelacionada?.nombre ?? "—",
   };
+}
+
+// ── Suscripción del residencial (Super Admin) ─────────────────
+
+/**
+ * public.suscripciones tal como la ve Super Admin (RLS: or
+ * is_super_admin()). De los identificadores del proveedor solo se expone
+ * si existen: la pantalla solo necesita saber si la gestiona un proveedor.
+ */
+export interface SuscripcionSuperAdmin {
+  id: string;
+  estado: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  origen: "registro_publico" | "alta_manual";
+  plan: "hasta-50" | "hasta-150" | null;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  impagoDesde: string | null;
+  viviendasDeclaradas: number | null;
+  provider: string | null;
+  tieneSuscripcionProveedor: boolean;
+  tieneClienteProveedor: boolean;
+}
+
+export async function obtenerSuscripcionResidencial(supabase: SupabaseClient, tenantId: string): Promise<SuscripcionSuperAdmin | null> {
+  const { data, error } = await supabase
+    .from("suscripciones")
+    .select(
+      "id, estado, origen, plan, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde, viviendas_declaradas, provider, provider_subscription_id, provider_customer_id",
+    )
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    estado: data.estado,
+    origen: data.origen,
+    plan: data.plan,
+    trialStartedAt: data.trial_started_at,
+    trialEndsAt: data.trial_ends_at,
+    currentPeriodEnd: data.current_period_end,
+    cancelAtPeriodEnd: data.cancel_at_period_end === true,
+    impagoDesde: data.impago_desde,
+    viviendasDeclaradas: data.viviendas_declaradas,
+    provider: data.provider,
+    tieneSuscripcionProveedor: Boolean(data.provider_subscription_id),
+    tieneClienteProveedor: Boolean(data.provider_customer_id),
+  };
+}
+
+/** Respuesta de las RPC superadmin_* de suscripción (migración 20261013000000). */
+export interface ResultadoRpcSuscripcion {
+  resultado: "aplicado" | "sin_cambios";
+  suscripcion_id: string;
+  estado: string;
+  trial_ends_at?: string;
+  current_period_end?: string;
+}
+
+/**
+ * Las tres operaciones se validan en la base (is_super_admin, estado,
+ * proveedor, fechas, 1 fila, auditoría). `hasta` es un día "YYYY-MM-DD"
+ * en la zona del residencial: el acceso sigue durante todo ese día.
+ */
+export async function superadminExtenderTrial(supabase: SupabaseClient, tenantId: string, hasta: string): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_extender_trial", { p_tenant_id: tenantId, p_hasta: hasta });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
+}
+
+export async function superadminActivarSuscripcionManual(
+  supabase: SupabaseClient,
+  tenantId: string,
+  hasta: string,
+  plan: "hasta-50" | "hasta-150" | null,
+): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_activar_suscripcion_manual", { p_tenant_id: tenantId, p_hasta: hasta, p_plan: plan });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
+}
+
+export async function superadminExtenderSuscripcionManual(supabase: SupabaseClient, tenantId: string, hasta: string): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_extender_suscripcion_manual", { p_tenant_id: tenantId, p_hasta: hasta });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
 }

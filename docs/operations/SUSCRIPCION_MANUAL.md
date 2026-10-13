@@ -64,6 +64,29 @@ Migración: `supabase/migrations/20261013000000_superadmin_suscripcion_manual.sq
 fecha elegida, la zona horaria y `cobro: ninguno`. Sin datos personales ni
 tokens.
 
+## Pantalla (Super Admin → Residenciales → detalle → «Suscripción»)
+
+* Muestra estado, origen, fin de la prueba, vigencia, proveedor, plan,
+  viviendas declaradas y si el residencial puede operar hoy (misma regla
+  que `tenant_operativo`), con las fechas en su zona horaria.
+* Solo ofrece las acciones que la base acepta para ese estado: prueba →
+  «Extender prueba» y «Activar manualmente»; activación manual →
+  «Extender vigencia»; cancelada/vencida sin proveedor → «Activar
+  manualmente»; con Stripe → «Esta suscripción está gestionada por
+  Stripe.» y ninguna acción; alta manual sin vencimiento → sin acciones.
+* Fecha explícita ("hasta, incluido") con los límites de la base y una
+  confirmación antes de guardar: «Este residencial podrá usar Gate Flow
+  hasta el 30/11/2026. Esta acción no genera ningún cobro automático.»
+  (+ "No usa Stripe ni Mercado Pago").
+* Server actions (`apps/admin/app/superadmin/suscripcion-actions.ts`):
+  sesión de super_admin, validación de la entrada y la RPC con el JWT de
+  quien opera (nunca la clave de servicio).
+* El panel del residencial no dice "cancelada": en `/suscripcion` muestra
+  «Activa hasta el …» y, en los últimos 7 días, la línea discreta «Tu
+  suscripción está activa hasta el …».
+* El historial queda en `audit_log`; Super Admin todavía no lo ve en la
+  pantalla (`authenticated` no tiene SELECT sobre `audit_log`).
+
 ## Desactivar
 
 No hay acción nueva. Una activación manual vence sola en su fecha; para
@@ -76,3 +99,8 @@ residencial a "suspendido" (`superadmin_cambiar_estado_servicio`).
   `run-local.sh`) y `concurrencia_suscripcion_manual.sh` (dos sesiones).
 * `supabase/tests/grants/93_suscripcion_manual.sql` (grants de un proyecto
   nuevo de Supabase).
+* `apps/admin/lib/__tests__/suscripcion-manual.test.ts` (acciones por
+  estado, fechas, textos, errores, aviso del residencial).
+* `tests/superadmin/e2e-suscripcion-manual.mjs` (opt-in, local: Admin real
+  + PostgREST + Playwright; prueba vencida → extender → activar → extender
+  con doble clic → vencimiento → bloqueo; Stripe intacto; teardown con hash).

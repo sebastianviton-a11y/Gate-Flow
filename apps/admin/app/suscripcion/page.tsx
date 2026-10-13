@@ -481,7 +481,13 @@ function VistaGestion({
           )}
         </dl>
       ) : (
-        <p>La gestiona el equipo de Gate Flow. Para cualquier cambio, escríbenos a soporte.</p>
+        <>
+          {suscripcion?.cancelAtPeriodEnd && suscripcion.currentPeriodEnd && (
+            // Activación manual (migración 20261013000000): fin exclusivo → último día con acceso.
+            <p data-vigencia-manual>Activa hasta el {fecha(new Date(Date.parse(suscripcion.currentPeriodEnd) - 1).toISOString(), zona)}.</p>
+          )}
+          <p>La gestiona el equipo de Gate Flow. Para cualquier cambio, escríbenos a soporte.</p>
+        </>
       )}
       {suscripcion?.provider && <BotonGestion disponible={gestion} texto="Administrar suscripción" />}
     </Aviso>

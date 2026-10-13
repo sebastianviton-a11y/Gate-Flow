@@ -106,6 +106,10 @@ export {
   actualizarPlanResidencial,
   eliminarResidencial,
   obtenerResidencialDetalle,
+  obtenerSuscripcionResidencial,
+  superadminExtenderTrial,
+  superadminActivarSuscripcionManual,
+  superadminExtenderSuscripcionManual,
   ESTADO_SERVICIO_LABEL,
   PLAN_LABEL,
   type MetricasGlobales,
@@ -114,6 +118,8 @@ export {
   type ResidencialInput,
   type EstadoServicio,
   type PlanClave,
+  type SuscripcionSuperAdmin,
+  type ResultadoRpcSuscripcion,
 } from "./superadmin";
 
 export {

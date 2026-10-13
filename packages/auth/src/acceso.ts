@@ -23,7 +23,16 @@ export interface DatosSuscripcion {
   cancel_at_period_end?: boolean | null;
   /** Inicio del episodio de impago (solo past_due; migración 20261009000000). */
   impago_desde?: string | null;
+  /**
+   * Proveedor de cobro (stripe) o null si la gestiona Gate Flow (alta o
+   * activación manual, migración 20261013000000). Solo cambia el texto del
+   * aviso; el acceso no depende de esto.
+   */
+  provider?: string | null;
 }
+
+/** Días antes del vencimiento de una activación manual en que Admin lo avisa. */
+export const DIAS_AVISO_VENCIMIENTO = 7;
 
 /** Gracia tras un cobro fallido (past_due), contada desde el inicio del impago (impago_desde). */
 export const DIAS_GRACIA_PAGO = 7;
@@ -88,7 +97,7 @@ export function finGraciaPago(s: DatosSuscripcion | null | undefined): string | 
 
 // ── Aviso de pago (gracia o cancelación pendiente) ────────────
 
-export type NivelAvisoPago = "gracia" | "cancelacion";
+export type NivelAvisoPago = "gracia" | "cancelacion" | "vencimiento";
 
 export interface AvisoPago {
   nivel: NivelAvisoPago;
@@ -110,6 +119,9 @@ function fechaLegible(ms: number, zona: string): string {
  * Solo para quien administra el residencial (Admin); Guard no lo muestra.
  *   gracia       "No pudimos cobrar tu suscripción…" (fuerte)
  *   cancelacion  "Tu suscripción termina el …" (cancelación pedida, aún vigente)
+ *   vencimiento  activación manual (sin proveedor) en sus últimos 7 días:
+ *                "Tu suscripción está activa hasta el …" (nadie la canceló; antes de
+ *                esos 7 días, sin aviso)
  */
 export function avisoPago(s: DatosSuscripcion | null | undefined, ahora: Date, zonaHoraria: string | null | undefined): AvisoPago | null {
   if (!s) return null;
@@ -125,6 +137,17 @@ export function avisoPago(s: DatosSuscripcion | null | undefined, ahora: Date, z
   }
   if (estado === "activa" && s.estado === "active" && s.cancel_at_period_end) {
     const hasta = instante(s.current_period_end);
+    // Activación manual de Gate Flow (provider explícitamente null): vence en
+    // su fecha, nadie la canceló. Sin el campo (consultas anteriores) se
+    // mantiene el aviso de cancelación.
+    if (s.provider === null) {
+      if (hasta - ahora.getTime() > DIAS_AVISO_VENCIMIENTO * 86_400_000) return null;
+      return {
+        nivel: "vencimiento",
+        hasta: new Date(hasta).toISOString(),
+        texto: `Tu suscripción está activa hasta el ${fechaLegible(hasta - 1, zona)}.`,
+      };
+    }
     return {
       nivel: "cancelacion",
       hasta: new Date(hasta).toISOString(),
@@ -190,7 +213,7 @@ export function avisoTrial(s: DatosSuscripcion | null | undefined, ahora: Date, 
  * user_tenants (activo = true, del usuario) → rol, tenant y su suscripción.
  */
 export const SELECT_MEMBRESIA_ACCESO =
-  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde))";
+  "roles(clave), tenants(onboarding_completado, estado_servicio, timezone, suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde, provider))";
 
 export type MembresiaAcceso = {
   roles: unknown;

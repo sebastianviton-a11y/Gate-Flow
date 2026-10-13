@@ -87,8 +87,8 @@ seccion("Paridad con tenant_operativo (SQL)", () => {
   assert(!/now\(\) < s\.current_period_end \+ interval '7 days'/.test(mig), "SQL: la gracia ya no usa current_period_end");
   assert(mig.includes("(s.current_period_end is not null and pg_catalog.now() < s.current_period_end)"), "SQL: cancelación vigente solo antes de cpe");
   assert(mig.includes("s.trial_ends_at is not null and pg_catalog.now() < s.trial_ends_at"), "SQL: trial sin cambios");
-  assert(SELECT_MEMBRESIA_ACCESO.includes("suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde)"), "SELECT de acceso lee las columnas de billing");
-  assert(SELECT_MEMBRESIAS_ACCESO.includes("suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde)"), "SELECT multitenant lee las columnas de billing");
+  assert(SELECT_MEMBRESIA_ACCESO.includes("suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde, provider)"), "SELECT de acceso lee las columnas de billing (+ provider para el aviso de activación manual)");
+  assert(SELECT_MEMBRESIAS_ACCESO.includes("suscripciones(estado, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde, provider)"), "SELECT multitenant lee las columnas de billing (+ provider)");
 });
 
 seccion("Gracia: Admin con banner fuerte, Guard opera normal", () => {
