@@ -28,7 +28,9 @@
 #   …BO  + tenant_operativo_billing         → 0 FAIL
 #   …BOF + corrección otro tenant           → 0 FAIL
 #   …BOFM + gracia desde impago_desde       → 0 FAIL
-#   …BOFMR + residentes por enlace (20261011) → 0 FAIL; contrato aquí
+#   …BOFMR + residentes por enlace (20261011) → 0 FAIL
+#   …BOFMRS + suscripción manual de Super Admin (20261013) → 0 FAIL; contrato aquí
+#        rollback SM = …BOFMR
 #        rollback RE = …BOFM
 #        rollback IM = …BOF
 #        rollback OB = …B, rollback B = GRACTOIP
@@ -77,6 +79,8 @@ MIG_IM="20261009000000_billing_impago_desde.sql"
 DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
 MIG_RE="20261011000000_residentes_enlace.sql"
 DOWN_RE="$SUPA/rollback/20261011000000_residentes_enlace.down.sql"
+MIG_SM="20261013000000_superadmin_suscripcion_manual.sql"
+DOWN_SM="$SUPA/rollback/20261013000000_superadmin_suscripcion_manual.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
 
@@ -166,7 +170,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM"|"$MIG_RE") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM"|"$MIG_RE"|"$MIG_SM") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -261,6 +265,9 @@ snapshot "$OUT/snap_GRACTOIPBOFM.txt"
 sql_file "$SUPA/migrations/$MIG_RE"
 run_suites GRACTOIPBOFMR "… + residentes por enlace"
 snapshot "$OUT/snap_GRACTOIPBOFMR.txt"
+sql_file "$SUPA/migrations/$MIG_SM"
+run_suites GRACTOIPBOFMRS "… + suscripción manual"
+snapshot "$OUT/snap_GRACTOIPBOFMRS.txt"
 
 # El código llama a las RPC de registro, Super Admin, billing y
 # residentes, lee suscripciones (con las columnas de billing) y
@@ -288,6 +295,7 @@ else
   echo "  la autoprueba NO detecta lo esperado:"; sed 's/^/    /' "$OUT/contrato_autoprueba.log"; FALLAS=$((FALLAS + 1))
 fi
 
+sql_file "$DOWN_SM";                   snapshot "$OUT/snap_GRACTOIPBOFMRb.txt"; igual "$OUT/snap_GRACTOIPBOFMR.txt" "$OUT/snap_GRACTOIPBOFMRb.txt" rollback_SM
 sql_file "$DOWN_RE";                   snapshot "$OUT/snap_GRACTOIPBOFMb.txt"; igual "$OUT/snap_GRACTOIPBOFM.txt" "$OUT/snap_GRACTOIPBOFMb.txt" rollback_RE
 sql_file "$DOWN_IM";                   snapshot "$OUT/snap_GRACTOIPBOFb.txt"; igual "$OUT/snap_GRACTOIPBOF.txt" "$OUT/snap_GRACTOIPBOFb.txt" rollback_IM
 sql_file "$DOWN_BF";                   snapshot "$OUT/snap_GRACTOIPBOb.txt"; igual "$OUT/snap_GRACTOIPBO.txt" "$OUT/snap_GRACTOIPBOb.txt" rollback_BF

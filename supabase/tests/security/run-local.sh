@@ -30,6 +30,11 @@
 #        revisión concurrente (concurrencia_residentes.sh) → 3 PASS;
 #        rollback RE → catálogo idéntico a IM; RE se reaplica idéntico;
 #        con solicitudes o personas cargadas, el rollback aborta sin cambios
+#   SM + administración manual de suscripciones (20261013) → 0 FAIL;
+#        dos sesiones de Super Admin a la vez (concurrencia_suscripcion_manual.sh)
+#        → 3 PASS; el catálogo solo gana las 4 funciones nuevas (tenant_operativo,
+#        billing_* y tablas sin cambios); rollback SM → idéntico a RE; SM se
+#        reaplica idéntico
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -69,6 +74,8 @@ MIG_IM="20261009000000_billing_impago_desde.sql"
 DOWN_IM="$SUPA/rollback/20261009000000_billing_impago_desde.down.sql"
 MIG_RE="20261011000000_residentes_enlace.sql"
 DOWN_RE="$SUPA/rollback/20261011000000_residentes_enlace.down.sql"
+MIG_SM="20261013000000_superadmin_suscripcion_manual.sql"
+DOWN_SM="$SUPA/rollback/20261013000000_superadmin_suscripcion_manual.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -156,7 +163,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -240,6 +247,29 @@ same_catalog "$OUT/snap_IM2.txt" "$OUT/snap_IM_tras_down_RE.txt" "rollback_RE"
 sql_file "$SUPA/migrations/$MIG_RE"
 snapshot "$OUT/snap_RE2.txt"
 same_catalog "$OUT/snap_RE.txt" "$OUT/snap_RE2.txt" "reaplicar_RE"
+
+sql_file "$SUPA/migrations/$MIG_SM"
+run_suites SM "… + suscripción manual" C
+echo "  concurrencia de la suscripción manual (dos sesiones de Super Admin):"
+bash "$DIR/concurrencia_suscripcion_manual.sh" "$DB" > "$OUT/concurrencia_suscripcion_manual.log" 2>&1 || true
+sed 's/^/    /' "$OUT/concurrencia_suscripcion_manual.log"
+if grep -qv '^PASS|' "$OUT/concurrencia_suscripcion_manual.log" || [[ "$(grep -c '^PASS|' "$OUT/concurrencia_suscripcion_manual.log")" != "3" ]]; then FALLAS=$((FALLAS + 1)); fi
+snapshot "$OUT/snap_SM.txt"
+# La migración solo AGREGA las cuatro funciones: nada existente cambia.
+diff "$OUT/snap_RE2.txt" "$OUT/snap_SM.txt" | grep '^[<>]' > "$OUT/diff_SM_sobre_RE.txt" || true
+if [[ "$(grep -c '^>' "$OUT/diff_SM_sobre_RE.txt")" == "4" && "$(grep -c '^<' "$OUT/diff_SM_sobre_RE.txt")" == "0" ]] \
+   && ! grep -qvE '^> FN\|(public\.)?(superadmin_extender_trial|superadmin_activar_suscripcion_manual|superadmin_extender_suscripcion_manual|suscripcion_fin_dia_local)\(' "$OUT/diff_SM_sobre_RE.txt"; then
+  echo "  suscripción manual: el catálogo solo gana las 4 funciones (tenant_operativo, billing_* y tablas sin cambios)"
+else
+  echo "  suscripción manual: cambios de catálogo inesperados (ver $OUT/diff_SM_sobre_RE.txt)"; FALLAS=$((FALLAS + 1))
+fi
+sql_file "$DOWN_SM"
+snapshot "$OUT/snap_RE_tras_down_SM.txt"
+same_catalog "$OUT/snap_RE2.txt" "$OUT/snap_RE_tras_down_SM.txt" "rollback_SM"
+sql_file "$SUPA/migrations/$MIG_SM"
+snapshot "$OUT/snap_SM2.txt"
+same_catalog "$OUT/snap_SM.txt" "$OUT/snap_SM2.txt" "reaplicar_SM"
+sql_file "$DOWN_SM"
 # Con datos de personas, el rollback debe abortar sin tocar nada.
 sql -c "insert into public.residentes_enlaces (id, tenant_id, token) values ('e1000000-0000-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000000', repeat('e', 64))" >/dev/null
 sql -c "insert into public.residentes_solicitudes (tenant_id, enlace_id, nombre, apellido, direccion, telefono) values ('aaaaaaaa-0000-0000-0000-000000000000', 'e1000000-0000-0000-0000-000000000000', 'Zz', 'Prueba', 'Casa Z', '529981234567')" >/dev/null

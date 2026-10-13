@@ -29,7 +29,11 @@ do $$ begin
          || has_function_privilege('authenticated', p.oid, 'execute')::text || has_function_privilege('anon', p.oid, 'execute')::text
          || has_function_privilege('service_role', p.oid, 'execute')::text, ',' order by p.proname)
        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'superadmin\_%'$q$,
-    'superadmin_actualizar_plan_residencial:true:search_path="":truefalsefalse,superadmin_actualizar_residencial:true:search_path="":truefalsefalse,superadmin_cambiar_estado_servicio:true:search_path="":truefalsefalse');
+    case when to_regprocedure('public.superadmin_activar_suscripcion_manual(uuid,date,text)') is null
+      then 'superadmin_actualizar_plan_residencial:true:search_path="":truefalsefalse,superadmin_actualizar_residencial:true:search_path="":truefalsefalse,superadmin_cambiar_estado_servicio:true:search_path="":truefalsefalse'
+      -- + las tres de la suscripción manual (20261013000000), mismas reglas.
+      else 'superadmin_activar_suscripcion_manual:true:search_path="":truefalsefalse,superadmin_actualizar_plan_residencial:true:search_path="":truefalsefalse,superadmin_actualizar_residencial:true:search_path="":truefalsefalse,superadmin_cambiar_estado_servicio:true:search_path="":truefalsefalse,superadmin_extender_suscripcion_manual:true:search_path="":truefalsefalse,superadmin_extender_trial:true:search_path="":truefalsefalse'
+    end);
 end $$;
 
 -- ── 1–8. admin_residencial ────────────────────────────────────
