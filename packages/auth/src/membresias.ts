@@ -19,6 +19,38 @@ export const COOKIE_TENANT = "gf_tenant";
 /** Ruta de selección (existe en Admin y en Guard). */
 export const RUTA_SELECCIONAR_RESIDENCIAL = "/seleccionar-residencial";
 
+/**
+ * Destino del formulario de /seleccionar-residencial (Route Handler
+ * app/seleccionar-residencial/elegir/route.ts en Admin y en Guard). Es un
+ * POST de formulario HTML nativo, no una Server Action: el navegador
+ * recibe un 303 con Set-Cookie y navega solo, sin depender del router de
+ * cliente (con la Server Action, en Chrome de iPad la cookie se guardaba
+ * pero la pantalla se quedaba en el selector).
+ */
+export const RUTA_ELEGIR_RESIDENCIAL = "/seleccionar-residencial/elegir";
+
+/** 303 See Other a una ruta relativa de la misma app: el navegador la abre con GET. */
+export function redireccionEleccion(destino: string): Response {
+  return new Response(null, { status: 303, headers: { Location: destino, "Cache-Control": "no-store" } });
+}
+
+/**
+ * Misma comprobación anti-CSRF que Next aplica a las Server Actions: si
+ * llega Origin, su host debe ser x-forwarded-host (o host). Un Origin
+ * ilegible ("null") falla cerrado. Además gf_tenant y la sesión son
+ * SameSite=Lax: un POST desde otro sitio no las lleva.
+ */
+export function origenPermitidoEleccion(headers: Headers): boolean {
+  const origen = headers.get("origin");
+  if (!origen) return true;
+  const host = headers.get("x-forwarded-host") ?? headers.get("host");
+  try {
+    return Boolean(host) && new URL(origen).host === host;
+  } catch {
+    return false;
+  }
+}
+
 /** Atributos de gf_tenant: nunca se confía en su valor sin validar la membresía activa. */
 export function opcionesCookieTenant() {
   return { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/", maxAge: 60 * 60 * 24 * 180 };

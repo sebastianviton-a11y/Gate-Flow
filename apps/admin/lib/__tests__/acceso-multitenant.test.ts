@@ -8,7 +8,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   COOKIE_TENANT,
+  RUTA_ELEGIR_RESIDENCIAL,
+  RUTA_SELECCIONAR_RESIDENCIAL,
   opcionesCookieTenant,
+  origenPermitidoEleccion,
+  redireccionEleccion,
   opcionesSeleccion,
   resolverAccesoUsuario,
   resultadoEleccionAdmin,
@@ -17,6 +21,7 @@ import {
   type FilaMembresia,
 } from "@gateflow/auth/client";
 import { destinoDeDecision, destinoTrasAutenticar, mostrarCtaGuard, resultadoPanel } from "../acceso-panel";
+import { RUTAS_CUENTA } from "../rutas-publicas";
 
 let pasadas = 0;
 let fallidas = 0;
@@ -181,7 +186,7 @@ seccion("50. tenant_operativo evalúa exactamente p_tenant_id (SQL)", () => {
 seccion("51. cambiar de residencial reemplaza la cookie", () => {
   const o = opcionesCookieTenant();
   assert(o.httpOnly === true && o.secure === true && o.sameSite === "lax" && o.path === "/", "gf_tenant: httpOnly, Secure, SameSite=Lax, path=/");
-  for (const accion of ["apps/admin/app/seleccionar-residencial/actions.ts", "apps/guard/app/seleccionar-residencial/actions.ts"]) {
+  for (const accion of ["apps/admin/app/seleccionar-residencial/elegir/route.ts", "apps/guard/app/seleccionar-residencial/elegir/route.ts"]) {
     const s = fuente(accion);
     assert(s.includes("cookies().set(COOKIE_TENANT, tenantId, opcionesCookieTenant())"), `${accion}: escribe la misma cookie (reemplaza)`);
     assert(antes(s, '.eq("activo", true)', "cookies().set(COOKIE_TENANT"), `${accion}: valida la membresía activa ANTES de escribir`);
@@ -214,7 +219,7 @@ seccion("53. Admin no guarda el tenant de un guardia como contexto", () => {
   assert(JSON.stringify(resultadoEleccionAdmin("guardia")) === JSON.stringify({ guardarCookie: false, destino: "guard" }), "guardia → no guarda cookie, va a Guard");
   assert(resultadoEleccionAdmin("admin_residencial").guardarCookie && resultadoEleccionAdmin("admin_residencial").destino === "panel", "admin_residencial → guarda y entra");
   assert(!resultadoEleccionAdmin("residente").guardarCookie && !resultadoEleccionAdmin(null).guardarCookie, "otros roles → no guarda");
-  const s = fuente("apps/admin/app/seleccionar-residencial/actions.ts");
+  const s = fuente("apps/admin/app/seleccionar-residencial/elegir/route.ts");
   assert(antes(s, "if (resultado.guardarCookie) {", "cookies().set(COOKIE_TENANT"), "la única escritura está dentro de guardarCookie");
 });
 
@@ -223,8 +228,8 @@ seccion("54. Guard usa su propia cookie", () => {
   assert(!resultadoEleccionGuard("residente").guardarCookie && !resultadoEleccionGuard("super_admin").guardarCookie, "roles que no se eligen en Guard → no guarda");
   const lector = fuente("apps/guard/lib/acceso-guard.ts");
   assert(lector.includes("cookies().get(COOKIE_TENANT)?.value") && lector.includes('app: "guard"'), "Guard lee la cookie de su propio dominio");
-  const s = fuente("apps/guard/app/seleccionar-residencial/actions.ts");
-  assert(s.includes('redirect("/guard")') && s.includes("redirect(RUTA_SERVICIO_INACTIVO)"), "tras elegir: /guard si opera, /servicio-inactivo si no");
+  const s = fuente("apps/guard/app/seleccionar-residencial/elegir/route.ts");
+  assert(s.includes('redireccionEleccion("/guard")') && s.includes("redireccionEleccion(RUTA_SERVICIO_INACTIVO)"), "tras elegir: /guard si opera, /servicio-inactivo si no");
 });
 
 seccion("55. invitación con membresías previas → selección", () => {
@@ -296,6 +301,33 @@ seccion("60. ninguna resolución de membresía usa limit(1) u ORDER BY", () => {
     }
   }
   assert(consultas >= 8, `${consultas} lecturas de user_tenants revisadas`);
+});
+
+seccion("61. elegir residencial es un POST nativo con 303 (no una Server Action)", () => {
+  // Con la Server Action, en Chrome de iPad (WebKit) la cookie se guardaba
+  // pero la pantalla se quedaba en el selector: el navegador debe navegar
+  // solo, sin depender del router de cliente.
+  assert(RUTA_ELEGIR_RESIDENCIAL.startsWith(`${RUTA_SELECCIONAR_RESIDENCIAL}/`), "la ruta de elección cuelga de /seleccionar-residencial");
+  assert(RUTAS_CUENTA.some((r) => RUTA_ELEGIR_RESIDENCIAL.startsWith(r)), "Admin: el middleware la trata como ruta de cuenta (exige sesión, sin decidir membresía)");
+  for (const app of ["admin", "guard"]) {
+    const pagina = fuente(`apps/${app}/app/seleccionar-residencial/page.tsx`);
+    assert(pagina.includes('<form method="post" action={RUTA_ELEGIR_RESIDENCIAL} encType="multipart/form-data">'), `${app}: formulario HTML nativo`);
+    assert(!/action=\{elegir/.test(pagina) && !pagina.includes('from "./actions"'), `${app}: sin Server Action en el selector`);
+    const ruta = fuente(`apps/${app}/app/seleccionar-residencial/elegir/route.ts`);
+    assert(!ruta.includes('"use server"') && !ruta.includes("next/navigation"), `${app}: el handler responde, no lanza redirect()`);
+    assert(antes(ruta, "origenPermitidoEleccion(request.headers)", "request.formData()"), `${app}: comprueba el origen antes de leer el formulario`);
+    assert(antes(ruta, "auth.getUser()", ".from(\"user_tenants\")") && ruta.includes('.eq("user_id", user.id)'), `${app}: la membresía es la del usuario de la sesión`);
+    assert(ruta.includes("export function GET()") && ruta.includes("export async function POST("), `${app}: POST elige; GET vuelve al selector`);
+  }
+  const r = redireccionEleccion("/dashboard");
+  assert(r.status === 303 && r.headers.get("location") === "/dashboard" && r.headers.get("cache-control") === "no-store", "303 See Other, Location relativa, sin caché");
+  const h = (o: Record<string, string>) => new Headers(o);
+  assert(origenPermitidoEleccion(h({ origin: "https://a.example", host: "a.example" })), "mismo origen → permitido");
+  assert(!origenPermitidoEleccion(h({ origin: "https://otro.example", host: "a.example" })), "otro origen → rechazado");
+  assert(origenPermitidoEleccion(h({ origin: "https://a.example", "x-forwarded-host": "a.example", host: "interno:3000" })), "x-forwarded-host manda sobre host (como Next)");
+  assert(!origenPermitidoEleccion(h({ origin: "https://a.example", "x-forwarded-host": "b.example", host: "a.example" })), "x-forwarded-host distinto → rechazado");
+  assert(!origenPermitidoEleccion(h({ origin: "null", host: "a.example" })) && !origenPermitidoEleccion(h({ origin: "https://a.example" })), "Origin ilegible o sin host → rechazado");
+  assert(origenPermitidoEleccion(h({ host: "a.example" })), "sin Origin → permitido (igual que Next)");
 });
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);

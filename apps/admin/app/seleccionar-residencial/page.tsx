@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { Building } from "lucide-react";
-import { ROLE_LABELS, nombreTenantDeFila, opcionesSeleccion, rolDeFila } from "@gateflow/auth";
+import { ROLE_LABELS, RUTA_ELEGIR_RESIDENCIAL, nombreTenantDeFila, opcionesSeleccion, rolDeFila } from "@gateflow/auth";
 import type { RoleKey } from "@gateflow/types";
 import { GateFlowLogo } from "@gateflow/ui";
 import { destinoDeDecision } from "@/lib/acceso-panel";
 import { leerAccesoAdmin } from "@/lib/acceso-servidor";
 import { CerrarSesionButton } from "../sin-acceso/cerrar-sesion-button";
-import { elegirResidencialAdmin } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +42,7 @@ export default async function SeleccionarResidencialPage() {
             const rol = rolDeFila(fila);
             return (
               <li key={fila.tenant_id}>
-                <form action={elegirResidencialAdmin}>
+                <form method="post" action={RUTA_ELEGIR_RESIDENCIAL} encType="multipart/form-data">
                   <input type="hidden" name="tenant_id" value={fila.tenant_id} />
                   <button
                     type="submit"
