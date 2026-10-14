@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, MailCheck } from "lucide-react";
 import { Button, GateFlowLogo, Input, Label, PasswordInput } from "@gateflow/ui";
 import type { ResultadoAlta } from "@/lib/registro/alta";
 import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro } from "@/lib/registro/validacion";
+import { DOCUMENTOS, hrefDocumento, type ClaveDocumento } from "@/lib/legal/documentos";
 import { registrarCuentaPrueba } from "./actions";
 import { TurnstileWidget, type TurnstileHandle } from "./turnstile-widget";
 
@@ -21,6 +22,9 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
   const [mensajeFinal, setMensajeFinal] = useState("");
   const [timezone, setTimezone] = useState("");
   const [viviendas, setViviendas] = useState("");
+  // Solo para los enlaces legales: se lee el documento del país elegido.
+  const [pais, setPais] = useState("");
+  const enlaceLegal = (clave: ClaveDocumento) => (pais === "MX" || pais === "AR" ? hrefDocumento(clave, pais) : DOCUMENTOS[clave].ruta);
   // Turnstile: sin token no se puede enviar; cada token sirve una vez.
   const [tokenDesafio, setTokenDesafio] = useState<string | null>(null);
   const [errorDesafio, setErrorDesafio] = useState(false);
@@ -146,7 +150,7 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
         <div className="grid grid-cols-2 gap-3">
           <Campo id="pais" etiqueta="País" error={errores.pais}>
             {/* Sin preselección: el país define cómo se cobra la suscripción y el formato de los teléfonos. */}
-            <select id="pais" name="pais" required defaultValue="" className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
+            <select id="pais" name="pais" required defaultValue="" onChange={(e) => setPais(e.target.value)} className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
               <option value="" disabled>
                 Selecciona
               </option>
@@ -180,11 +184,11 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
             <input type="checkbox" name="aceptaTerminos" value="on" required className="mt-0.5 h-4 w-4" />
             <span>
               Acepto los{" "}
-              <a href="/terminos" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              <a href={enlaceLegal("terminos")} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                 Términos y Condiciones
               </a>{" "}
               y el{" "}
-              <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              <a href={enlaceLegal("privacidad")} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                 Aviso de Privacidad
               </a>
               .

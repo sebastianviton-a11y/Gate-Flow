@@ -41,6 +41,11 @@
 #        legales (ninguna línea existente cambia); rollback LG → idéntico a
 #        SM; LG se reaplica idéntico; con un documento cargado, el rollback
 #        aborta sin cambios; LG se revierte antes que SM
+#   LP + lectura pública de documentos publicados (20261015, Fase 2) sobre LG
+#        → 0 FAIL; el catálogo solo gana la función de historial y el
+#        EXECUTE de anon/authenticated en las 2 lecturas existentes;
+#        rollback LP → idéntico a LG; LP se reaplica idéntico; LP se
+#        revierte antes que LG
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -84,6 +89,8 @@ MIG_SM="20261013000000_superadmin_suscripcion_manual.sql"
 DOWN_SM="$SUPA/rollback/20261013000000_superadmin_suscripcion_manual.down.sql"
 MIG_LG="20261014000000_documentos_legales.sql"
 DOWN_LG="$SUPA/rollback/20261014000000_documentos_legales.down.sql"
+MIG_LP="20261015000000_documentos_legales_lectura_publica.sql"
+DOWN_LP="$SUPA/rollback/20261015000000_documentos_legales_lectura_publica.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -171,7 +178,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" || "$(basename "$m")" == "$MIG_LP" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -312,6 +319,26 @@ fi
 snapshot "$OUT/snap_LG_tras_abortar.txt"
 same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG_tras_abortar.txt" "LG_rollback_abortado_sin_cambios"
 sql -c "delete from public.documentos_legales_versiones; delete from public.audit_log where entidad = 'documentos_legales_versiones'" >/dev/null
+
+sql_file "$SUPA/migrations/$MIG_LP"
+run_suites LP "… + lectura pública legal" C
+snapshot "$OUT/snap_LP.txt"
+# Solo cambian las 2 lecturas existentes (su ACL) y se agrega la de historial.
+diff "$OUT/snap_LG.txt" "$OUT/snap_LP.txt" | grep '^[<>]' > "$OUT/diff_LP_sobre_LG.txt" || true
+if [[ "$(grep -c '^<' "$OUT/diff_LP_sobre_LG.txt")" == "2" && "$(grep -c '^>' "$OUT/diff_LP_sobre_LG.txt")" == "3" ]] \
+   && ! grep -qvE '^[<>] FN\|(public\.)?(documentos_legales_vigentes|documento_legal_publicado|documentos_legales_historial)\(' "$OUT/diff_LP_sobre_LG.txt"; then
+  echo "  lectura pública: solo cambian los permisos de 2 lecturas y se agrega el historial (tablas y demás funciones sin cambios)"
+else
+  echo "  lectura pública: cambios de catálogo inesperados (ver $OUT/diff_LP_sobre_LG.txt)"; FALLAS=$((FALLAS + 1))
+fi
+sql_file "$DOWN_LP"
+snapshot "$OUT/snap_LG_tras_down_LP.txt"
+same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG_tras_down_LP.txt" "rollback_LP"
+sql_file "$SUPA/migrations/$MIG_LP"
+snapshot "$OUT/snap_LP2.txt"
+same_catalog "$OUT/snap_LP.txt" "$OUT/snap_LP2.txt" "reaplicar_LP"
+sql_file "$DOWN_LP"
+
 sql_file "$DOWN_LG"
 snapshot "$OUT/snap_SM_tras_down_LG2.txt"
 same_catalog "$OUT/snap_SM2.txt" "$OUT/snap_SM_tras_down_LG2.txt" "rollback_LG_tras_abortar"

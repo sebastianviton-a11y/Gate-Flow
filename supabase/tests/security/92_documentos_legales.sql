@@ -26,6 +26,15 @@ create or replace function tests.lg() returns boolean language sql as $$
 $$;
 grant execute on function tests.lg() to anon, authenticated, service_role;
 
+-- ¿Está aplicada la lectura pública de la Fase 2 (20261015000000)? Con
+-- ella, documentos_legales_vigentes y documento_legal_publicado tienen
+-- EXECUTE para anon/authenticated a propósito; sus casos están en
+-- 91_documentos_legales_lectura.sql.
+create or replace function tests.lp_aplicada() returns boolean language sql as $$
+  select to_regprocedure('public.documentos_legales_historial(text,text)') is not null;
+$$;
+grant execute on function tests.lp_aplicada() to anon, authenticated, service_role;
+
 do $$ begin
   if not tests.lg() then raise notice 'INFO|92_documentos_legales omitido: migración no aplicada'; end if;
 end $$;
@@ -150,6 +159,7 @@ begin
     end loop;
   end loop;
   foreach f in array v_api loop
+    continue when tests.lp_aplicada() and f in ('public.documentos_legales_vigentes(text)', 'public.documento_legal_publicado(uuid)');
     perform tests.lg_ok('DL-05', f || ': SECURITY DEFINER, search_path vacío, sin EXECUTE para PUBLIC, anon, authenticated ni service_role',
       (select p.prosecdef and p.proconfig = array['search_path=""']
               and not has_function_privilege('anon', p.oid, 'EXECUTE')
@@ -179,8 +189,10 @@ begin
   r := tests.lg_llamar('00000000-0000-0000-0000-00000000000a',
          'select public.registrar_aceptaciones(''aaaaaaaa-0000-0000-0000-000000000000'', array[gen_random_uuid()], ''aceptacion_posterior'', true)');
   perform tests.lg_ok('DL-08b', 'la API no puede llamar registrar_aceptaciones', r like 'ERR:42501:permission denied%', r);
-  r := tests.lg_llamar('00000000-0000-0000-0000-00000000000a', 'select public.documentos_legales_vigentes(''MX'')', 'anon');
-  perform tests.lg_ok('DL-08c', 'anon no puede llamar documentos_legales_vigentes', r like 'ERR:42501:permission denied%', r);
+  if not tests.lp_aplicada() then
+    r := tests.lg_llamar('00000000-0000-0000-0000-00000000000a', 'select public.documentos_legales_vigentes(''MX'')', 'anon');
+    perform tests.lg_ok('DL-08c', 'anon no puede llamar documentos_legales_vigentes', r like 'ERR:42501:permission denied%', r);
+  end if;
   r := tests.lg_llamar('00000000-0000-0000-0000-00000000000a',
          'select public.descartar_aceptaciones_alta_fallida(''00000000-0000-0000-0000-00000000000a'', ''aaaaaaaa-0000-0000-0000-000000000000'')', 'service_role');
   perform tests.lg_ok('DL-08d', 'service_role no puede llamar descartar_aceptaciones_alta_fallida', r like 'ERR:42501:permission denied%', r);

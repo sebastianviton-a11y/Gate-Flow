@@ -1,4 +1,4 @@
-# Documentos legales y evidencia de aceptaciones — Fase 1 (inactiva)
+# Documentos legales y evidencia de aceptaciones — Fases 1 y 2 (aceptación inactiva)
 
 Migración: `supabase/migrations/20261014000000_documentos_legales.sql`
 (rollback: `supabase/rollback/20261014000000_documentos_legales.down.sql`).
@@ -136,10 +136,116 @@ nunca del llamador.
   todo se conserva. La depuración, cuando se decida, será una migración
   nueva con su prueba.
 
+## Fase 2 — lectura pública y páginas (la aceptación sigue inactiva)
+
+Migración: `supabase/migrations/20261015000000_documentos_legales_lectura_publica.sql`
+(rollback: `supabase/rollback/20261015000000_documentos_legales_lectura_publica.down.sql`).
+**No está aplicada en ningún proyecto.** Sin ella, las páginas muestran
+el estado pendiente (nunca un texto).
+
+### Qué cambia
+
+* `/terminos`, `/privacidad` y `/acuerdo-datos` (Admin) muestran la
+  versión **publicada y vigente** de cada documento para el país
+  (`?pais=MX|AR`, México por defecto), con título, versión, fecha de
+  vigencia, país y huella SHA-256, y el historial de versiones publicadas
+  (vigente, anterior, retirada y la próxima programada, cada una marcada).
+  `?version=<id>` abre una versión del historial.
+* Sin versión vigente para el país: «Documento pendiente de publicación ·
+  no definitivo», sin ningún texto. Un documento publicado en un país no
+  se muestra en el otro.
+* `?version=` de un borrador, de un aprobado sin publicar, de otro
+  documento o inexistente → «No encontramos esa versión», sin texto.
+* `/registro` enlaza los documentos del país elegido en el formulario
+  (`?pais=`).
+* `/aceptar-invitacion` enlaza los Términos del país del residencial de la
+  invitación. Lo decide el servidor (`app/aceptar-invitacion/actions.ts`,
+  server action sin argumentos): valida la sesión con `getUser()` y lee
+  con RLS las membresías activas y el país de su residencial (la
+  membresía se otorga al invitar; el enlace del correo no lleva el
+  residencial). El navegador no envía país ni residencial, y lo que se le
+  mande se ignora. Si no hay un único país (sin membresía, residenciales
+  de México y Argentina, error de lectura): aviso «No pudimos confirmar el
+  país de tu residencial», sin enlace y sin poder aceptar; «Reintentar»
+  si fue pasajero. Nunca se supone México. La aceptación (checkbox,
+  `terminos_aceptados_en`, contraseña) no cambia.
+* `/suscripcion`, `/alta-residente` y la landing siguen enlazando las
+  rutas (México por defecto).
+* No se registra ninguna aceptación nueva, no hay requisitos cargados y
+  nadie queda bloqueado: el checkbox actual de `/registro` y de la
+  invitación no cambia.
+
+### Lectura controlada (por qué estos permisos)
+
+* La migración crea `documentos_legales_historial(clave, pais)` y concede
+  EXECUTE a `anon` y `authenticated` **solo** en las tres lecturas:
+  `documentos_legales_vigentes(pais)`, `documento_legal_publicado(id)` y
+  `documentos_legales_historial(clave, pais)`. Son `SECURITY DEFINER`,
+  `search_path` vacío y devuelven únicamente versiones `publicado` o
+  `retirado` con `publicado_en`: nunca un borrador ni un aprobado sin
+  publicar, ni quién aprobó, ni nada de residenciales o aceptaciones.
+* Las tablas siguen sin ningún privilegio para la API; `service_role` no
+  recibe nada; `documentos_pendientes`, `registrar_aceptaciones` y el
+  resto siguen cerrados. Las tablas y permisos de la Fase 1 no cambian.
+* Qué versión está vigente lo decide la base con `now()` del servidor
+  (columna `situacion` del historial, misma regla que `vigentes`); la
+  página no compara fechas y el navegador no decide nada. Las páginas son
+  dinámicas y sus lecturas no pasan por la caché de datos de Next
+  (`fetchCache = "force-no-store"` y `noStore()`; con solo
+  `force-dynamic`, Next 14 guardaba las RPC sin vencimiento): una versión
+  programada pasa a vigente sola y un retiro se ve en la siguiente
+  petición.
+* Las páginas leen en el servidor con el cliente anónimo
+  (`createAnonServerClient`, sin cookies ni sesión) y solo por RPC; con o
+  sin sesión, de cualquier residencial, todos ven lo mismo. Son rutas
+  siempre públicas (`lib/rutas-publicas.ts`): sin sesión no redirigen a
+  `/login`.
+* Si la lectura falla (migración sin aplicar, red), se muestra el estado
+  pendiente y el servidor registra solo el código de error.
+* El texto (Markdown limitado) se pinta con elementos de React, nunca
+  como HTML: no puede inyectar marcado, scripts ni enlaces que no sean
+  `http(s)`, `mailto:` o anclas.
+
+### Cómo se cargan los textos reales
+
+Fuente: `legal/` (formato y ciclo en `legal/README.md`). Resumen:
+
+1. El texto entregado por la revisión jurídica se copia tal cual en
+   `legal/<carpeta>/v<versión>[-mx|-ar].md` como `borrador` (un archivo
+   por país si el texto difiere). Los borradores nunca se cargan.
+2. Con la aprobación jurídica: `estado: aprobado` y `aprobacion` (la
+   referencia verificable); revisión por PR.
+3. `node scripts/legal/documentos-legales.mjs validar` y
+   `sql-carga --salida carga.sql` (sin `--publicar`: llega a `aprobado`,
+   nada visible). Se ejecuta en el SQL Editor **de staging** y se
+   comprueba con `sql-verificar`.
+4. Para publicar: `estado: publicado` y `vigente_desde` futura (la Fase 1
+   rechaza vigencias de más de 5 minutos atrás y anteriores a la última
+   publicada del mismo documento y país), `sql-carga --publicar`, y la
+   misma secuencia (staging primero). Requiere 20261015 aplicada para que
+   se vea.
+5. Retirar: `estado: retirado` y `sql-carga --publicar`. La versión debe
+   haberse publicado antes (no se carga como retirada una versión que
+   nunca se publicó con vigencia pasada).
+
+La carga es una transacción idempotente que aborta sin cambios ante
+cualquier diferencia (otro texto, otra referencia de aprobación, otra
+vigencia, repositorio atrasado respecto de la base, script editado).
+
+### Pendiente (Fase 2)
+
+* Aplicar 20261015 (con autorización; primero staging).
+* Los textos reales (no están en el repositorio) y su aprobación.
+* La aceptación obligatoria, los requisitos y el registro de evidencia
+  siguen inactivos (fases siguientes).
+* Probado en Chromium (escritorio y móvil emulado); falta Safari/WebKit y
+  dispositivos reales.
+
 ## Pendiente para fases posteriores (nada de esto está activo)
 
 1. Textos aprobados por la revisión jurídica (domicilio de la prestadora,
-   `privacidad@`/`soporte@` verificados) y su carga como versiones.
+   `privacidad@`/`soporte@` verificados) y su carga como versiones (el
+   mecanismo de carga ya existe: Fase 2).
 2. Decidir los requisitos por rol y país (tabla vacía hoy) y si algún
    tratamiento exige consentimiento.
 3. Validación de facultades de representación para el Acuerdo de
@@ -147,9 +253,10 @@ nunca del llamador.
 4. Fase de registro: `crear_cuenta_prueba` registrará las aceptaciones
    con origen `registro`; `revertir_cuenta_prueba` deberá llamar a
    `descartar_aceptaciones_alta_fallida` antes de borrar el usuario.
-5. Permisos para la API (solo las funciones necesarias) y la interfaz.
-   Cualquier bloqueo de acceso por pendientes se decidirá y probará en su
-   propia fase.
+5. Permisos para la API de pendientes y registro, y su interfaz (la
+   Fase 2 solo abre las lecturas de documentos publicados). Cualquier
+   bloqueo de acceso por pendientes se decidirá y probará en su propia
+   fase.
 6. Plazo de conservación y depuración.
 
 ## Pruebas
@@ -168,3 +275,11 @@ nunca del llamador.
   API.
 * Los dos runners aplican, revierten y reaplican la migración y comparan
   el catálogo. Con datos cargados, el rollback aborta sin cambios.
+* Fase 2: `supabase/tests/security/91_documentos_legales_lectura.sql`
+  (fase LP: qué devuelve cada lectura a anon/authenticated, borradores y
+  aprobados nunca, vigente decidida por la base, sin acceso a tablas ni a
+  escrituras, leer no escribe, aislamiento entre residenciales),
+  `supabase/tests/grants/98_documentos_legales_lectura.sql` (EXECUTE
+  exacto con los default privileges de staging), `tests/legal/` (cargador
+  contra el esquema real y páginas en navegador; ver `tests/legal/README.md`)
+  y `apps/admin/lib/__tests__/legal-paginas.test.ts`.
