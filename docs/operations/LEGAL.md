@@ -157,8 +157,20 @@ el estado pendiente (nunca un texto).
 * `?version=` de un borrador, de un aprobado sin publicar, de otro
   documento o inexistente → «No encontramos esa versión», sin texto.
 * `/registro` enlaza los documentos del país elegido en el formulario
-  (`?pais=`); `/aceptar-invitacion`, `/suscripcion`, `/alta-residente` y
-  la landing siguen enlazando las rutas (México por defecto).
+  (`?pais=`).
+* `/aceptar-invitacion` enlaza los Términos del país del residencial de la
+  invitación. Lo decide el servidor (`app/aceptar-invitacion/actions.ts`,
+  server action sin argumentos): valida la sesión con `getUser()` y lee
+  con RLS las membresías activas y el país de su residencial (la
+  membresía se otorga al invitar; el enlace del correo no lleva el
+  residencial). El navegador no envía país ni residencial, y lo que se le
+  mande se ignora. Si no hay un único país (sin membresía, residenciales
+  de México y Argentina, error de lectura): aviso «No pudimos confirmar el
+  país de tu residencial», sin enlace y sin poder aceptar; «Reintentar»
+  si fue pasajero. Nunca se supone México. La aceptación (checkbox,
+  `terminos_aceptados_en`, contraseña) no cambia.
+* `/suscripcion`, `/alta-residente` y la landing siguen enlazando las
+  rutas (México por defecto).
 * No se registra ninguna aceptación nueva, no hay requisitos cargados y
   nadie queda bloqueado: el checkbox actual de `/registro` y de la
   invitación no cambia.
@@ -224,7 +236,6 @@ vigencia, repositorio atrasado respecto de la base, script editado).
 
 * Aplicar 20261015 (con autorización; primero staging).
 * Los textos reales (no están en el repositorio) y su aprobación.
-* `/aceptar-invitacion` no conoce el país: enlaza México por defecto.
 * La aceptación obligatoria, los requisitos y el registro de evidencia
   siguen inactivos (fases siguientes).
 * Probado en Chromium (escritorio y móvil emulado); falta Safari/WebKit y

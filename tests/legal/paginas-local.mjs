@@ -10,7 +10,9 @@
 //      programada), documento sin publicar → pendiente, borrador /
 //      aprobado / versión de otro documento → no encontrada, país por
 //      URL, sin sesión y con sesión de dos residenciales (mismo
-//      contenido), /registro y /aceptar-invitacion enlazan bien, la API
+//      contenido), /registro enlaza el país elegido, /aceptar-invitacion
+//      el del residencial de la invitación (o un aviso si no se puede
+//      determinar; nunca México por defecto), la API
 //      no abre tablas ni funciones de escritura, leer no escribe nada.
 //   3. Rollback de 20261015: vuelve el estado pendiente.
 // Pila: Postgres local (gf_legal_paginas) + PostgREST + gateway +
@@ -184,9 +186,11 @@ async function main() {
   );
   const ua = crypto.randomUUID();
   const ub = crypto.randomUUID();
+  const uab = crypto.randomUUID(); // residenciales de México y de Argentina
+  const usin = crypto.randomUUID(); // sin membresía activa
   const correo = (k) => `zz_autotest+${run.toLowerCase()}-${k}@gateflow.invalid`;
-  execFileSync("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", DB, "-c", "set role supabase_auth_admin", "-c", `insert into auth.users (id, email) values ('${ua}', '${correo("a")}'), ('${ub}', '${correo("b")}')`]);
-  sql(`insert into public.user_tenants (user_id, tenant_id, rol_id) select u, t, (select id from public.roles where clave = 'admin_residencial') from (values ('${ua}'::uuid, '${fix.a}'::uuid), ('${ub}'::uuid, '${fix.b}'::uuid)) v(u, t)`);
+  execFileSync("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", DB, "-c", "set role supabase_auth_admin", "-c", `insert into auth.users (id, email) values ('${ua}', '${correo("a")}'), ('${ub}', '${correo("b")}'), ('${uab}', '${correo("ab")}'), ('${usin}', '${correo("sin")}')`]);
+  sql(`insert into public.user_tenants (user_id, tenant_id, rol_id) select u, t, (select id from public.roles where clave = r) from (values ('${ua}'::uuid, '${fix.a}'::uuid, 'admin_residencial'), ('${ub}'::uuid, '${fix.b}'::uuid, 'guardia'), ('${uab}'::uuid, '${fix.a}'::uuid, 'guardia'), ('${uab}'::uuid, '${fix.b}'::uuid, 'guardia')) v(u, t, r)`);
   const docs = path.join(TMP, "legal");
   escribirDocumentos(docs);
   const carga = path.join(TMP, "carga.sql");
@@ -257,7 +261,8 @@ async function main() {
     ];
     for (const perfil of perfiles) await paginas(navegador, perfil, ID);
     await sesiones(navegador, { secreto, ua, ub, ua_correo: correo("a"), ub_correo: correo("b") });
-    await registroEInvitacion(navegador, { secreto, ua, correo: correo("a") });
+    await registroEInvitacion(navegador);
+    await invitacion(navegador, { secreto, usuarios: { mx: [ua, correo("a")], ar: [ub, correo("b")], ab: [uab, correo("ab")], sin: [usin, correo("sin")] } });
     await api(anon, ID);
     ok("80", sql(HUELLA) === huellaInicial, "leer páginas y API no escribió nada (versiones, aceptaciones, auditoría, residenciales y membresías intactos)");
 
@@ -383,7 +388,7 @@ async function paginas(navegador, perfil, ID) {
   }
 }
 
-/** Con sesión (admin de dos residenciales) se ve exactamente lo mismo que sin sesión. */
+/** Con sesión (admin de un residencial, guardia de otro) se ve exactamente lo mismo que sin sesión. */
 async function sesiones(navegador, { secreto, ua, ub, ua_correo, ub_correo }) {
   const contenido = async (cookie) => {
     const ctx = await navegador.newContext({ viewport: { width: 1366, height: 900 } });
@@ -403,11 +408,11 @@ async function sesiones(navegador, { secreto, ua, ub, ua_correo, ub_correo }) {
   const a = await contenido(cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: ua, email: ua_correo }));
   const b = await contenido(cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: ub, email: ub_correo }));
   ok("70", a.status === 200 && b.status === 200 && a.ruta === "/terminos" && b.ruta === "/terminos", "con sesión (residencial MX y residencial AR) la página se abre sin redirigir");
-  ok("71", sin.articulo === a.articulo && a.articulo === b.articulo && sin.historial === a.historial && a.historial === b.historial, "sin sesión, admin de A y admin de B ven exactamente el mismo documento e historial");
+  ok("71", sin.articulo === a.articulo && a.articulo === b.articulo && sin.historial === a.historial && a.historial === b.historial, "sin sesión, admin del residencial MX y guardia del residencial AR ven exactamente el mismo documento e historial");
   ok("72", ![ua, ub].some((u) => a.articulo.includes(u) || b.articulo.includes(u)) && !/ZZ_AUTOTEST_\d/.test(a.articulo + b.articulo), "la página no muestra datos de la sesión ni del residencial");
 }
 
-async function registroEInvitacion(navegador, { secreto, ua, correo }) {
+async function registroEInvitacion(navegador) {
   for (const perfil of [
     { id: "escritorio", contexto: { viewport: { width: 1366, height: 900 } } },
     { id: "movil", contexto: { ...playwright.devices["iPhone 13"] } },
@@ -432,24 +437,116 @@ async function registroEInvitacion(navegador, { secreto, ua, correo }) {
       await ctx.close();
     }
   }
-  // Invitación: con la sesión del enlace, el formulario enlaza /terminos (México por defecto).
-  const ctx = await navegador.newContext({ ...playwright.devices["iPhone 13"] });
-  const c = cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: ua, email: correo });
-  await ctx.addCookies([{ name: c.nombre, value: c.valor, url: URL_ADMIN }]);
-  const page = await ctx.newPage();
-  try {
+}
+
+/** Id de una server action en el build de Admin (como la llamaría el formulario). */
+function idAccion(ruta, nombre) {
+  const pagina = path.join(RAIZ, `apps/admin/.next/server/app/${ruta}/page.js`);
+  if (!fs.existsSync(pagina)) return null;
+  return new RegExp(`[{,]"?([0-9a-f]{40})"?:\\(\\)=>Promise\\.resolve\\(\\)\\.then\\([^)]*\\)\\)\\.then\\(\\w+=>\\w+\\.${nombre}\\)`).exec(fs.readFileSync(pagina, "utf8"))?.[1] ?? null;
+}
+
+/**
+ * /aceptar-invitacion: los Términos son los del país del residencial de la
+ * invitación (membresías activas de la sesión, leídas en el servidor). Sin
+ * país determinado: estado claro, sin enlace y sin poder aceptar.
+ */
+async function invitacion(navegador, { secreto, usuarios }) {
+  const abrir = async ([id, email], perfil = { viewport: { width: 1366, height: 900 } }) => {
+    const ctx = await navegador.newContext(perfil);
+    const c = cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: id, email });
+    await ctx.addCookies([{ name: c.nombre, value: c.valor, url: URL_ADMIN }]);
+    const page = await ctx.newPage();
     await page.goto(`${URL_ADMIN}/aceptar-invitacion`);
-    const enlace = page.locator("a", { hasText: "términos y condiciones" });
-    await enlace.waitFor({ timeout: 15_000 });
-    ok("7A", (await enlace.getAttribute("href")) === "/terminos", "/aceptar-invitacion sigue enlazando /terminos");
-    const [nueva] = await Promise.all([ctx.waitForEvent("page"), enlace.click()]);
-    await nueva.waitForLoadState();
-    ok("7B", /Versión\s+1\.1/.test(await textoDe(nueva, '[data-testid="legal-meta"]')) && /México/.test(await textoDe(nueva, '[data-testid="legal-meta"]')), "desde la invitación se abren los Términos vigentes (México por defecto)");
-  } catch (e) {
-    ok("7A", false, "/aceptar-invitacion con sesión", String(e).slice(0, 200));
-  } finally {
-    await ctx.close();
+    await page.locator('input[type="checkbox"]').waitFor({ timeout: 15_000 });
+    // Espera a que el servidor responda (enlace o aviso).
+    await page.locator('label a:has-text("términos y condiciones"), [data-testid="invitacion-pais-indeterminado"]').first().waitFor({ timeout: 15_000 });
+    return { ctx, page };
+  };
+  const terminosAceptados = (id) => sql(`select terminos_aceptados_en is not null from public.users where id = '${id}'`);
+
+  for (const [caso, clave, pais, nombre, version, marca, perfil] of [
+    ["7A", "mx", "MX", "México", "1.1", "ZZ_TEXTO_VIGENTE_MX", { ...playwright.devices["iPhone 13"] }],
+    ["7B", "ar", "AR", "Argentina", "1.0", "ZZ_TEXTO_COMUN_MX_AR", { viewport: { width: 1366, height: 900 } }],
+  ]) {
+    const { ctx, page } = await abrir(usuarios[clave], perfil);
+    try {
+      const enlace = page.locator('label a:has-text("términos y condiciones")');
+      ok(`${caso}a`, (await enlace.getAttribute("href")) === `/terminos?pais=${pais}` && (await page.locator("label").filter({ has: page.locator('input[type="checkbox"]') }).innerText()).includes(`(${nombre})`), `/aceptar-invitacion, residencial de ${nombre}: enlace a los Términos de ${nombre}`);
+      ok(`${caso}b`, await page.locator('input[type="checkbox"]').isEnabled(), "el checkbox se puede marcar");
+      const [nueva] = await Promise.all([ctx.waitForEvent("page"), enlace.click()]);
+      await nueva.waitForLoadState();
+      ok(`${caso}c`, new RegExp(`Versión\\s+${version.replace(".", "\\.")}`).test(await textoDe(nueva, '[data-testid="legal-meta"]')) && (await textoDe(nueva, '[data-testid="legal-contenido"]')).includes(marca), `se abren los Términos vigentes de ${nombre} (${version})`);
+      ok(`${caso}d`, await sinScrollHorizontal(page), "sin scroll horizontal");
+      await captura(page, `invitacion-${clave}-${perfil.viewport.width < 800 ? "movil" : "escritorio"}`);
+    } finally {
+      await ctx.close();
+    }
   }
+
+  // El navegador no puede cambiar el país: la acción no tiene argumentos y los que se le envíen se ignoran.
+  const id = idAccion("aceptar-invitacion", "paisDeLaInvitacion");
+  if (!id) {
+    ok("7E", false, "no se encontró la server action paisDeLaInvitacion en el build");
+  } else {
+    const c = cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: usuarios.mx[0], email: usuarios.mx[1] });
+    const r = await fetch(`${URL_ADMIN}/aceptar-invitacion`, {
+      method: "POST",
+      headers: { "next-action": id, "content-type": "text/plain;charset=UTF-8", accept: "text/x-component", cookie: `${c.nombre}=${c.valor}` },
+      body: JSON.stringify(["AR", { pais: "AR", tenant_id: crypto.randomUUID() }]),
+    });
+    const cuerpo = await r.text();
+    ok("7E", r.status === 200 && cuerpo.includes('"pais":"MX"') && !cuerpo.includes('"pais":"AR"'), "llamar la acción con un país o residencial falsificado no cambia nada (sigue México)", `${r.status} ${cuerpo.slice(-160)}`);
+    const sinSesion = await fetch(`${URL_ADMIN}/aceptar-invitacion`, { method: "POST", headers: { "next-action": id, "content-type": "text/plain;charset=UTF-8", accept: "text/x-component" }, body: "[]" });
+    ok("7F", (await sinSesion.text()).includes('"motivo":"sin_sesion"'), "sin sesión, la acción no devuelve ningún país");
+  }
+
+  // Residenciales de dos países: no se elige uno.
+  {
+    const { ctx, page } = await abrir(usuarios.ab, { ...playwright.devices["iPhone 13"] });
+    try {
+      const aviso = page.locator('[data-testid="invitacion-pais-indeterminado"]');
+      ok("7G", (await aviso.isVisible()) && (await page.locator('label a:has-text("términos y condiciones")').count()) === 0 && (await page.locator('input[type="checkbox"]').isDisabled()), "residenciales de México y Argentina → aviso claro, sin enlace y sin poder marcar el checkbox (no se supone México)");
+      ok("7H", (await aviso.innerText()).includes("Pide a quien te invitó") && (await aviso.locator("button").count()) === 0, "no es pasajero: sin «Reintentar», con a quién acudir");
+      await page.locator("#ai-nombre").fill("Persona Ficticia");
+      await page.locator("#ai-password").fill("ZzFicticia-123");
+      await page.locator("#ai-password2").fill("ZzFicticia-123");
+      await page.getByRole("button", { name: /Crear contraseña y continuar/ }).click();
+      await page.waitForTimeout(800);
+      ok("7I", new URL(page.url()).pathname === "/aceptar-invitacion" && (await page.locator(".text-destructive").innerText()).includes("No pudimos confirmar el país") && terminosAceptados(usuarios.ab[0]) === "f", "enviar igual no hace nada: ni aceptación guardada ni contraseña");
+      await captura(page, "invitacion-indeterminado-movil");
+    } finally {
+      await ctx.close();
+    }
+  }
+  {
+    const { ctx, page } = await abrir(usuarios.sin);
+    try {
+      ok("7J", (await page.locator('[data-testid="invitacion-pais-indeterminado"]').isVisible()) && (await page.locator('label a:has-text("términos y condiciones")').count()) === 0, "sin membresía activa → aviso claro, sin enlace");
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  // Error al leer (permiso retirado un momento) → «Reintentar»; al volver, el enlace correcto.
+  sql("revoke select on public.user_tenants from authenticated");
+  try {
+    const { ctx, page } = await abrir(usuarios.ar);
+    try {
+      const boton = page.locator('[data-testid="invitacion-pais-indeterminado"] button', { hasText: "Reintentar" });
+      ok("7K", (await boton.isVisible()) && (await page.locator('input[type="checkbox"]').isDisabled()), "error de lectura → aviso con «Reintentar», sin poder aceptar");
+      sql("grant select on public.user_tenants to authenticated");
+      await boton.click();
+      await page.locator('label a:has-text("términos y condiciones")').waitFor({ timeout: 15_000 });
+      ok("7L", (await page.locator('label a:has-text("términos y condiciones")').getAttribute("href")) === "/terminos?pais=AR" && (await page.locator('input[type="checkbox"]').isEnabled()), "tras «Reintentar», el enlace de Argentina y el checkbox habilitado");
+    } finally {
+      await ctx.close();
+    }
+  } finally {
+    sql("grant select on public.user_tenants to authenticated");
+  }
+  ok("7M", ["mx", "ar", "ab", "sin"].every((k) => terminosAceptados(usuarios[k][0]) === "f"), "abrir la invitación no registra ninguna aceptación");
+  ok("7N", /aceptar-invitacion: país del residencial no determinado \((varios_paises|sin_membresia|error)\)/.test(leerLog("admin")) && !Object.values(usuarios).some(([u, e]) => leerLog("admin").includes(u) || leerLog("admin").includes(e)), "el servidor registra solo el motivo, sin ids ni correos");
 }
 
 /** La API pública solo expone las tres lecturas; nada de tablas ni escrituras. */

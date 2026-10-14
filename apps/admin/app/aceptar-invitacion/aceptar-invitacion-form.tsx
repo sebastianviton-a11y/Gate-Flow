@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
 import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
+import { hrefDocumento, nombrePais } from "@/lib/legal/documentos";
+import { reintentable, type PaisInvitacion } from "@/lib/legal/pais-invitacion";
+import { paisDeLaInvitacion } from "./actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -21,6 +24,19 @@ export function AceptarInvitacionForm() {
   const [confirmarPassword, setConfirmarPassword] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // País de los documentos legales: el del residencial de la invitación,
+  // decidido en el servidor (actions.ts). null mientras se consulta; sin
+  // país no hay enlace ni se puede aceptar (nunca se supone México).
+  const [paisLegal, setPaisLegal] = useState<PaisInvitacion | null>(null);
+
+  async function cargarPaisLegal() {
+    setPaisLegal(null);
+    try {
+      setPaisLegal(await paisDeLaInvitacion());
+    } catch {
+      setPaisLegal({ estado: "indeterminado", motivo: "error" });
+    }
+  }
 
   useEffect(() => {
     async function verificarSesion() {
@@ -55,6 +71,7 @@ export function AceptarInvitacionForm() {
         console.error("[GateFlow] getSession falló:", errorSesion.message, errorSesion.status);
       }
       setEstado(data.session ? "lista" : "invalida");
+      if (data.session) await cargarPaisLegal();
     }
     verificarSesion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,6 +88,10 @@ export function AceptarInvitacionForm() {
     }
     if (password !== confirmarPassword) {
       setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (paisLegal?.estado !== "ok") {
+      setError("No pudimos confirmar el país de tu residencial, así que no podemos mostrarte los términos que te corresponden.");
       return;
     }
     if (!aceptaTerminos) {
@@ -180,15 +201,45 @@ export function AceptarInvitacionForm() {
           </div>
 
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} className="mt-0.5 h-4 w-4" />
+            <input
+              type="checkbox"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              disabled={paisLegal?.estado !== "ok"}
+              className="mt-0.5 h-4 w-4"
+            />
             <span>
               Acepto los{" "}
-              <a href="/terminos" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                términos y condiciones
-              </a>{" "}
-              de GateFlow.
+              {paisLegal?.estado === "ok" ? (
+                <a href={hrefDocumento("terminos", paisLegal.pais)} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  términos y condiciones
+                </a>
+              ) : (
+                "términos y condiciones"
+              )}{" "}
+              de GateFlow{paisLegal?.estado === "ok" ? ` (${nombrePais(paisLegal.pais)})` : ""}.
+              {paisLegal === null && <Loader2 className="ml-1 inline h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Cargando" />}
             </span>
           </label>
+          {paisLegal?.estado === "indeterminado" && (
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn-foreground" data-testid="invitacion-pais-indeterminado">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">No pudimos confirmar el país de tu residencial.</p>
+                <p className="mt-1">
+                  Sin ese dato no podemos mostrarte los términos que te corresponden, así que todavía no puedes continuar.{" "}
+                  {reintentable(paisLegal.motivo) ? (
+                    <button type="button" onClick={cargarPaisLegal} className="font-medium text-primary underline">
+                      Reintentar
+                    </button>
+                  ) : (
+                    "Pide a quien te invitó que revise tu invitación"
+                  )}
+                  . Si el problema sigue, escribe a soporte@gateflow.mx.
+                </p>
+              </div>
+            </div>
+          )}
 
           {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 

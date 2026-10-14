@@ -762,6 +762,11 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     await pg.waitForSelector('input[type="password"]', { timeout: 20_000 }).catch(() => null);
     const tg = await texto(pg);
     ok(e("33"), !/STEP \d|access_token|refresh_token/.test(tg) && !consola.some((l) => /access_token|refresh_token|STEP \d/.test(l)), `[${p}] aceptar invitación: sin consola de diagnóstico ni tokens visibles`, consola.find((l) => /access_token|STEP/.test(l)) ?? "");
+    // Los Términos que se aceptan son los del país del residencial (Argentina), decididos en el servidor.
+    const enlaceTerminos = pg.locator('label a:has-text("términos y condiciones")');
+    await enlaceTerminos.waitFor({ timeout: 15_000 }).catch(() => null);
+    const hrefTerminos = await enlaceTerminos.getAttribute("href").catch(() => null);
+    ok(e("33"), hrefTerminos === "/terminos?pais=AR", `[${p}] invitación de un residencial de Argentina: enlaza los Términos de Argentina`, hrefTerminos);
     await pg.locator("#ai-nombre").fill("Guardia Sintético");
     await pg.locator("#ai-password").fill(guardia.password);
     await pg.locator("#ai-password2").fill(guardia.password);
