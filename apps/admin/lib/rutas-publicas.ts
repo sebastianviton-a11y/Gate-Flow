@@ -14,9 +14,10 @@ export const RUTAS_SOLO_INVITADOS = ["/login", "/registro"] as const;
  *                        la persona a mitad del proceso.
  *   /confirmar-cuenta    recibe el enlace del correo de /registro y
  *                        establece la sesión (mismo patrón).
- *   /terminos, /privacidad  contenido legal que cualquiera debe poder
- *                        leer sin ser redirigido (se enlazan desde el
- *                        checkbox de /registro y de /aceptar-invitacion).
+ *   /terminos, /privacidad, /acuerdo-datos  documentos legales que
+ *                        cualquiera debe poder leer sin ser redirigido (se
+ *                        enlazan desde /registro, /aceptar-invitacion y la
+ *                        landing); solo muestran versiones publicadas.
  *   /sin-acceso          destino de quien tiene sesión pero no un
  *                        residencial activo; no consulta la sesión, así
  *                        que no puede entrar en bucle.
@@ -29,6 +30,7 @@ export const RUTAS_SIEMPRE_PUBLICAS = [
   "/confirmar-cuenta",
   "/terminos",
   "/privacidad",
+  "/acuerdo-datos",
   "/residencial-suspendido",
   "/recuperar-password",
   "/restablecer-password",

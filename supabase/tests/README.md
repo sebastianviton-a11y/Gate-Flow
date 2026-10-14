@@ -66,6 +66,18 @@ gana objetos legales, revierten (idéntico a SM), reaplican y, con una
 versión cargada, comprueban que el rollback aborta sin cambios. Detalle
 en `docs/operations/LEGAL.md`.
 
+## Lectura pública de documentos (fase LP, 20261015000000)
+
+| Archivo | Contenido |
+|---|---|
+| `security/91_documentos_legales_lectura.sql` | Con documentos ficticios en todos los estados: `anon` y `authenticated` leen vigentes, una versión publicada o retirada por id y el historial por país (vigente, anterior, retirada, programada); nunca un borrador ni un aprobado sin publicar ni quién aprobó; la vigente del historial coincide con `documentos_legales_vigentes`; parámetros inválidos → 22023; sin acceso a tablas ni a `documentos_pendientes`/`registrar_aceptaciones`; `service_role` sin EXECUTE; leer no escribe; admins de dos residenciales y anon leen lo mismo. |
+| `grants/98_documentos_legales_lectura.sql` | Con los default privileges de staging, EXECUTE de la API solo en las tres lecturas (anon y authenticated) y ningún privilegio de tabla. |
+
+Ambos runners aplican LP después de LG, comprueban que el catálogo solo
+gana la función de historial y esos EXECUTE, revierten (idéntico a LG),
+reaplican y revierten LP antes que LG. `92`/`97` (fase LG) tienen en
+cuenta si LP está aplicada.
+
 ## Pendientes conocidos
 
 Ninguno en el flujo de paquetes. La reconciliación
