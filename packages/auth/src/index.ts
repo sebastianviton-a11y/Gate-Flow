@@ -25,8 +25,11 @@ export {
 export {
   COOKIE_TENANT,
   RUTA_SELECCIONAR_RESIDENCIAL,
+  RUTA_ELEGIR_RESIDENCIAL,
   SELECT_MEMBRESIAS_ACCESO,
   opcionesCookieTenant,
+  redireccionEleccion,
+  origenPermitidoEleccion,
   opcionesSeleccion,
   rolDeFila,
   nombreTenantDeFila,
