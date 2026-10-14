@@ -53,6 +53,19 @@ Recorre base → grants → reconciliación → migración A (y A sobre un
 sus rollbacks. Los casos `PENDIENTE` son fallos conocidos cuya corrección
 espera aprobación; se listan aparte y no cuentan como FAIL.
 
+## Documentos legales (fase LG, 20261014000000)
+
+| Archivo | Contenido |
+|---|---|
+| `security/92_documentos_legales.sql` | Fase 1 inactiva: sin versiones, requisitos ni permisos; ciclo de versiones inmutable, auditoría, TRUNCATE, pendientes/registro multitenant por país, alcance de residencial, consentimiento y revocación, evidencia inmutable que sobrevive a la cuenta y al residencial, descarte solo de un alta fallida. Concede EXECUTE a `authenticated` solo dentro de cada transacción de prueba. |
+| `security/concurrencia_aceptaciones.sh` | Dos sesiones reales (Acuerdo del mismo residencial, doble envío, residenciales distintos) en una **copia** desechable de la base: la evidencia no se puede borrar. |
+| `grants/97_documentos_legales.sql` | Con los default privileges de staging, ningún privilegio de tabla, de columna ni EXECUTE para la API. |
+
+Ambos runners aplican LG después de SM, verifican que el catálogo solo
+gana objetos legales, revierten (idéntico a SM), reaplican y, con una
+versión cargada, comprueban que el rollback aborta sin cambios. Detalle
+en `docs/operations/LEGAL.md`.
+
 ## Pendientes conocidos
 
 Ninguno en el flujo de paquetes. La reconciliación
