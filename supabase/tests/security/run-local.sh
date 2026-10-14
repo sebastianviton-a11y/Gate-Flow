@@ -35,6 +35,12 @@
 #        → 3 PASS; el catálogo solo gana las 4 funciones nuevas (tenant_operativo,
 #        billing_* y tablas sin cambios); rollback SM → idéntico a RE; SM se
 #        reaplica idéntico
+#   LG + documentos legales y evidencia de aceptaciones (20261014, inactiva)
+#        → 0 FAIL; aceptaciones simultáneas (concurrencia_aceptaciones.sh,
+#        en una copia de la base) → 3 PASS; el catálogo solo GANA objetos
+#        legales (ninguna línea existente cambia); rollback LG → idéntico a
+#        SM; LG se reaplica idéntico; con un documento cargado, el rollback
+#        aborta sin cambios; LG se revierte antes que SM
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -76,6 +82,8 @@ MIG_RE="20261011000000_residentes_enlace.sql"
 DOWN_RE="$SUPA/rollback/20261011000000_residentes_enlace.down.sql"
 MIG_SM="20261013000000_superadmin_suscripcion_manual.sql"
 DOWN_SM="$SUPA/rollback/20261013000000_superadmin_suscripcion_manual.down.sql"
+MIG_LG="20261014000000_documentos_legales.sql"
+DOWN_LG="$SUPA/rollback/20261014000000_documentos_legales.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -163,7 +171,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -269,6 +277,45 @@ same_catalog "$OUT/snap_RE2.txt" "$OUT/snap_RE_tras_down_SM.txt" "rollback_SM"
 sql_file "$SUPA/migrations/$MIG_SM"
 snapshot "$OUT/snap_SM2.txt"
 same_catalog "$OUT/snap_SM.txt" "$OUT/snap_SM2.txt" "reaplicar_SM"
+
+sql_file "$SUPA/migrations/$MIG_LG"
+run_suites LG "… + documentos legales" C
+echo "  concurrencia de aceptaciones legales (dos sesiones, en una copia de la base):"
+bash "$DIR/concurrencia_aceptaciones.sh" "$DB" > "$OUT/concurrencia_aceptaciones.log" 2>&1 || true
+sed 's/^/    /' "$OUT/concurrencia_aceptaciones.log"
+if grep -qv '^PASS|' "$OUT/concurrencia_aceptaciones.log" || [[ "$(grep -c '^PASS|' "$OUT/concurrencia_aceptaciones.log")" != "3" ]]; then FALLAS=$((FALLAS + 1)); fi
+snapshot "$OUT/snap_LG.txt"
+# La migración solo AGREGA objetos legales: nada existente cambia ni desaparece.
+LG_OBJ='(documentos_legales|documentos_legales_versiones|requisitos_legales|aceptaciones_legales)'
+LG_FN='(documentos_legales_[a-z_]+|documento_legal_publicado|documentos_pendientes|registrar_aceptaciones|descartar_aceptaciones_alta_fallida|requisitos_legales_auditar|aceptaciones_legales_guardia)'
+diff "$OUT/snap_SM2.txt" "$OUT/snap_LG.txt" | grep '^[<>]' > "$OUT/diff_LG_sobre_SM.txt" || true
+if [[ "$(grep -c '^<' "$OUT/diff_LG_sobre_SM.txt")" == "0" && "$(grep -c '^>' "$OUT/diff_LG_sobre_SM.txt")" -gt 0 ]] \
+   && ! grep -vE "^> (FN\|(public\.)?$LG_FN\(|(TG|ACL|CON)\|(public\.)?$LG_OBJ\||IDX\|(public\.)?$LG_OBJ(_[a-z_]+)?\|)" "$OUT/diff_LG_sobre_SM.txt" >/dev/null; then
+  echo "  documentos legales: el catálogo solo gana $(grep -c '^>' "$OUT/diff_LG_sobre_SM.txt") líneas de objetos legales (nada existente cambia)"
+else
+  echo "  documentos legales: cambios de catálogo inesperados (ver $OUT/diff_LG_sobre_SM.txt)"; FALLAS=$((FALLAS + 1))
+fi
+sql_file "$DOWN_LG"
+snapshot "$OUT/snap_SM_tras_down_LG.txt"
+same_catalog "$OUT/snap_SM2.txt" "$OUT/snap_SM_tras_down_LG.txt" "rollback_LG"
+sql_file "$SUPA/migrations/$MIG_LG"
+snapshot "$OUT/snap_LG2.txt"
+same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG2.txt" "reaplicar_LG"
+# Con un documento cargado, el rollback debe abortar sin tocar nada (un
+# borrador: es lo único que después se puede borrar para seguir).
+sql -c "select tests.lg_version('terminos', '1.0', 'MX', 'borrador')" >/dev/null
+if sql -f "$DOWN_LG" >/dev/null 2>"$OUT/LG_con_datos.err"; then
+  echo "  documentos legales: el rollback se aplicó con una versión cargada (debía abortar)"; FALLAS=$((FALLAS + 1))
+else
+  echo "  documentos legales: el rollback aborta con datos ($(grep -o '[0-9]* versiones' "$OUT/LG_con_datos.err" | head -1))"
+fi
+snapshot "$OUT/snap_LG_tras_abortar.txt"
+same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG_tras_abortar.txt" "LG_rollback_abortado_sin_cambios"
+sql -c "delete from public.documentos_legales_versiones; delete from public.audit_log where entidad = 'documentos_legales_versiones'" >/dev/null
+sql_file "$DOWN_LG"
+snapshot "$OUT/snap_SM_tras_down_LG2.txt"
+same_catalog "$OUT/snap_SM2.txt" "$OUT/snap_SM_tras_down_LG2.txt" "rollback_LG_tras_abortar"
+
 sql_file "$DOWN_SM"
 # Con datos de personas, el rollback debe abortar sin tocar nada.
 sql -c "insert into public.residentes_enlaces (id, tenant_id, token) values ('e1000000-0000-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000000', repeat('e', 64))" >/dev/null
