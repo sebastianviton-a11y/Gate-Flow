@@ -1,4 +1,5 @@
-import { PackagePlus, PackageCheck, Search, Clock, TriangleAlert, QrCode } from "lucide-react";
+import Link from "next/link";
+import { PackagePlus, PackageCheck, Search, Clock, TriangleAlert, QrCode, LifeBuoy } from "lucide-react";
 import { ActionTile } from "@/components/action-tile";
 
 export default function GuardHomePage() {
@@ -49,6 +50,14 @@ export default function GuardHomePage() {
           icon={TriangleAlert}
         />
       </div>
+
+      <Link
+        href="/guard/ayuda"
+        className="mt-4 inline-flex min-h-touch items-center gap-2 rounded-md px-2 text-sm font-medium text-primary hover:bg-primary/5"
+      >
+        <LifeBuoy className="h-4 w-4" aria-hidden="true" />
+        Ayuda: cómo registrar, avisar y entregar
+      </Link>
     </div>
   );
 }

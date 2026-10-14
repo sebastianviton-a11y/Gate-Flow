@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, MailCheck } from "lucide-react";
-import { Button, GateFlowLogo, Input, Label, PasswordInput } from "@gateflow/ui";
+import { AyudaCampo, Button, GateFlowLogo, Input, Label, PasswordInput } from "@gateflow/ui";
 import type { ResultadoAlta } from "@/lib/registro/alta";
 import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro } from "@/lib/registro/validacion";
 import { DOCUMENTOS, hrefDocumento, type ClaveDocumento } from "@/lib/legal/documentos";
@@ -13,6 +13,15 @@ import { TurnstileWidget, type TurnstileHandle } from "./turnstile-widget";
 type Pantalla = "formulario" | "revisa_correo" | "contacto";
 
 const CLASE_CAMPO = "border-white/10 bg-ink-950 text-white placeholder:text-white/30";
+
+/** Explicaciones breves del botón «?» de cada campo (se abren al tocarlo). */
+const AYUDA_REGISTRO = {
+  email: "Te enviaremos un enlace a este correo para confirmar la cuenta. Después es tu usuario para entrar al panel.",
+  password: "Entre 8 y 72 caracteres, y distinta de tu correo.",
+  nombreResidencial: "Lo ven tus guardias en la app de portería y aparece en los mensajes de WhatsApp a los residentes. Puedes cambiarlo después en Configuración.",
+  pais: "El país donde está el residencial: define el formato de los teléfonos de WhatsApp y la moneda en que se cobrará cuando contrates.",
+  viviendas: `Cuántas casas o departamentos tiene, aproximadamente (hasta ${MAX_VIVIENDAS_AUTOSERVICIO} para registrarte aquí). Sirve para sugerirte un plan cuando contrates; no limita la prueba.`,
+} as const;
 
 export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: string; turnstileSiteKey: string | null }) {
   const [pantalla, setPantalla] = useState<Pantalla>("formulario");
@@ -125,11 +134,11 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
           <Input id="nombreCompleto" name="nombreCompleto" autoComplete="name" required maxLength={80} placeholder="Ana Pérez" className={CLASE_CAMPO} />
         </Campo>
 
-        <Campo id="email" etiqueta="Correo" error={errores.email}>
+        <Campo id="email" etiqueta="Correo" error={errores.email} ayuda={AYUDA_REGISTRO.email}>
           <Input id="email" name="email" type="email" autoComplete="email" required maxLength={254} placeholder="ana@residencial.com" className={CLASE_CAMPO} />
         </Campo>
 
-        <Campo id="password" etiqueta="Contraseña" error={errores.password}>
+        <Campo id="password" etiqueta="Contraseña" error={errores.password} ayuda={AYUDA_REGISTRO.password}>
           <PasswordInput
             id="password"
             name="password"
@@ -143,12 +152,12 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
           />
         </Campo>
 
-        <Campo id="nombreResidencial" etiqueta="Nombre del residencial" error={errores.nombreResidencial}>
+        <Campo id="nombreResidencial" etiqueta="Nombre del residencial" error={errores.nombreResidencial} ayuda={AYUDA_REGISTRO.nombreResidencial}>
           <Input id="nombreResidencial" name="nombreResidencial" autoComplete="organization" required maxLength={80} placeholder="Residencial Las Palmas" className={CLASE_CAMPO} />
         </Campo>
 
         <div className="grid grid-cols-2 gap-3">
-          <Campo id="pais" etiqueta="País" error={errores.pais}>
+          <Campo id="pais" etiqueta="País" error={errores.pais} ayuda={AYUDA_REGISTRO.pais}>
             {/* Sin preselección: el país define cómo se cobra la suscripción y el formato de los teléfonos. */}
             <select id="pais" name="pais" required defaultValue="" onChange={(e) => setPais(e.target.value)} className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
               <option value="" disabled>
@@ -162,7 +171,7 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
             </select>
           </Campo>
 
-          <Campo id="viviendas" etiqueta="Viviendas (aprox.)" error={errores.viviendas}>
+          <Campo id="viviendas" etiqueta="Viviendas (aprox.)" error={errores.viviendas} ayuda={AYUDA_REGISTRO.viviendas}>
             <Input
               id="viviendas"
               name="viviendas"
@@ -262,12 +271,19 @@ function Marco({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string; error?: string; children: React.ReactNode }) {
+function Campo({ id, etiqueta, error, ayuda, children }: { id: string; etiqueta: string; error?: string; ayuda?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-white/80">
-        {etiqueta}
-      </Label>
+      <div className="flex flex-wrap items-center gap-x-1">
+        <Label htmlFor={id} className="text-white/80">
+          {etiqueta}
+        </Label>
+        {ayuda && (
+          <AyudaCampo id={id} etiqueta={etiqueta} className="text-white/50 hover:text-white" claseTexto="text-white/60">
+            {ayuda}
+          </AyudaCampo>
+        )}
+      </div>
       {children}
       {error && (
         <p role="alert" className="text-xs text-destructive">

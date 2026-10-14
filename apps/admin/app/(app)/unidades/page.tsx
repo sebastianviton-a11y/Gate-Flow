@@ -2,6 +2,7 @@ import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { esPaisResidencial, listarUnidades } from "@gateflow/paquetes";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { UnidadesClient } from "./unidades-client";
 
 export default async function UnidadesPage() {
@@ -16,6 +17,7 @@ export default async function UnidadesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Unidades" description="Viviendas del residencial activo." />
+      <GuiaSeccion clave="unidades" />
       <UnidadesClient tenantId={session.tenant.id} unidades={unidades} pais={pais} />
     </div>
   );

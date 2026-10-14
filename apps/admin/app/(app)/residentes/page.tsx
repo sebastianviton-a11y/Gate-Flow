@@ -2,6 +2,7 @@ import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { esPaisResidencial, listarResidentesAdicionales, listarSolicitudesResidentes, listarUnidades, obtenerEnlaceResidentes } from "@gateflow/paquetes";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { EnlaceResidentes } from "./enlace-residentes";
 import { ResidentesClient } from "./residentes-client";
 import { SolicitudesResidentes } from "./solicitudes-residentes";
@@ -34,6 +35,7 @@ export default async function ResidentesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Residentes" description="Personas de contacto de cada vivienda — mismos datos que Unidades, organizados para encontrar a alguien rápido." />
+      <GuiaSeccion clave="residentes" />
       <EnlaceResidentes tenantId={tenantId} enlaceInicial={enlace} />
       <SolicitudesResidentes solicitudes={solicitudes} viviendas={viviendas} pais={pais} zonaHoraria={session.tenant.timezone ?? null} />
       <ResidentesClient tenantId={tenantId} unidades={unidades} adicionales={adicionales} pais={pais} />

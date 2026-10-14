@@ -205,3 +205,12 @@ export {
   type MotivoRechazo,
   type ResidenteAdicional,
 } from "./residentes-enlace";
+export {
+  obtenerConteosConfiguracion,
+  progresoConfiguracion,
+  pasoInicialAsistente,
+  type ConteosConfiguracion,
+  type ProgresoConfiguracion,
+  type PasoConfiguracion,
+  type ClavePasoConfiguracion,
+} from "./progreso";
