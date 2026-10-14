@@ -21,6 +21,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/usuarios", label: "Usuarios", icon: "UserCog", roles: ["admin_residencial", "super_admin"] },
   { href: "/configuracion", label: "Configuración", icon: "Settings", roles: ["admin_residencial", "super_admin"] },
   { href: "/superadmin", label: "Super Admin", icon: "ShieldCheck", roles: ["super_admin"] },
+  // Ayuda: procesos, guías de cada sección y contacto (también en el menú del celular).
+  { href: "/ayuda", label: "Ayuda", icon: "LifeBuoy" },
 ];
 
 export function navItemsForRole(role: RoleKey): NavItem[] {

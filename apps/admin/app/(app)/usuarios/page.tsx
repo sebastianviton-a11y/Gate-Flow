@@ -2,6 +2,7 @@ import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { listarUsuariosTenant } from "@gateflow/paquetes";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { UsuariosClient } from "./usuarios-client";
 
 export default async function UsuariosPage() {
@@ -15,6 +16,7 @@ export default async function UsuariosPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Usuarios" description="Guardias, administradores y sus roles dentro de este residencial." />
+      <GuiaSeccion clave="usuarios" />
       <UsuariosClient usuarios={usuarios} />
     </div>
   );

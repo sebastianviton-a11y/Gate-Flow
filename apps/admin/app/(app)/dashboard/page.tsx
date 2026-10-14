@@ -6,12 +6,15 @@ import {
   obtenerResumenDashboard,
   obtenerVolumen30Dias,
   obtenerActividadReciente,
+  obtenerConteosConfiguracion,
+  progresoConfiguracion,
 } from "@gateflow/paquetes";
 import { Button } from "@gateflow/ui";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PackagesChart } from "@/components/dashboard/packages-chart";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { PrimerosPasos } from "@/components/dashboard/primeros-pasos";
 
 export default async function DashboardPage() {
   const session = await getSessionContext();
@@ -19,11 +22,16 @@ export default async function DashboardPage() {
 
   const supabase = createServerSupabaseClient();
 
-  const [resumen, volumen, actividad] = await Promise.all([
+  // «Primeros pasos» solo para quien configura el residencial; si no se
+  // puede leer el avance, simplemente no se muestra (nunca bloquea).
+  const configura = session.role === "admin_residencial" || session.role === "super_admin";
+  const [resumen, volumen, actividad, conteos] = await Promise.all([
     obtenerResumenDashboard(supabase, session.tenant.id, session.tenant.timezone),
     obtenerVolumen30Dias(supabase, session.tenant.id, session.tenant.timezone),
     obtenerActividadReciente(supabase, session.tenant.id),
+    configura ? obtenerConteosConfiguracion(supabase, session.tenant.id) : Promise.resolve(null),
   ]);
+  const progreso = conteos ? progresoConfiguracion(conteos) : null;
 
   const estadoOperativo =
     resumen.olvidados > 0
@@ -53,6 +61,8 @@ export default async function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      {progreso && <PrimerosPasos progreso={progreso} usuarioId={session.user.id} tenantId={session.tenant.id} />}
 
       {/* Alerta accionable, no una tarjeta más — solo aparece si hay algo
           que realmente requiere atención. Un dashboard "ejecutivo" no

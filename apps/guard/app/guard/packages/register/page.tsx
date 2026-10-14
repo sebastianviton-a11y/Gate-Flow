@@ -29,6 +29,7 @@ import {
 import type { UnidadConResidentes } from "@gateflow/types";
 import { Button, Input, PickupShareCard, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
+import { GuiaGuard } from "@/components/ayuda-guard";
 import { PhotoCapture } from "@/components/photo-capture";
 import { useGuardSession } from "@/components/session-provider";
 import { obtenerCatalogosCacheados } from "@/components/catalogos-cache";
@@ -332,6 +333,7 @@ export default function RegisterPackagePage() {
     return (
       <div className="flex h-full flex-col">
         <OperationalHeader title="Paquete guardado" />
+        <GuiaGuard clave="notificar" className="px-4 pt-3" />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/10">
             <Check className="h-7 w-7 text-success" />
@@ -364,6 +366,7 @@ export default function RegisterPackagePage() {
     <div className="flex h-full flex-col">
       <OperationalHeader title="Registrar paquete" />
       <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-28">
+        <GuiaGuard clave="registrar" />
         {!unidadSeleccionada ? (
           <div>
             <div className="relative">

@@ -6,6 +6,7 @@ import { listarPaquetes, buscarPaquetes } from "@gateflow/paquetes";
 import { EstadoBadge, Button, formatearFecha } from "@gateflow/ui";
 import type { EstadoPaquete } from "@gateflow/types";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { FiltrosPaquetes } from "@/components/paquetes/filtros-paquetes";
 import { Paginacion } from "@/components/paquetes/paginacion";
 
@@ -55,6 +56,7 @@ export default async function PaquetesPage({
           </Link>
         </Button>
       </div>
+      <GuiaSeccion clave="paquetes" />
 
       <FiltrosPaquetes estadoActual={searchParams.estado} textoActual={searchParams.q} />
 

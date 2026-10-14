@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { SoporteBanner } from "@/components/layout/soporte-banner";
 import { AvisoTrial } from "@/components/layout/aviso-trial";
 import { AvisoPago } from "@/components/layout/aviso-pago";
+import { AyudaProvider } from "@/components/ayuda/ayuda-contexto";
 import { destinoDeDecision } from "@/lib/acceso-panel";
 import { leerAccesoAdmin } from "@/lib/acceso-servidor";
 
@@ -39,6 +40,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Problema de pago (gracia) o cancelación pendiente: mismo criterio.
   const avisoPago = decision.tipo === "permitir" && decision.rol === "admin_residencial" && !session.impersonando ? decision.avisoPago : null;
 
+  // Guías de primera visita: se abren solas solo mientras se configura el
+  // residencial o dura la prueba (nunca en modo soporte); para el resto,
+  // solo desde «Cómo funciona». No cambian ningún flujo.
+  const guiasAutomaticas =
+    !session.impersonando && (decision.tipo === "onboarding" || (decision.tipo === "permitir" && decision.estado === "trial_activo"));
+
   return (
     <div className="flex min-h-screen bg-muted/40">
       <Sidebar role={session.role} logoUrl={session.tenant.logoUrl} nombreTenant={session.tenant.nombre} />
@@ -47,7 +54,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SoporteBanner session={session} />
         <AvisoPago aviso={avisoPago} />
         <AvisoTrial aviso={aviso} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <AyudaProvider usuarioId={session.user.id} autoMostrar={guiasAutomaticas}>
+            {children}
+          </AyudaProvider>
+        </main>
       </div>
     </div>
   );

@@ -32,3 +32,14 @@ export { EstadoBadge } from "./estado-badge";
 export { GateFlowLogo } from "./gateflow-logo";
 export { PasswordInput } from "./password-input";
 export { DebugConsole } from "./debug-console";
+export { AyudaCampo } from "./ayuda/ayuda-campo";
+export { GuiaPrimeraVisita, type ContenidoGuia } from "./ayuda/guia-primera-visita";
+export {
+  almacenDelNavegador,
+  claveGuiaVista,
+  clavePrimerosPasosOculto,
+  guardarMarca,
+  leerMarca,
+  type Almacen,
+} from "./ayuda/preferencias";
+export { WHATSAPP_SOPORTE_VISIBLE, MENSAJE_AYUDA, MENSAJE_DEMO, enlaceWhatsAppSoporte } from "./ayuda/contacto";

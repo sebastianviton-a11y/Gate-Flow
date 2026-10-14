@@ -4,6 +4,7 @@ import { getSessionContext, RUTA_SELECCIONAR_RESIDENCIAL, SesionNoResueltaError 
 import type { RoleKey } from "@gateflow/types";
 import { GuardShell } from "@/components/guard-shell";
 import { GuardSessionProvider } from "@/components/session-provider";
+import { AyudaGuardProvider } from "@/components/ayuda-guard";
 import { RUTA_SERVICIO_INACTIVO, esServicioInactivo, leerAccesoGuard } from "@/lib/acceso-guard";
 
 // Roles que pueden operar esta app. `residente` queda explícitamente
@@ -58,11 +59,17 @@ export default async function GuardLayout({ children }: { children: React.ReactN
     );
   }
 
+  // Guías de portería: se abren solas solo durante la prueba del
+  // residencial (nunca en modo soporte); siempre con «Cómo funciona».
+  const guiasAutomaticas = !session.impersonando && decision.tipo === "permitir" && decision.estado === "trial_activo";
+
   return (
     <div className="flex min-h-screen flex-col">
       <GuardShell session={session} />
       <GuardSessionProvider session={session}>
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <AyudaGuardProvider usuarioId={session.user.id} autoMostrar={guiasAutomaticas}>
+          <main className="flex-1 overflow-y-auto">{children}</main>
+        </AyudaGuardProvider>
       </GuardSessionProvider>
     </div>
   );
