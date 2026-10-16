@@ -259,7 +259,9 @@ const remoto = [process.env.PGHOST, process.env.DATABASE_URL, process.env.PGDATA
 if (!/^gf_legal_/.test(DB) || remoto) {
   ok(false, "salvaguarda: la base debe ser local y llamarse gf_legal_*");
 } else if (!hayPg) {
-  console.log("\nB. SKIP: no hay Postgres local accesible (PGHOST/PGPORT/PGUSER)");
+  // En CI (GF_LEGAL_EXIGIR_BD=1) omitir la parte B es un fallo, nunca un verde falso.
+  if (process.env.GF_LEGAL_EXIGIR_BD === "1") ok(false, "B. no hay Postgres accesible y GF_LEGAL_EXIGIR_BD=1 exige la parte B");
+  else console.log("\nB. SKIP: no hay Postgres local accesible (PGHOST/PGPORT/PGUSER)");
 } else {
   parteB();
 }
