@@ -1,19 +1,41 @@
+import { createAnonServerClient } from "@gateflow/supabase";
 import { GateFlowLogo, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
+import { DOCUMENTOS_REGISTRO, documentosMostrados, type DocumentoAceptable, type FilaVigente } from "@/lib/legal/aceptacion";
 import { esEntornoDePruebas, urlPublicaAdmin } from "@/lib/entorno";
 import { configuracionAntibot, motivoRegistroCerrado } from "@/lib/registro/antibot";
 import { emitirTokenTiempo } from "@/lib/registro/hash";
-import { paisesHabilitados } from "@/lib/registro/validacion";
+import { paisesHabilitados, type PaisRegistro } from "@/lib/registro/validacion";
 import { RegistroForm } from "./registro-form";
 
-// El token de tiempo se firma por petición: nunca se puede cachear.
+// El token de tiempo se firma por petición: nunca se puede cachear. Los
+// documentos vigentes tampoco: el cliente anónimo no usa cookies y, sin
+// force-no-store, Next guardaría la RPC en su caché de datos.
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 /**
  * /registro — alta pública con trial de 30 días (Admin es la única app
  * con la clave secreta, por eso vive aquí y no en la landing).
  * Pública solo para quien no tiene sesión (middleware).
  */
-export default function RegistroPage() {
+/**
+ * Versiones vigentes que el formulario muestra y envía (una lectura por
+ * país habilitado). Si no se pueden leer, la lista queda vacía: la RPC
+ * del alta rechaza el registro si algún documento es obligatorio.
+ */
+async function documentosPorPais(paises: readonly PaisRegistro[]): Promise<Partial<Record<PaisRegistro, DocumentoAceptable[]>>> {
+  const cliente = createAnonServerClient();
+  const pares = await Promise.all(
+    paises.map(async (pais) => {
+      const { data, error } = await cliente.rpc("documentos_legales_vigentes", { p_pais: pais });
+      if (error) console.error(`[GateFlow] /registro: no se leyeron los documentos vigentes (${pais}): ${error.code ?? ""} ${error.message}`.trim());
+      return [pais, error ? [] : documentosMostrados(data as FilaVigente[] | null, DOCUMENTOS_REGISTRO)] as const;
+    }),
+  );
+  return Object.fromEntries(pares);
+}
+
+export default async function RegistroPage() {
   const pepper = process.env.REGISTRO_HASH_PEPPER;
   // Turnstile obligatorio con claves reales en el entorno de clientes.
   const antibot = configuracionAntibot(process.env);
@@ -47,11 +69,13 @@ export default function RegistroPage() {
     );
   }
 
+  const paises = paisesHabilitados(process.env.REGISTRO_PAISES);
   return (
     <RegistroForm
       tokenTiempo={emitirTokenTiempo(pepper)}
       turnstileSiteKey={antibot.modo === "turnstile" ? antibot.siteKey : null}
-      paises={paisesHabilitados(process.env.REGISTRO_PAISES)}
+      paises={paises}
+      documentos={await documentosPorPais(paises)}
     />
   );
 }

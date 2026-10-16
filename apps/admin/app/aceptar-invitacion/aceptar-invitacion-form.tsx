@@ -10,7 +10,8 @@ import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-pane
 import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 import { hrefDocumento, nombrePais } from "@/lib/legal/documentos";
 import { reintentable, type PaisInvitacion } from "@/lib/legal/pais-invitacion";
-import { paisDeLaInvitacion } from "./actions";
+import { MENSAJES_ACEPTACION, type DocumentoAceptable } from "@/lib/legal/aceptacion";
+import { aceptarDocumentosDeLaInvitacion, documentosDeLaInvitacion, paisDeLaInvitacion } from "./actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -28,14 +29,30 @@ export function AceptarInvitacionForm() {
   // decidido en el servidor (actions.ts). null mientras se consulta; sin
   // país no hay enlace ni se puede aceptar (nunca se supone México).
   const [paisLegal, setPaisLegal] = useState<PaisInvitacion | null>(null);
+  // Versiones vigentes del país: las que se muestran son las que se aceptan.
+  const [documentos, setDocumentos] = useState<DocumentoAceptable[]>([]);
+  const terminos = documentos.find((d) => d.clave === "terminos");
+  const privacidad = documentos.find((d) => d.clave === "privacidad");
+
+  async function cargarDocumentos(pais: PaisInvitacion) {
+    if (pais.estado !== "ok") return;
+    try {
+      setDocumentos((await documentosDeLaInvitacion(pais.pais)) ?? []);
+    } catch {
+      setDocumentos([]);
+    }
+  }
 
   async function cargarPaisLegal() {
     setPaisLegal(null);
+    let resultado: PaisInvitacion;
     try {
-      setPaisLegal(await paisDeLaInvitacion());
+      resultado = await paisDeLaInvitacion();
     } catch {
-      setPaisLegal({ estado: "indeterminado", motivo: "error" });
+      resultado = { estado: "indeterminado", motivo: "error" };
     }
+    await cargarDocumentos(resultado);
+    setPaisLegal(resultado);
   }
 
   useEffect(() => {
@@ -102,6 +119,22 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
+    // Aceptación ANTES de la contraseña (cambiarla cierra la sesión). La
+    // fecha y la evidencia las fija el servidor; si no se registra, no se
+    // continúa.
+    const aceptacion = await aceptarDocumentosDeLaInvitacion(documentos.map((d) => d.versionId)).catch(() => ({ ok: false as const, motivo: "error" as const }));
+    if (!aceptacion.ok) {
+      if (aceptacion.motivo === "actualizados") {
+        await cargarDocumentos(paisLegal);
+        setAceptaTerminos(false);
+        setError(MENSAJES_ACEPTACION.actualizados);
+      } else {
+        setError("No pudimos registrar tu aceptación de los términos. Inténtalo de nuevo.");
+      }
+      setEstado("lista");
+      return;
+    }
+
     // Perfil y destino ANTES de la contraseña: Supabase Auth cierra todas
     // las sesiones del usuario al cambiarla (admin.updateUserById), así
     // que después ya no hay sesión para leer membresías ni guardar el
@@ -125,7 +158,7 @@ export function AceptarInvitacionForm() {
     if (userData.user) {
       const { error: errorPerfil } = await supabase
         .from("users")
-        .update({ nombre_completo: nombreCompleto.trim(), terminos_aceptados_en: new Date().toISOString() })
+        .update({ nombre_completo: nombreCompleto.trim() })
         .eq("id", userData.user.id);
       if (errorPerfil) console.error("[GateFlow] aceptar-invitacion: no se guardó el perfil:", errorPerfil.message);
     }
@@ -211,13 +244,27 @@ export function AceptarInvitacionForm() {
             <span>
               Acepto los{" "}
               {paisLegal?.estado === "ok" ? (
-                <a href={hrefDocumento("terminos", paisLegal.pais)} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                <a
+                  href={terminos ? hrefDocumento("terminos", paisLegal.pais, terminos.versionId) : hrefDocumento("terminos", paisLegal.pais)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
                   términos y condiciones
                 </a>
               ) : (
                 "términos y condiciones"
               )}{" "}
-              de GateFlow{paisLegal?.estado === "ok" ? ` (${nombrePais(paisLegal.pais)})` : ""}.
+              de GateFlow{paisLegal?.estado === "ok" ? ` (${nombrePais(paisLegal.pais)})` : ""}
+              {paisLegal?.estado === "ok" && privacidad && (
+                <>
+                  {" "}y he leído el{" "}
+                  <a href={hrefDocumento("privacidad", paisLegal.pais, privacidad.versionId)} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    Aviso de Privacidad
+                  </a>
+                </>
+              )}
+              .
               {paisLegal === null && <Loader2 className="ml-1 inline h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Cargando" />}
             </span>
           </label>

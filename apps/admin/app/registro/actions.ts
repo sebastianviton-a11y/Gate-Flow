@@ -1,7 +1,8 @@
 "use server";
 
 import { headers } from "next/headers";
-import { createServiceRoleClient } from "@gateflow/supabase";
+import { createAnonServerClient, createServiceRoleClient } from "@gateflow/supabase";
+import { DOCUMENTOS_REGISTRO, documentosMostrados, type FilaVigente } from "@/lib/legal/aceptacion";
 import { ejecutarAlta, MENSAJES_ALTA, type DepsAlta, type ResultadoAlta } from "@/lib/registro/alta";
 import { paisesHabilitados } from "@/lib/registro/validacion";
 import { configuracionAntibot, verificarDesafio } from "@/lib/registro/antibot";
@@ -92,7 +93,9 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
       const { error } = await servicio.auth.admin.deleteUser(userId);
       if (error) throw new Error(`${error.status ?? ""} ${error.message}`.trim());
     },
-    async crearCuenta({ userId, nombreResidencial, pais, viviendas, timezone, aceptaTerminos }) {
+    async crearCuenta({ userId, nombreResidencial, pais, viviendas, timezone, aceptaTerminos, versionIds, declaraFacultades }) {
+      // Firma con evidencia (migración 20261017000000): las versiones
+      // mostradas y la declaración de facultades.
       const { data, error } = await servicio.rpc("crear_cuenta_prueba", {
         p_user_id: userId,
         p_nombre_residencial: nombreResidencial,
@@ -100,6 +103,8 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
         p_viviendas: viviendas,
         p_timezone: timezone,
         p_acepta_terminos: aceptaTerminos,
+        p_version_ids: versionIds,
+        p_declara_facultades: declaraFacultades,
       });
       if (error) return { ok: false, detalle: `${error.code ?? ""} ${error.message}`.trim() };
       const r = (data ?? {}) as { tenant_id?: string };
@@ -113,6 +118,12 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
     },
     enviarConfirmacion(email) {
       return enviarCorreoConfirmacion(email, redirectTo);
+    },
+    async documentosVigentes(pais) {
+      // Lectura pública (Fase 2): EXECUTE para anon, no para service_role.
+      const { data, error } = await createAnonServerClient().rpc("documentos_legales_vigentes", { p_pais: pais });
+      if (error) return { ok: false, detalle: `${error.code ?? ""} ${error.message}`.trim() };
+      return { ok: true, documentos: documentosMostrados(data as FilaVigente[] | null, DOCUMENTOS_REGISTRO) };
     },
     log(evento, datos) {
       // Solo eventos y códigos: nunca correo, IP ni contraseña.

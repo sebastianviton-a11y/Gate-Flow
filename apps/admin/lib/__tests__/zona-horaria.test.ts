@@ -288,7 +288,8 @@ const camposAlta = (pais: string, timezone: string): CamposCrudos => ({
   sitio_web: "",
   t: "x",
 });
-const altaAr = validarRegistro(camposAlta("AR", "America/Cancun"));
+// Argentina solo se abre con REGISTRO_PAISES (desde el lanzamiento, por defecto solo México).
+const altaAr = validarRegistro(camposAlta("AR", "America/Cancun"), ["MX", "AR"]);
 assert(altaAr.ok && altaAr.datos.timezone === BSAS, "validarRegistro AR + navegador en Cancún → timezone Buenos Aires");
 const altaMx = validarRegistro(camposAlta("MX", "America/Cancun"));
 assert(altaMx.ok && altaMx.datos.timezone === CANCUN, "validarRegistro MX + navegador en Cancún → Cancún (sin cambios para México)");
