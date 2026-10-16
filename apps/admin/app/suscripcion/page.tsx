@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { finGraciaPago } from "@gateflow/auth/client";
-import { GateFlowLogo, cn } from "@gateflow/ui";
+import { GateFlowLogo, MENSAJE_CONTRATAR, WHATSAPP_SOPORTE_VISIBLE, cn, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import { obtenerSuscripcion } from "@gateflow/paquetes";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import type { Suscripcion } from "@gateflow/types";
@@ -12,7 +12,7 @@ import { viviendasRequeridas } from "@/lib/billing/catalogo";
 import { montosPublicables } from "@/lib/billing/catalogo";
 import { contratacionHabilitada } from "@/lib/billing/pais";
 import { checkoutDisponible, gestionDisponible, paisDeTenantServidor } from "@/lib/billing/servidor";
-import { CORREO_SOPORTE, PLANES, type Plan } from "@/lib/planes";
+import { PLANES, type Plan } from "@/lib/planes";
 import { CerrarSesionButton } from "../sin-acceso/cerrar-sesion-button";
 import { administrarSuscripcionAction, elegirPlanAction } from "./actions";
 
@@ -145,9 +145,9 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
           <VistaGestion estado={decision.estado} suscripcion={suscripcion} zona={zona} gestion={gestion} contratacion={contratacion} />
         ) : decision.estado === "sin_suscripcion" ? (
           <Aviso titulo="No pudimos determinar una suscripción activa para este residencial.">
-            Es un problema de configuración de la cuenta. Escríbenos a{" "}
-            <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm text-primary underline", FOCO)}>
-              {CORREO_SOPORTE}
+            Es un problema de configuración de la cuenta. Escríbenos por WhatsApp al{" "}
+            <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className={cn("rounded-sm text-primary underline", FOCO)}>
+              {WHATSAPP_SOPORTE_VISIBLE}
             </a>{" "}
             y lo resolvemos.
           </Aviso>
@@ -176,7 +176,7 @@ export default async function SuscripcionPage({ searchParams }: { searchParams: 
               Volver al panel
             </a>
           )}
-          <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm py-2.5 transition-colors hover:text-white md:py-0", FOCO)}>
+          <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className={cn("rounded-sm py-2.5 transition-colors hover:text-white md:py-0", FOCO)}>
             Soporte
           </a>
           <a href="/terminos" className={cn("rounded-sm py-2.5 transition-colors hover:text-white md:py-0", FOCO)}>
@@ -201,9 +201,9 @@ function SinContratacion({ etiqueta }: { etiqueta: string }) {
       </p>
       <h1 className="font-display text-2xl font-bold tracking-[-0.02em] md:text-[32px] md:leading-tight">La contratación en línea todavía no está disponible</h1>
       <p className="text-[15px] leading-[1.6] text-white/70 md:text-base">
-        Tu información se conserva. Cuando la contratación esté habilitada podrás elegir un plan y seguir donde lo dejaste. Si tienes dudas, escríbenos a{" "}
-        <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm text-primary underline", FOCO)}>
-          {CORREO_SOPORTE}
+        Tu información se conserva. Para contratar un plan y seguir donde lo dejaste, escríbenos por WhatsApp al{" "}
+        <a href={enlaceWhatsAppSoporte(MENSAJE_CONTRATAR)} target="_blank" rel="noopener noreferrer" className={cn("rounded-sm text-primary underline", FOCO)}>
+          {WHATSAPP_SOPORTE_VISIBLE}
         </a>
         .
       </p>
@@ -498,9 +498,9 @@ function BotonGestion({ disponible, texto }: { disponible: boolean; texto: strin
   if (!disponible) {
     return (
       <p className="mt-5 max-w-md">
-        Para gestionar tu suscripción escríbenos a{" "}
-        <a href={`mailto:${CORREO_SOPORTE}`} className={cn("rounded-sm text-primary underline", FOCO)}>
-          {CORREO_SOPORTE}
+        Para gestionar tu suscripción escríbenos por WhatsApp al{" "}
+        <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className={cn("rounded-sm text-primary underline", FOCO)}>
+          {WHATSAPP_SOPORTE_VISIBLE}
         </a>
         .
       </p>

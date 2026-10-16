@@ -1,7 +1,8 @@
-import { GateFlowLogo } from "@gateflow/ui";
+import { GateFlowLogo, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import { esEntornoDePruebas, urlPublicaAdmin } from "@/lib/entorno";
 import { configuracionAntibot, motivoRegistroCerrado } from "@/lib/registro/antibot";
 import { emitirTokenTiempo } from "@/lib/registro/hash";
+import { paisesHabilitados } from "@/lib/registro/validacion";
 import { RegistroForm } from "./registro-form";
 
 // El token de tiempo se firma por petición: nunca se puede cachear.
@@ -27,7 +28,13 @@ export default function RegistroPage() {
         <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white">
           <GateFlowLogo size={48} onDark />
           <p className="font-display text-lg font-semibold">El registro no está disponible por ahora</p>
-          <p className="text-sm text-white/60">Inténtalo más tarde o escribe a soporte@gateflow.mx.</p>
+          <p className="text-sm text-white/60">
+            Inténtalo más tarde o escríbenos por WhatsApp al{" "}
+            <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              {WHATSAPP_SOPORTE_VISIBLE}
+            </a>
+            .
+          </p>
           {/* Solo en localhost, staging y previews: el código de lo que falta
               (nunca un valor) para que el equipo lo vea sin abrir los logs. */}
           {esEntornoDePruebas(urlAdmin) && (
@@ -40,5 +47,11 @@ export default function RegistroPage() {
     );
   }
 
-  return <RegistroForm tokenTiempo={emitirTokenTiempo(pepper)} turnstileSiteKey={antibot.modo === "turnstile" ? antibot.siteKey : null} />;
+  return (
+    <RegistroForm
+      tokenTiempo={emitirTokenTiempo(pepper)}
+      turnstileSiteKey={antibot.modo === "turnstile" ? antibot.siteKey : null}
+      paises={paisesHabilitados(process.env.REGISTRO_PAISES)}
+    />
+  );
 }

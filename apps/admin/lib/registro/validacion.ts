@@ -11,10 +11,28 @@ export const PAISES_REGISTRO = [
 ] as const;
 export type PaisRegistro = (typeof PAISES_REGISTRO)[number]["codigo"];
 
+/**
+ * Países con registro abierto: REGISTRO_PAISES del servidor ("MX" o
+ * "MX,AR"), solo códigos del catálogo de arriba. Sin valor válido: solo
+ * México (lanzamiento). Argentina queda en el catálogo para una segunda
+ * etapa: se abre agregándola a la variable, sin cambiar código.
+ */
+export const PAISES_POR_DEFECTO: readonly PaisRegistro[] = ["MX"];
+
+export function paisesHabilitados(valor: string | undefined): PaisRegistro[] {
+  const pedidos = (valor ?? "").split(",").map((p) => p.trim().toUpperCase());
+  const habilitados = PAISES_REGISTRO.map((p) => p.codigo).filter((c) => pedidos.includes(c));
+  return habilitados.length > 0 ? habilitados : [...PAISES_POR_DEFECTO];
+}
+
+export function nombrePais(codigo: PaisRegistro): string {
+  return PAISES_REGISTRO.find((p) => p.codigo === codigo)?.nombre ?? codigo;
+}
+
 /** Autoservicio: hasta 150 viviendas. Más de eso se atiende a mano. */
 export const MAX_VIVIENDAS_AUTOSERVICIO = 150;
 
-export const MENSAJE_CONTACTO = "Para residenciales de más de 150 viviendas, contáctanos.";
+export const MENSAJE_CONTACTO = "Para residenciales de más de 150 viviendas, escríbenos por WhatsApp.";
 /** Única respuesta pública de éxito. También se usa cuando el correo
  * ya tiene cuenta: no se revela si existe. */
 export const MENSAJE_REVISA_CORREO = "Revisa tu correo. Si ya tienes una cuenta, puedes iniciar sesión.";
@@ -147,7 +165,7 @@ function esPais(valor: string): valor is PaisRegistro {
   return PAISES_REGISTRO.some((p) => p.codigo === valor);
 }
 
-export function validarRegistro(campos: CamposCrudos): ResultadoValidacion {
+export function validarRegistro(campos: CamposCrudos, habilitados: readonly PaisRegistro[] = PAISES_POR_DEFECTO): ResultadoValidacion {
   // Más de 150 viviendas: no se crea nada, se invita a contactar. Se
   // decide antes que cualquier otra cosa para que el mensaje sea ese.
   const viviendasTexto = campos.viviendas.trim();
@@ -186,8 +204,8 @@ export function validarRegistro(campos: CamposCrudos): ResultadoValidacion {
   const pais = campos.pais.trim();
   if (!pais) {
     errores.pais = "Elige el país del residencial.";
-  } else if (!esPais(pais)) {
-    errores.pais = "Por ahora solo México y Argentina.";
+  } else if (!esPais(pais) || !habilitados.includes(pais)) {
+    errores.pais = `Por ahora Gate Flow está disponible solo en ${habilitados.map(nombrePais).join(" y ")}.`;
   }
 
   if (!viviendasEsEntero || viviendas < 1) {
@@ -199,7 +217,7 @@ export function validarRegistro(campos: CamposCrudos): ResultadoValidacion {
     errores.aceptaTerminos = "Debes aceptar los Términos y Condiciones y el Aviso de Privacidad.";
   }
 
-  if (Object.keys(errores).length > 0 || !esPais(pais)) {
+  if (Object.keys(errores).length > 0 || !esPais(pais) || !habilitados.includes(pais)) {
     return { ok: false, tipo: "campos", errores };
   }
 

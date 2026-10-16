@@ -34,6 +34,7 @@ no tiene las 16 migraciones del registro autónomo y gateflow.mx es el panel.
 | Admin | `SUPABASE_SERVICE_ROLE_KEY` | service_role de producción (secreta) | Functions, solo Production |
 | Admin | `REGISTRO_HASH_PEPPER` | `openssl rand -hex 32` (secreta, ≥16) | Functions, solo Production |
 | Admin | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | widget de Cloudflare para `app.gateflow.mx` (la secreta, secreta) | Functions, solo Production |
+| Admin | `REGISTRO_PAISES` | **no definir** (sin valor: solo México). `MX,AR` abre Argentina en la segunda etapa | Functions |
 | Admin | `STRIPE_*` | **no definir** | — |
 | Guard | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | proyecto de producción | Builds + Functions |
 | Guard | `NEXT_PUBLIC_GUARD_APP_URL` | `https://guard.gateflow.mx` | Builds + Functions |
@@ -154,8 +155,8 @@ Formato, ciclo y carga en `legal/README.md`:
 `node scripts/legal/documentos-legales.mjs validar | sql-carga [--publicar] | sql-verificar`.
 
 Faltan, para México: Términos y Condiciones, Aviso de Privacidad (LFPDPPP) y
-Acuerdo de Tratamiento de Datos. Para Argentina, los equivalentes (Ley 25.326)
-si el registro sigue ofreciendo ese país. Datos del titular que el texto
+Acuerdo de Tratamiento de Datos. Argentina (Ley 25.326) queda para la segunda
+etapa: el registro solo ofrece México mientras `REGISTRO_PAISES` no la incluya. Datos del titular que el texto
 tiene que traer y no están en el repositorio: razón social, RFC (o CUIT),
 domicilio, medio para ejercer derechos ARCO, jurisdicción y plazo de
 conservación (pendiente en `LEGAL.md`). Ningún texto se redacta aquí: se
@@ -165,6 +166,50 @@ incorpora tal como lo entregue la revisión jurídica.
 
 La prueba vence, el residencial deja de operar y **conserva sus datos**; no
 hay cobro automático. Con montos sin aprobación comercial, `/suscripcion`
-muestra «La contratación en línea todavía no está disponible» y el contacto
-`soporte@gateflow.mx`. La continuidad es manual: Super Admin → activar
-suscripción manual.
+muestra «La contratación en línea todavía no está disponible» y el WhatsApp
++52 55 2324 8345 para contratar. La continuidad es manual: Super Admin →
+activar suscripción manual. Ninguna pantalla del panel muestra un correo de
+contacto: todo el contacto comercial y de soporte es por WhatsApp.
+
+## 10. Token de retiro expuesto en el video anterior (RETIRO-000018)
+
+El video de la landing publicado hasta el PR #10 mostraba el enlace
+`/escanear/<token>` del Guard de producción (el prefijo no se copia aquí).
+El video entró al repo el 2026-10-08: si el token del grupo es anterior a esa
+fecha, sigue siendo el del video. Qué expone:
+
+- **Sin sesión:** nada. `/escanear/<token>` muestra «Presenta este código al
+  personal de seguridad» sin consultar la base; `/escanear/<token>/qr` solo
+  dibuja el QR del mismo enlace.
+- **Con sesión de guardia:** solo un guardia del **mismo** residencial (RLS)
+  ve el grupo; si ya se entregó, ve «Este paquete ya fue entregado».
+
+Comprobación de solo lectura (producción, SQL Editor):
+
+```sql
+select g.codigo_grupo, g.estado, g.cantidad_total, g.cantidad_entregada,
+       g.fecha_entrega is not null as entregado, g.token_created_at::date as token_desde,
+       g.token_created_at < date '2026-10-09' as sigue_el_token_del_video,
+       t.nombre as residencial
+from public.paquete_grupos_entrega g join public.tenants t on t.id = g.tenant_id
+where g.codigo_grupo = 'RETIRO-000018';
+```
+
+Invalidación sin tocar el historial (solo con confirmación): rotar el token
+del grupo. `codigo_grupo`, paquetes, firmas e historial no cambian; el enlace
+viejo deja de encontrar el grupo.
+
+```sql
+begin;
+update public.paquete_grupos_entrega
+-- misma fórmula que producción (migración 20260729200000): 64 hex, sin pgcrypto
+set token = pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', '')
+         || pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''),
+    token_created_at = now()
+where codigo_grupo = 'RETIRO-000018' and token_created_at < date '2026-10-09';
+-- debe decir UPDATE 1; si dice 0, ya se había rotado o no existe: rollback
+commit;
+```
+
+Si el grupo sigue pendiente, el residente necesita un aviso nuevo (el
+guardia lo reenvía desde el paquete). Si ya se entregó, rotar es opcional.

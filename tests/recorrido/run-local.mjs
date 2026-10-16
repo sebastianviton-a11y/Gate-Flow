@@ -262,6 +262,9 @@ async function main() {
     ...envPublico,
     SUPABASE_SERVICE_ROLE_KEY: servicio,
     REGISTRO_HASH_PEPPER: crypto.randomBytes(24).toString("hex"),
+    // El lanzamiento abre solo México (sin variable); este recorrido sigue
+    // cubriendo Argentina (segunda etapa) con su registro abierto a propósito.
+    REGISTRO_PAISES: "MX,AR",
   };
   // Admin con Stripe configurado como en staging (claves ficticias): el
   // checkout está "disponible", así que el bloqueo de Argentina se prueba
@@ -502,8 +505,8 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     ok(e("31"), page.url() === `${URL_WEB}/` && /30 d[ií]as/i.test(t) && !/7 d[ií]as|una semana/i.test(t), `[${p}] landing publicada (V2): 30 días, sin "7 días"`, t.slice(0, 160));
     ok(
       e("31"),
-      !/elegir un plan|USD|\/ mes|se elimina/i.test(t) && t.includes("En Argentina, por ahora solo está disponible la prueba gratuita de 30 días") && t.includes("No se borra"),
-      `[${p}] landing honesta para Argentina: sin promesa de contratar, sin importes en USD, sin borrado automático`,
+      !/elegir un plan|USD|\/ mes|se elimina|Argentin/i.test(t) && t.includes("Durante la prueba no se cobra nada ni se pide tarjeta.") && t.includes("No se borra"),
+      `[${p}] landing del lanzamiento (México): sin promesa de contratar en línea, sin importes en USD, sin borrado automático`,
       t.slice(0, 200),
     );
     const html = await page.content();

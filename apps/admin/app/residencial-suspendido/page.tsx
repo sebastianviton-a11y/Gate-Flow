@@ -1,5 +1,5 @@
 import { ShieldAlert } from "lucide-react";
-import { GateFlowLogo } from "@gateflow/ui";
+import { GateFlowLogo, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
 
 export default function ResidencialSuspendidoPage() {
   return (
@@ -11,8 +11,8 @@ export default function ResidencialSuspendidoPage() {
         <p className="text-sm text-white/60">
           El acceso a GateFlow para este residencial está temporalmente suspendido.
         </p>
-        <a href="mailto:soporte@gateflow.mx" className="text-sm text-primary/80 underline hover:text-primary">
-          soporte@gateflow.mx
+        <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className="text-sm text-primary/80 underline hover:text-primary">
+          WhatsApp {WHATSAPP_SOPORTE_VISIBLE}
         </a>
       </div>
     </div>
