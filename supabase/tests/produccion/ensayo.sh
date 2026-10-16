@@ -6,7 +6,7 @@
 #      20260729000000 + parche_forma_produccion.sql (drift leído del
 #      catálogo de producción en solo lectura, 2026-10-08)
 #   2. datos SINTÉTICOS con la forma y el volumen de producción
-#   3. las 12 migraciones en orden (las mismas que staging)
+#   3. las 16 migraciones en orden (las mismas que staging)
 #   4. ninguna fila existente cambia (huella por tabla) + verificación
 #      de comportamiento (verificacion_post.sql)
 # Uso: PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/produccion/ensayo.sh
@@ -25,7 +25,9 @@ done
 MIGS=(20260729100000_grants_minimo_privilegio 20260729200000_reconciliacion_paridad_produccion 20260930000000_privilegios_fase_a
       20261005180000_privilegios_fase_c 20261006000000_registro_trial 20261007000000_tenant_operativo 20261007100000_integridad_multitenant
       20261008000000_tenants_columnas_protegidas 20261008100000_billing_base 20261008200000_tenant_operativo_billing
-      20261008300000_billing_evento_otro_tenant 20261009000000_billing_impago_desde)
+      20261008300000_billing_evento_otro_tenant 20261009000000_billing_impago_desde
+      20261011000000_residentes_enlace 20261013000000_superadmin_suscripcion_manual
+      20261014000000_documentos_legales 20261015000000_documentos_legales_lectura_publica)
 sql() { PGOPTIONS="-c client_min_messages=warning" psql -X -q -v ON_ERROR_STOP=1 -d "$DB" "$@"; }
 OUT="$(mktemp -d)"
 
@@ -40,26 +42,37 @@ sql -f "$DIR/parche_forma_produccion.sql" >/dev/null
 sql -f "$SUPA/seed.sql" >/dev/null
 sql -f "$DIR/datos_sinteticos_forma_prod.sql" >/dev/null
 
-foto() {  # filas y huella de cada tabla existente
-  psql -X -At -d "$DB" <<'SQL'
-select c.relname,
-  (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', c.relname), false, true, '')))[1]::text,
-  (xpath('/row/h/text()', query_to_xml(format('select md5(coalesce(string_agg(x::text, %L order by x::text), %L)) as h from public.%I x', E'\n', '', c.relname), false, true, '')))[1]::text
-from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
-  and c.relname not in ('suscripciones','registro_intentos','billing_checkouts','billing_eventos')
-order by 1;
+# D0: copia de cada tabla existente antes de migrar; después se comparan solo
+# las columnas que ya existían (las migraciones agregan columnas nuevas, en NULL).
+sql <<'SQL'
+create schema zz_antes;
+do $$ declare t text; begin
+  for t in select c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' loop
+    execute format('create table zz_antes.%I as select * from public.%I', t, t);
+  end loop;
+end $$;
 SQL
-}
-foto > "$OUT/antes.txt"
 for m in "${MIGS[@]}"; do
   inicio=$(date +%s%N)
   sql -f "$SUPA/migrations/$m.sql" >/dev/null
   echo "aplicada $m ($(( ($(date +%s%N) - inicio) / 1000000 )) ms)"
 done
-foto > "$OUT/despues.txt"
-if diff -q "$OUT/antes.txt" "$OUT/despues.txt" >/dev/null; then
-  echo "PASS|D0|ninguna fila existente cambió ($(wc -l < "$OUT/antes.txt") tablas, $(awk -F'|' '{s+=$2} END {print s}' "$OUT/antes.txt") filas)"
-else
-  echo "FAIL|D0|cambiaron filas existentes"; diff "$OUT/antes.txt" "$OUT/despues.txt" | head -20
-fi
+psql -X -q -v ON_ERROR_STOP=1 -d "$DB" > "$OUT/d0.txt" 2>&1 <<'SQL' || true
+do $$ declare t text; cols text; n bigint; total bigint := 0; filas bigint; tablas int := 0; distintas text := '';
+begin
+  for t in select c.relname from pg_class c where c.relnamespace = 'zz_antes'::regnamespace and c.relkind = 'r' order by 1 loop
+    select string_agg(quote_ident(a.attname), ', ' order by a.attnum) into cols
+      from pg_attribute a where a.attrelid = format('zz_antes.%I', t)::regclass and a.attnum > 0 and not a.attisdropped;
+    execute format('select count(*) from ((select row(%1$s)::text from public.%2$I except all select row(%1$s)::text from zz_antes.%2$I)
+                    union all (select row(%1$s)::text from zz_antes.%2$I except all select row(%1$s)::text from public.%2$I)) d', cols, t) into n;
+    execute format('select count(*) from zz_antes.%I', t) into filas;
+    total := total + filas; tablas := tablas + 1;
+    if n > 0 then distintas := distintas || format(' %s(%s)', t, n); end if;
+  end loop;
+  if distintas = '' then raise notice 'PASS|D0|ninguna fila existente cambió (% tablas, % filas; columnas previas)', tablas, total;
+  else raise notice 'FAIL|D0|cambiaron filas existentes:%', distintas; end if;
+end $$;
+drop schema zz_antes cascade;
+SQL
+grep -E "PASS\||FAIL\||ERROR" "$OUT/d0.txt" | sed 's/^.*NOTICE:  //'
 psql -X -q -d "$DB" -f "$DIR/verificacion_post.sql" 2>&1 | grep -E "PASS\||FAIL\||ERROR" | sed 's/^.*NOTICE:  //'

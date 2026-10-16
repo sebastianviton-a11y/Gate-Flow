@@ -9,14 +9,14 @@ de solo lectura y sin filas de datos.
 - Más las políticas de logos en `storage.objects` con `has_role_in_tenant`.
 - Huella por tipo de objeto igual a la de producción, salvo 7 triggers internos de Supabase Storage.
 
-**Pendientes.** Las 12 migraciones posteriores, en el mismo orden que en staging (lista en `ensayo.sh`).
+**Pendientes.** Las 16 migraciones posteriores, en el mismo orden que en staging (lista en `ensayo.sh`).
 
 | Archivo | Para qué |
 |---|---|
 | `huella_objetos.sql` | Huella de catálogo por objeto. La misma consulta en producción y en local; se compara por tipo y se baja al detalle solo donde difiere |
 | `parche_forma_produccion.sql` | Lleva la base local a la forma de producción. Solo pruebas |
 | `datos_sinteticos_forma_prod.sql` | Datos sintéticos con la forma y el volumen de producción: 3 residenciales MX (2 «piloto», 1 «trial»), 8 usuarios, unos 600 registros. Ningún dato real |
-| `ensayo.sh` | Forma + datos → 12 migraciones → comprueba que ninguna fila existente cambie y verifica el comportamiento (`verificacion_post.sql`) |
+| `ensayo.sh` | Forma + datos → 16 migraciones → comprueba que ninguna fila existente cambie (en las columnas que ya existían) y verifica el comportamiento (`verificacion_post.sql`) |
 | `verificacion_produccion.sql` | Consultas de **solo lectura** para producción, a correr antes y después de la ventana: conteos y violaciones de FK, sin datos personales |
 
 ```bash
@@ -33,3 +33,14 @@ GF_BASE_PRODUCCION=1 PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/sec
   - aislamiento entre residenciales.
 - Suites de seguridad desde la forma de producción: 0 FAIL en las fases A…IM.
 - Los rollbacks del repo **no** devuelven producción a su forma exacta (las diferencias aparecen en rollback_O/T/C/A). En producción, la reversa es restaurar el respaldo.
+
+**Resultado (2026-10-16, 16 migraciones, hasta `20261015000000`).**
+- Aplican en ~1,3 s.
+- `D0`: ninguna fila existente cambia (31 tablas, 597 filas). La comparación es por las columnas que ya existían: `residentes_enlace` agrega 3 columnas nuevas, en NULL, a `paquetes`.
+- `D1–D18` PASS. Además de lo anterior:
+  - `D13` alta autónoma: prueba de 30 días sin proveedor de cobro, admin solo de su residencial, onboarding pendiente;
+  - `D14` el residencial nuevo opera y su admin no opera en otro;
+  - `D15` al vencer deja de operar, conserva los datos y no pasa a cobro;
+  - `D16` un admin no usa acciones de Super Admin ni el enlace de residentes de otro residencial;
+  - `D17–D18` no se publica ningún documento legal ni se crea ninguna aceptación.
+- Suites de seguridad desde la forma de producción: 0 FAIL en todas las fases (923 PASS en LP). Las 4 «fallas» del runner son las diferencias de catálogo ya conocidas de rollback_O/T/C/A.
