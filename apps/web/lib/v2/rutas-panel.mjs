@@ -29,6 +29,7 @@ export const RUTAS_PANEL = [
   "usuarios",
   "configuracion",
   "superadmin",
+  "ayuda",
 ];
 
 /** Igual que normalizarUrlAdmin (links.ts): http(s) sin "/" final, o null. */

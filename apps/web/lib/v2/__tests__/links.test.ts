@@ -5,7 +5,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { MODO_DEMO, V2_LINKS, ctaHref, ctaTexto, normalizarContactoDemo, normalizarUrlAdmin, preventPendingLinkClick, registroHref } from "../links";
+import { MODO_DEMO, TEXTO_CTA_PRUEBA, V2_LINKS, ctaHref, ctaTexto, normalizarContactoDemo, normalizarUrlAdmin, preventPendingLinkClick, registroHref } from "../links";
 import { RUTAS_PANEL, urlPanel } from "../rutas-panel.mjs";
 import { indexable } from "../../indexacion";
 
@@ -49,8 +49,9 @@ for (const [archivo, ancla] of [["DesktopLandingV2.tsx", "#d-probar"], ["MobileL
   assert((s.match(new RegExp(`ctaHref\\("${ancla}"\\)`, "g")) ?? []).length === 3, `${archivo}: header, hero y CTA final → /registro (o demo)`);
   assert(!s.includes("registroHref("), `${archivo}: todos los CTAs pasan por ctaHref (modo demo)`);
   assert(!s.includes(`href="${ancla}"`), `${archivo}: ningún "Probar gratis" queda como ancla fija`);
-  assert(!/>(Probar gratis|Comenzar prueba gratis)[^<{]*</.test(s) && (s.match(/>\{ctaTexto\("/g) ?? []).length === 5, `${archivo}: los 5 textos de CTA pasan por ctaTexto`);
+  assert(!/>(Probar gratis|Comenzar prueba gratis)[^<{]*</.test(s) && (s.match(/>\{ctaTexto\(/g) ?? []).length === 5, `${archivo}: los 5 textos de CTA pasan por ctaTexto`);
   assert(!/aria-label="Probar gratis/.test(s), `${archivo}: aria-label de los planes también cambia en modo demo`);
+  assert((s.match(/ctaTexto\(TEXTO_CTA_PRUEBA\)/g) ?? []).length === 7 && !/ctaTexto\("/.test(s), `${archivo}: todos los CTAs de prueba dicen «Probar 30 días gratis»`);
   const legales = s.match(/V2_LINKS\.(privacidad|terminos)/g) ?? [];
   const protegidos = s.match(/\{MOSTRAR_LEGALES && \(<><a href=\{V2_LINKS\.privacidad\}[^]*?Términos<\/a><\/>\)\}/g) ?? [];
   assert(legales.length > 0 && legales.length === protegidos.length * 2, `${archivo}: cada enlace a Privacidad/Términos depende de MOSTRAR_LEGALES`);
@@ -81,7 +82,9 @@ console.log("\nEnlaces secundarios");
 const links = readFileSync(join(__dirname, "..", "links.ts"), "utf8");
 assert(/ingresar: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/login` : "#"/.test(links), "Ingresar → /login del panel");
 assert(/privacidad: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/privacidad` : "#"/.test(links) && /terminos: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/terminos` : "#"/.test(links), "Privacidad y Términos → las páginas que se aceptan en /registro");
-assert(/contacto: `mailto:\$\{CORREO_SOPORTE\}/.test(links) && /soporte: `mailto:\$\{CORREO_SOPORTE\}`/.test(links), "Contacto y Soporte → correo de soporte");
+const WA = "https://wa.me/525523248345?text=";
+assert(V2_LINKS.contacto.startsWith(WA) && decodeURIComponent(V2_LINKS.contacto).includes("me interesa Gate Flow") && V2_LINKS.soporte.startsWith(WA) && decodeURIComponent(V2_LINKS.soporte).includes("necesito ayuda"), "Contacto y Soporte → WhatsApp +52 55 2324 8345 (secundarios)");
+assert(!Object.values(V2_LINKS).some((v) => v.startsWith("mailto:")), "sin correos: contacto, soporte y demo van por WhatsApp");
 const evento = (href: string) => {
   let prevenido = false;
   preventPendingLinkClick({ currentTarget: { getAttribute: () => href }, preventDefault: () => (prevenido = true) } as never);
@@ -101,11 +104,11 @@ console.log("\nModo demo (NEXT_PUBLIC_LANDING_MODO=demo)");
 assert(MODO_DEMO === false, "sin variable: modo de registro (staging y previews sin cambios)");
 assert(ctaHref("#d-probar", "hasta-50", false) === registroHref("#d-probar", "hasta-50"), "fuera de demo: igual que antes");
 assert(ctaHref("#d-probar", undefined, true) === V2_LINKS.demo && ctaHref("#m-probar", "hasta-150", true) === V2_LINKS.demo, "en demo: todos los CTAs → contacto de demo");
-assert(ctaTexto("Probar gratis 30 días", false) === "Probar gratis 30 días" && ctaTexto("Comenzar prueba gratis", true) === "Solicitar demo", "texto: «Solicitar demo» solo en demo");
-assert(V2_LINKS.demo === "mailto:soporte@gateflow.mx?subject=Solicitud%20de%20demo%20-%20Gate%20Flow", "contacto por defecto: el correo de soporte con asunto");
+assert(TEXTO_CTA_PRUEBA === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, false) === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, true) === "Solicitar demo", "texto: «Probar 30 días gratis»; «Solicitar demo» solo en demo");
+assert(V2_LINKS.demo.startsWith("https://wa.me/525523248345?text=") && decodeURIComponent(V2_LINKS.demo).includes("demostración"), "contacto de demo por defecto: WhatsApp con el mensaje de demostración");
 assert(normalizarContactoDemo("mailto:ventas@gateflow.mx") === "mailto:ventas@gateflow.mx" && normalizarContactoDemo(" https://wa.me/5215500000000 ") === "https://wa.me/5215500000000", "acepta mailto: y https://");
 for (const malo of [undefined, "", "soporte@gateflow.mx", "http://inseguro.test", "javascript:alert(1)", "mailto:sin-arroba", "tel:+5215500000000"]) {
-  assert(normalizarContactoDemo(malo) === null, `rechaza ${JSON.stringify(malo)} (queda el correo de soporte)`);
+  assert(normalizarContactoDemo(malo) === null, `rechaza ${JSON.stringify(malo)} (queda el WhatsApp)`);
 }
 const fuenteLinks = readFileSync(join(__dirname, "..", "links.ts"), "utf8");
 assert(/export const MOSTRAR_LEGALES = !MODO_DEMO;/.test(fuenteLinks), "en demo no se muestran Privacidad ni Términos (no hay página publicada a la que llevar)");

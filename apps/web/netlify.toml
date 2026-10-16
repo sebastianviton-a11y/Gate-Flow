@@ -1,11 +1,9 @@
 ## netlify.toml — sitio "gateflow-web" (landing comercial pública)
 ##
-## PREPARADO, SIN CONECTAR: este archivo sigue el mismo patrón que
+## Sigue el mismo patrón que
 ## apps/admin/netlify.toml y apps/guard/netlify.toml (ver DEPLOY_STAGING.md
-## §3) pero el sitio Netlify correspondiente todavía NO ha sido creado ni
-## conectado a ningún dominio. Nada de este archivo dispara un deploy por
-## sí solo — requiere que alguien cree el sitio en Netlify (Package
-## directory: apps/web, Base directory: vacío) y lo conecte a este repo.
+## §3). Sitio gateflow-web: Package directory = apps/web, Base directory
+## vacío, conectado a este repo (ver docs/operations/LANZAMIENTO.md).
 ##
 ## Todas las rutas de este archivo son relativas a la RAÍZ del repo,
 ## no a esta carpeta, porque "Base directory" queda sin definir.
@@ -37,16 +35,12 @@
 #     abierta en el panel de clientes: los CTAs dicen "Solicitar demo" y
 #     abren el contacto de demo, y no se muestran Privacidad ni Términos.
 #   NEXT_PUBLIC_LANDING_CONTACTO_DEMO — contacto de demo (mailto: o
-#     https://, p. ej. WhatsApp); sin valor, soporte@gateflow.mx.
+#     https://); sin valor, el WhatsApp de Gate Flow (+52 55 2324 8345).
 #   GF_LANDING_INDEXAR=1 — solo en el sitio público (lib/indexacion.ts).
 
-# Rama de publicación de la landing comercial (gateflow.mx). Valores
-# públicos (se inlinean en el HTML): el panel de clientes y el modo
-# «Solicitar demo» mientras el alta de prueba no esté abierta en
-# producción. Así su branch deploy en el sitio de previews ya se ve igual
-# que el sitio público; en el sitio público (gateflow-web) las mismas
-# variables también están en la UI. GF_LANDING_INDEXAR=1 solo se activa en
-# el sitio público al conectar el dominio.
-[context.landing-produccion.environment]
-  NEXT_PUBLIC_ADMIN_APP_URL = "https://app.gateflow.mx"
-  NEXT_PUBLIC_LANDING_MODO = "demo"
+# Sitio público (gateflow-web → gateflow.mx y www.gateflow.mx), en la UI de
+# Netlify, contexto Production:
+#   NEXT_PUBLIC_ADMIN_APP_URL = https://app.gateflow.mx
+#   GF_LANDING_INDEXAR       = 1
+#   (sin NEXT_PUBLIC_LANDING_MODO: los CTAs dicen «Probar 30 días gratis»
+#    y llevan a https://app.gateflow.mx/registro)
