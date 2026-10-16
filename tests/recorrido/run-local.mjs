@@ -824,7 +824,14 @@ async function recorrido(navegador, perfil, { run, correo, servicio, desde, tena
     const antes = Date.now();
     const c = await nuevo();
     const pr = await c.newPage();
-    await pr.goto(`${base}/recuperar-password`, { waitUntil: "networkidle" });
+    // Desde el login, como lo haría la persona: el enlace tiene que estar ahí.
+    await pr.goto(`${base}/login`, { waitUntil: "networkidle" });
+    const enlaceOlvido = pr.getByRole("link", { name: "¿Olvidaste tu contraseña?" });
+    const hayEnlace = (await enlaceOlvido.count()) === 1;
+    ok(e("32"), hayEnlace, `[${p}] recuperación (${etiqueta}): el login muestra «¿Olvidaste tu contraseña?»`);
+    if (!hayEnlace) return c.close();
+    await Promise.all([pr.waitForURL(`${base}/recuperar-password**`, { timeout: 20_000 }).catch(() => null), enlaceOlvido.click()]);
+    await pr.locator('input[type="email"]').waitFor({ timeout: 20_000 }).catch(() => null);
     await pr.locator('input[type="email"]').fill(cuenta.email);
     await pr.locator('button[type="submit"]').click();
     const m = await smtp.esperar(cuenta.email, { ms: 20_000, despuesDe: antes });
