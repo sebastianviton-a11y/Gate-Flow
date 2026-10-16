@@ -46,6 +46,11 @@
 #        EXECUTE de anon/authenticated en las 2 lecturas existentes;
 #        rollback LP → idéntico a LG; LP se reaplica idéntico; LP se
 #        revierte antes que LG
+#   ER + eliminación manual asistida de residenciales (20261018) sobre LP
+#        → 0 FAIL; el catálogo solo GANA la tabla de registro y sus 8
+#        funciones; rollback ER → idéntico a LP; ER se reaplica idéntico;
+#        con una eliminación registrada, el rollback aborta sin cambios;
+#        ER se revierte antes que LP
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -91,6 +96,8 @@ MIG_LG="20261014000000_documentos_legales.sql"
 DOWN_LG="$SUPA/rollback/20261014000000_documentos_legales.down.sql"
 MIG_LP="20261015000000_documentos_legales_lectura_publica.sql"
 DOWN_LP="$SUPA/rollback/20261015000000_documentos_legales_lectura_publica.down.sql"
+MIG_ER="20261018000000_eliminacion_residencial.sql"
+DOWN_ER="$SUPA/rollback/20261018000000_eliminacion_residencial.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -178,7 +185,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" || "$(basename "$m")" == "$MIG_LP" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" || "$(basename "$m")" == "$MIG_LP" || "$(basename "$m")" == "$MIG_ER" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -337,6 +344,36 @@ same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG_tras_down_LP.txt" "rollback_LP"
 sql_file "$SUPA/migrations/$MIG_LP"
 snapshot "$OUT/snap_LP2.txt"
 same_catalog "$OUT/snap_LP.txt" "$OUT/snap_LP2.txt" "reaplicar_LP"
+
+sql_file "$SUPA/migrations/$MIG_ER"
+run_suites ER "… + eliminación asistida" C
+snapshot "$OUT/snap_ER.txt"
+# Solo se AGREGAN la tabla de registro (ACL, restricciones, índices) y sus funciones.
+ER_FN='eliminacion_residencial_(servicio|conteo|cuentas|cuenta_referenciada|archivos|simular|ejecutar|completar)'
+diff "$OUT/snap_LP2.txt" "$OUT/snap_ER.txt" | grep '^[<>]' > "$OUT/diff_ER_sobre_LP.txt" || true
+if [[ "$(grep -c '^<' "$OUT/diff_ER_sobre_LP.txt")" == "0" && "$(grep -c '^> FN|' "$OUT/diff_ER_sobre_LP.txt")" == "8" ]] \
+   && ! grep -vE "^> (FN\|(public\.)?$ER_FN\(|(ACL|CON)\|(public\.)?eliminaciones_residencial\||IDX\|(public\.)?eliminaciones_residencial_[a-z_]+\|)" "$OUT/diff_ER_sobre_LP.txt" >/dev/null; then
+  echo "  eliminación asistida: el catálogo solo gana la tabla de registro y sus 8 funciones (nada existente cambia)"
+else
+  echo "  eliminación asistida: cambios de catálogo inesperados (ver $OUT/diff_ER_sobre_LP.txt)"; FALLAS=$((FALLAS + 1))
+fi
+sql_file "$DOWN_ER"
+snapshot "$OUT/snap_LP_tras_down_ER.txt"
+same_catalog "$OUT/snap_LP2.txt" "$OUT/snap_LP_tras_down_ER.txt" "rollback_ER"
+sql_file "$SUPA/migrations/$MIG_ER"
+snapshot "$OUT/snap_ER2.txt"
+same_catalog "$OUT/snap_ER.txt" "$OUT/snap_ER2.txt" "reaplicar_ER"
+# Con una eliminación registrada (la auditoría), el rollback debe abortar.
+sql -c "insert into public.eliminaciones_residencial (tenant_id, estado, motivo, operador) values (gen_random_uuid(), 'no_elegible', 'sin_suscripcion', 'ticket-rollback')" >/dev/null
+if sql -f "$DOWN_ER" >/dev/null 2>"$OUT/ER_con_datos.err"; then
+  echo "  eliminación asistida: el rollback se aplicó con eliminaciones registradas (debía abortar)"; FALLAS=$((FALLAS + 1))
+else
+  echo "  eliminación asistida: el rollback aborta con registros ($(grep -o '[0-9]* eliminaciones' "$OUT/ER_con_datos.err" | head -1))"
+fi
+snapshot "$OUT/snap_ER_tras_abortar.txt"
+same_catalog "$OUT/snap_ER.txt" "$OUT/snap_ER_tras_abortar.txt" "ER_rollback_abortado_sin_cambios"
+sql -c "delete from public.eliminaciones_residencial" >/dev/null
+sql_file "$DOWN_ER"
 sql_file "$DOWN_LP"
 
 sql_file "$DOWN_LG"
