@@ -18,6 +18,7 @@ import {
   generarSqlVerificacion,
   leerArchivo,
   leerDocumentos,
+  marcadoresPendientes,
   normalizarContenido,
   separarCabecera,
   sha256Hex,
@@ -117,6 +118,95 @@ console.log("\nA. Validación de cada archivo");
   ok(rp.versiones[0]?.vigenteDesde === "2020-01-01T06:00:00.000Z", "vigencia con zona → UTC");
   const dpa = doc(d, "dpa", "v1.0.md", { identificador: "acuerdo_tratamiento", version: '"1.0"', jurisdicciones: ["MX"], estado: "borrador" });
   ok(leerArchivo(dpa, "dpa").versiones[0]?.clave === "acuerdo_tratamiento", "legal/dpa → acuerdo_tratamiento");
+}
+
+console.log("\nA. Marcadores pendientes entre corchetes (y equivalentes)");
+{
+  const d = nuevoDir();
+  const pendientes = [
+    "[NOMBRE LEGAL DEL PRESTADOR]",
+    "[DOMICILIO LEGAL]",
+    "[PENDIENTE]",
+    "[PENDIENTE: fecha de entrada en vigor]",
+    "[RFC]",
+    "[Razón social del prestador]",
+    "[nombre del cliente]",
+    "[…]",
+    "[...]",
+    "[ ]",
+    "<<FECHA>>",
+    "{{ rfc }}",
+    "TBD",
+    "Nombre: ____________",
+    "[sitio](https://[DOMINIO]/privacidad)",
+  ];
+  for (const marcador of pendientes) {
+    const r = doc(d, "dpa", "v1.0.md", { ...aprobado(), identificador: "acuerdo_tratamiento" }, `# Ficticio\n\nTexto ${marcador} de prueba.\n`);
+    let mensaje = "";
+    try {
+      leerArchivo(r, "dpa");
+    } catch (e) {
+      mensaje = e.message;
+    }
+    ok(/marcadores de texto pendiente/.test(mensaje), `aprobado con ${marcador} → rechazado`, mensaje || "aceptado");
+  }
+  // El caso del borrador real (v0.1): dos marcadores, los dos en el mensaje, también al publicar.
+  const real = "# Acuerdo ficticio\n\nEl Encargado: [NOMBRE LEGAL DEL PRESTADOR], quien opera bajo el nombre comercial Gate Flow.\n\nFecha de entrada en vigor: [PENDIENTE].\n\nDomicilio: [DOMICILIO LEGAL].\n";
+  for (const estado of ["aprobado", "publicado", "retirado"]) {
+    const r = doc(d, "dpa", "v1.0.md", { ...aprobado({ estado, vigente_desde: "2030-01-01T00:00:00-06:00" }), identificador: "acuerdo_tratamiento" }, real);
+    let mensaje = "";
+    try {
+      leerArchivo(r, "dpa");
+    } catch (e) {
+      mensaje = e.message;
+    }
+    ok(
+      mensaje.includes("[NOMBRE LEGAL DEL PRESTADOR]") && mensaje.includes("[PENDIENTE]") && mensaje.includes("[DOMICILIO LEGAL]"),
+      `${estado}: el error nombra cada marcador pendiente`,
+      mensaje || "aceptado",
+    );
+  }
+  const borrador = doc(d, "dpa", "v1.0.md", { identificador: "acuerdo_tratamiento", version: '"1.0"', jurisdicciones: ["MX"], estado: "borrador" }, real);
+  ok(leerArchivo(borrador, "dpa").versiones[0]?.estado === "borrador", "un borrador puede llevar [NOMBRE LEGAL DEL PRESTADOR] (nunca se carga)");
+  for (const [campo, extra] of [
+    ["resumen_cambios", { resumen_cambios: '"[PENDIENTE: resumen de cambios]"' }],
+    ["aprobacion", { aprobacion: '"[REFERENCIA DE APROBACIÓN]"' }],
+  ]) {
+    const r = doc(d, "terminos", "v1.0.md", aprobado(extra));
+    ok(lanza(() => leerArchivo(r, "terminos"), new RegExp(`${campo} tiene marcadores de texto pendiente`)), `aprobado con un marcador en ${campo} → rechazado`);
+  }
+  const limpio = [
+    "# Acuerdo ficticio",
+    "",
+    "Consulta el [Aviso de Privacidad](https://app.gateflow.mx/privacidad) o escribe a [contacto](mailto:zz@example.invalid).",
+    "",
+    "Según el artículo citado [1], el texto se transcribe [sic].",
+    "",
+    "---",
+    "",
+    "___",
+    "",
+    "Todo el contenido es de prueba y __subrayado__ no es un marcador.",
+    "",
+  ].join("\n");
+  const ok1 = doc(d, "dpa", "v1.0.md", { ...aprobado(), identificador: "acuerdo_tratamiento" }, limpio);
+  let aceptado = null;
+  try {
+    aceptado = leerArchivo(ok1, "dpa");
+  } catch (e) {
+    aceptado = e;
+  }
+  ok(!(aceptado instanceof Error) && aceptado?.versiones[0]?.estado === "aprobado", "enlaces [texto](url), [1], [sic], separadores y «Todo» no son marcadores", aceptado instanceof Error ? aceptado.message : "");
+  ok(
+    JSON.stringify(marcadoresPendientes("A [UNO] y {{dos}} y [UNO] y [ver](https://x.invalid) y <<TRES>>")) === JSON.stringify(["[UNO]", "{{dos}}", "<<TRES>>"]),
+    "marcadoresPendientes: en orden de aparición, sin repetidos y sin enlaces",
+  );
+  const cli = path.join(d, "cli");
+  doc(cli, "dpa", "v1.0-mx.md", { ...aprobado(), identificador: "acuerdo_tratamiento" }, real);
+  const rc = spawnSync(process.execPath, [CLI, "validar", "--dir", cli], { encoding: "utf8" });
+  ok(rc.status === 1 && rc.stderr.includes("[NOMBRE LEGAL DEL PRESTADOR]"), "CLI validar: aprobado con [NOMBRE LEGAL DEL PRESTADOR] → código 1 y lo nombra", rc.stderr || rc.stdout);
+  const rs = spawnSync(process.execPath, [CLI, "sql-carga", "--dir", cli], { encoding: "utf8" });
+  ok(rs.status === 1 && !rs.stdout.includes("insert"), "CLI sql-carga: no genera SQL con marcadores pendientes", rs.stdout.slice(0, 300));
 }
 
 console.log("\nA. Validación del conjunto");
