@@ -4,7 +4,7 @@
  * por campo y página de Ayuda.
  *   npx tsx apps/admin/lib/__tests__/onboarding-autonomo.test.ts
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { obtenerConteosConfiguracion, pasoInicialAsistente, progresoConfiguracion, type ConteosConfiguracion } from "@gateflow/paquetes";
 import {
@@ -34,6 +34,19 @@ async function seccion(nombre: string, fn: () => void | Promise<void>) {
 }
 const REPO = join(__dirname, "..", "..", "..", "..");
 const fuente = (ruta: string) => readFileSync(join(REPO, ruta), "utf8");
+function listarFuentes(dirs: string[]): string[] {
+  const salida: string[] = [];
+  const recorrer = (rel: string) => {
+    for (const e of readdirSync(join(REPO, rel), { withFileTypes: true })) {
+      const r = `${rel}/${e.name}`;
+      if (e.isDirectory()) {
+        if (!["node_modules", ".next", "__tests__"].includes(e.name)) recorrer(r);
+      } else if (/\.(ts|tsx)$/.test(e.name)) salida.push(r);
+    }
+  };
+  dirs.forEach(recorrer);
+  return salida;
+}
 const conteos = (c: Partial<ConteosConfiguracion> = {}): ConteosConfiguracion => ({ unidades: 0, residentes: 0, ubicaciones: 0, guardias: 0, paquetes: 0, ...c });
 
 /** Cliente falso: registra cada consulta (tabla y filtros) y devuelve el conteo pedido. */
@@ -140,6 +153,13 @@ void (async () => {
     assert(ayuda.includes("enlaceWhatsAppSoporte()") && ayuda.includes("enlaceWhatsAppSoporte(MENSAJE_DEMO)"), "soporte y demo por WhatsApp");
     assert(NAV_ITEMS.some((i) => i.href === "/ayuda" && !i.roles), "Ayuda en el menú (escritorio y celular, todos los roles)");
     assert(fuente("apps/guard/app/guard/ayuda/page.tsx").includes("enlaceWhatsAppSoporte()"), "Guard: ayuda con WhatsApp de soporte");
+    // Contacto único: WhatsApp. Ningún correo de soporte o comercial en lo que ve el cliente.
+    const conCorreo = listarFuentes(["apps/admin/app", "apps/admin/lib", "apps/admin/components", "apps/guard/app", "apps/guard/components", "packages/ui/src"])
+      .filter((f) => /(soporte|hola|ventas)@gateflow\.mx/.test(fuente(f)));
+    assert(conCorreo.length === 0, "ninguna pantalla muestra soporte@ / hola@gateflow.mx: el contacto es WhatsApp", conCorreo.join(", "));
+    const suscripcion = fuente("apps/admin/app/suscripcion/page.tsx");
+    assert(!suscripcion.includes("mailto:") && suscripcion.includes("enlaceWhatsAppSoporte(MENSAJE_CONTRATAR)"), "/suscripcion: al vencer la prueba, contratar por WhatsApp (continuidad manual)");
+    assert(fuente("apps/admin/lib/planes.ts").includes("enlaceWhatsAppSoporte(MENSAJE_MAS_DE_150)"), "más de 150 viviendas → WhatsApp");
   });
 
   await seccion("6. Asistente: se puede dejar y retomar, sin borrar ni rehacer nada", () => {

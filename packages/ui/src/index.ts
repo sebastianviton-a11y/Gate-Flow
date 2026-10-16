@@ -42,4 +42,4 @@ export {
   leerMarca,
   type Almacen,
 } from "./ayuda/preferencias";
-export { WHATSAPP_SOPORTE_VISIBLE, MENSAJE_AYUDA, MENSAJE_DEMO, enlaceWhatsAppSoporte } from "./ayuda/contacto";
+export { WHATSAPP_SOPORTE_VISIBLE, MENSAJE_AYUDA, MENSAJE_CONTRATAR, MENSAJE_DEMO, MENSAJE_MAS_DE_150, enlaceWhatsAppSoporte } from "./ayuda/contacto";

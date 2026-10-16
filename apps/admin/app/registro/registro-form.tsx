@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, MailCheck } from "lucide-react";
-import { AyudaCampo, Button, GateFlowLogo, Input, Label, PasswordInput } from "@gateflow/ui";
+import { AyudaCampo, Button, GateFlowLogo, Input, Label, MENSAJE_MAS_DE_150, PasswordInput, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import type { ResultadoAlta } from "@/lib/registro/alta";
-import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro } from "@/lib/registro/validacion";
+import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro, type PaisRegistro } from "@/lib/registro/validacion";
 import { DOCUMENTOS, hrefDocumento, type ClaveDocumento } from "@/lib/legal/documentos";
 import { registrarCuentaPrueba } from "./actions";
 import { TurnstileWidget, type TurnstileHandle } from "./turnstile-widget";
@@ -23,7 +23,19 @@ const AYUDA_REGISTRO = {
   viviendas: `Cuántas casas o departamentos tiene, aproximadamente (hasta ${MAX_VIVIENDAS_AUTOSERVICIO} para registrarte aquí). Sirve para sugerirte un plan cuando contrates; no limita la prueba.`,
 } as const;
 
-export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: string; turnstileSiteKey: string | null }) {
+export function RegistroForm({
+  tokenTiempo,
+  turnstileSiteKey,
+  paises,
+}: {
+  tokenTiempo: string;
+  turnstileSiteKey: string | null;
+  /** Países con registro abierto (lo decide el servidor). */
+  paises: readonly PaisRegistro[];
+}) {
+  const opcionesPais = PAISES_REGISTRO.filter((p) => paises.includes(p.codigo));
+  // Con un solo país abierto (lanzamiento: México) queda elegido; con varios, se elige explícitamente.
+  const paisUnico = opcionesPais.length === 1 ? (opcionesPais[0]?.codigo ?? "") : "";
   const [pantalla, setPantalla] = useState<Pantalla>("formulario");
   const [enviando, setEnviando] = useState(false);
   const [errores, setErrores] = useState<ErroresRegistro>({});
@@ -32,7 +44,7 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
   const [timezone, setTimezone] = useState("");
   const [viviendas, setViviendas] = useState("");
   // Solo para los enlaces legales: se lee el documento del país elegido.
-  const [pais, setPais] = useState("");
+  const [pais, setPais] = useState<string>(paisUnico);
   const enlaceLegal = (clave: ClaveDocumento) => (pais === "MX" || pais === "AR" ? hrefDocumento(clave, pais) : DOCUMENTOS[clave].ruta);
   // Turnstile: sin token no se puede enviar; cada token sirve una vez.
   const [tokenDesafio, setTokenDesafio] = useState<string | null>(null);
@@ -111,8 +123,8 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
           <CheckCircle2 className="h-10 w-10 text-primary" />
           <h1 className="font-display text-xl font-semibold text-white">Hablemos</h1>
           <p className="text-sm text-white/70">{mensajeFinal}</p>
-          <a href="mailto:hola@gateflow.mx" className="mt-2 text-sm text-primary underline">
-            hola@gateflow.mx
+          <a href={enlaceWhatsAppSoporte(MENSAJE_MAS_DE_150)} target="_blank" rel="noopener noreferrer" className="mt-2 text-sm text-primary underline">
+            WhatsApp {WHATSAPP_SOPORTE_VISIBLE}
           </a>
           <button type="button" onClick={() => setPantalla("formulario")} className="text-xs text-white/50 underline">
             Volver
@@ -158,12 +170,14 @@ export function RegistroForm({ tokenTiempo, turnstileSiteKey }: { tokenTiempo: s
 
         <div className="grid grid-cols-2 gap-3">
           <Campo id="pais" etiqueta="País" error={errores.pais} ayuda={AYUDA_REGISTRO.pais}>
-            {/* Sin preselección: el país define cómo se cobra la suscripción y el formato de los teléfonos. */}
-            <select id="pais" name="pais" required defaultValue="" onChange={(e) => setPais(e.target.value)} className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
-              <option value="" disabled>
-                Selecciona
-              </option>
-              {PAISES_REGISTRO.map((p) => (
+            {/* Con varios países abiertos no hay preselección: el país define cómo se cobra la suscripción y el formato de los teléfonos. */}
+            <select id="pais" name="pais" required defaultValue={paisUnico} onChange={(e) => setPais(e.target.value)} className={`flex h-10 w-full rounded-md border px-3 text-sm ${CLASE_CAMPO}`}>
+              {!paisUnico && (
+                <option value="" disabled>
+                  Selecciona
+                </option>
+              )}
+              {opcionesPais.map((p) => (
                 <option key={p.codigo} value={p.codigo}>
                   {p.nombre}
                 </option>

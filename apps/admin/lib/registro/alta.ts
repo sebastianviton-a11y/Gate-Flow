@@ -57,6 +57,8 @@ export interface ContextoAlta {
   pepper: string;
   ip: string | null;
   ahoraMs?: number;
+  /** Países con registro abierto (REGISTRO_PAISES); sin valor, solo México. */
+  paises?: readonly PaisRegistro[];
 }
 
 export type ResultadoAlta =
@@ -81,7 +83,7 @@ function detalle(e: unknown): string {
 }
 
 export async function ejecutarAlta(deps: DepsAlta, campos: CamposCrudos, ctx: ContextoAlta): Promise<ResultadoAlta> {
-  const validacion = validarRegistro(campos);
+  const validacion = validarRegistro(campos, ctx.paises);
   if (!validacion.ok) {
     return validacion.tipo === "contacto"
       ? { tipo: "contacto", mensaje: MENSAJE_CONTACTO }

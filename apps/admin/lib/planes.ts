@@ -1,3 +1,4 @@
+import { MENSAJE_MAS_DE_150, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import { CATALOGO_BILLING, formatearMonto, type PlanBillingId } from "./billing/catalogo";
 
 /**
@@ -6,7 +7,6 @@ import { CATALOGO_BILLING, formatearMonto, type PlanBillingId } from "./billing/
  * de aprobación comercial). Esto solo arma la presentación; el cobro
  * vuelve a resolver el plan en el servidor a partir de su id.
  */
-export const CORREO_SOPORTE = "soporte@gateflow.mx";
 
 export type AccionPlan =
   /** Alta por checkout hospedado (server action con planId). */
@@ -42,6 +42,6 @@ export const PLANES: readonly Plan[] = [
     nombre: "Más de 150 viviendas",
     limiteViviendas: null,
     precio: null,
-    accion: { tipo: "contacto", href: `mailto:${CORREO_SOPORTE}?subject=Plan%20para%20m%C3%A1s%20de%20150%20viviendas` },
+    accion: { tipo: "contacto", href: enlaceWhatsAppSoporte(MENSAJE_MAS_DE_150) },
   },
 ];

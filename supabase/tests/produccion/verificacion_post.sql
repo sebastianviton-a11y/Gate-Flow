@@ -97,3 +97,62 @@ do $$ begin
 exception when others then perform pg_temp.ok('D12', true, 'anon no puede leer paquetes [' || sqlstate || ']');
 end $$;
 rollback;
+
+-- D13–D15: alta autónoma de prueba (registro) tras las migraciones: 30 días,
+-- sin proveedor de cobro, admin del residencial nuevo y nada más.
+begin;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('c0000000-0000-4000-8000-0000000000e1', 'zz.alta.prueba@gateflow.invalid', '{"nombre_completo":"ZZ Alta Prueba"}');
+set local role service_role;
+create temp table _alta on commit drop as
+  select public.crear_cuenta_prueba('c0000000-0000-4000-8000-0000000000e1', 'ZZ Residencial Alta', 'MX', 40, 'America/Mexico_City', true) as r;
+reset role;
+select pg_temp.ok('D13',
+  (select count(*) from public.suscripciones s where s.tenant_id = ((select r from _alta)->>'tenant_id')::uuid
+     and s.estado = 'trialing' and s.origen = 'registro_publico' and s.provider is null
+     and s.trial_ends_at between now() + interval '29 days 23 hours' and now() + interval '30 days 1 hour') = 1
+  and (select count(*) from public.user_tenants ut join public.roles r on r.id = ut.rol_id
+         where ut.user_id = 'c0000000-0000-4000-8000-0000000000e1' and ut.activo and r.clave = 'admin_residencial') = 1
+  and (select count(*) from public.user_tenants where user_id = 'c0000000-0000-4000-8000-0000000000e1') = 1
+  and (select onboarding_completado from public.tenants where id = ((select r from _alta)->>'tenant_id')::uuid) = false,
+  'registro: prueba de 30 días sin proveedor de cobro, solo admin de su residencial, onboarding pendiente');
+select pg_temp.ok('D14', pg_temp.operativo_como('c0000000-0000-4000-8000-0000000000e1', ((select r from _alta)->>'tenant_id')::uuid)
+  and not pg_temp.operativo_como('c0000000-0000-4000-8000-0000000000e1', 'a0000000-0000-4000-8000-00000000000a'),
+  'el residencial nuevo opera durante la prueba y su admin no opera en otro residencial');
+update public.suscripciones set trial_started_at = now() - interval '31 days', trial_ends_at = now() - interval '1 day'
+  where tenant_id = ((select r from _alta)->>'tenant_id')::uuid;
+select pg_temp.ok('D15', not pg_temp.operativo_como('c0000000-0000-4000-8000-0000000000e1', ((select r from _alta)->>'tenant_id')::uuid)
+  and (select count(*) from public.tenants where id = ((select r from _alta)->>'tenant_id')::uuid) = 1
+  and (select estado from public.suscripciones where tenant_id = ((select r from _alta)->>'tenant_id')::uuid) = 'trialing'
+  and (select provider from public.suscripciones where tenant_id = ((select r from _alta)->>'tenant_id')::uuid) is null,
+  'al vencer la prueba deja de operar, conserva el residencial y no pasa a cobro (sigue sin proveedor)');
+rollback;
+
+-- D16: un admin no puede usar las acciones de Super Admin ni generar el enlace de residentes de otro residencial
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$
+declare v_ok_super boolean := false; v_ok_ajeno boolean := false; v_ok_propio boolean := false;
+begin
+  begin perform public.superadmin_extender_trial('a0000000-0000-4000-8000-00000000000a', (current_date + 60));
+  exception when others then v_ok_super := true; end;
+  begin perform public.residentes_enlace_generar('a0000000-0000-4000-8000-00000000000b');
+  exception when others then v_ok_ajeno := true; end;
+  begin perform public.residentes_enlace_generar('a0000000-0000-4000-8000-00000000000a'); v_ok_propio := true;
+  exception when others then v_ok_propio := false; end;
+  perform pg_temp.ok('D16', v_ok_super and v_ok_ajeno and v_ok_propio,
+    'admin A: sin acciones de Super Admin, sin enlace de residentes de B, con enlace del suyo',
+    format('super=%s ajeno=%s propio=%s', v_ok_super, v_ok_ajeno, v_ok_propio));
+end $$;
+rollback;
+
+-- D17: documentos legales: la migración no publica nada; anon solo lee lo publicado (hoy, nada)
+begin;
+set local role anon;
+select pg_temp.ok('D17', (select count(*) from public.documentos_legales_vigentes('MX')) = 0
+  and (select count(*) from public.documentos_legales_vigentes('AR')) = 0,
+  'sin documentos legales publicados tras migrar (las páginas muestran «pendiente»)');
+rollback;
+select pg_temp.ok('D18', (select count(*) from public.documentos_legales_versiones) = 0 and (select count(*) from public.aceptaciones_legales) = 0,
+  'ninguna versión ni aceptación legal se crea sola');

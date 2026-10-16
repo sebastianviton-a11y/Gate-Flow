@@ -54,7 +54,7 @@ export async function invitarUsuarioResidencial(input: InvitarUsuarioResidencial
   const urlAdmin = urlPublicaAdmin();
   if (!urlAdmin) {
     console.error("[GateFlow] invitación: falta NEXT_PUBLIC_ADMIN_APP_URL; no se envió.");
-    return { ok: false, mensaje: "No se pudo enviar la invitación: falta configurar la dirección del panel. Escribe a soporte@gateflow.mx." };
+    return { ok: false, mensaje: "No se pudo enviar la invitación: falta configurar la dirección del panel. Escríbenos por WhatsApp al +52 55 2324 8345." };
   }
 
   const { data: dataInvite, error } = await servicioClient.auth.admin.inviteUserByEmail(input.correo.trim(), {

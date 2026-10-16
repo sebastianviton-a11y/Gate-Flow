@@ -1,21 +1,23 @@
 /**
- * Destinos de los CTAs "Probar gratis" de la landing V2.
+ * Destinos de los CTAs "Probar gratis" / "Solicitar demo" de la landing V2
+ * y redirecciones de las rutas viejas del panel.
  *   npx tsx apps/web/lib/v2/__tests__/links.test.ts
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { normalizarUrlAdmin, preventPendingLinkClick, registroHref } from "../links";
+import { MODO_DEMO, TEXTO_CTA_PRUEBA, V2_LINKS, ctaHref, ctaTexto, normalizarContactoDemo, normalizarUrlAdmin, preventPendingLinkClick, registroHref } from "../links";
+import { RUTAS_PANEL, urlPanel } from "../rutas-panel.mjs";
 import { indexable } from "../../indexacion";
 
 let pasadas = 0;
 let fallidas = 0;
 
-function assert(condicion: boolean, mensaje: string) {
+function assert(condicion: boolean, mensaje: string, detalle = "") {
   if (condicion) {
     pasadas++;
   } else {
     fallidas++;
-    console.error(`✗ FALLÓ: ${mensaje}`);
+    console.error(`✗ FALLÓ: ${mensaje}${detalle ? ` (${detalle})` : ""}`);
   }
 }
 
@@ -42,18 +44,27 @@ for (const [archivo, ancla] of [["DesktopLandingV2.tsx", "#d-probar"], ["MobileL
   const s = readFileSync(join(V2, archivo), "utf8");
   const texto = s.replace(/<[^>]+>/g, " ");
   assert(!/7 d[ií]as|7 D[IÍ]AS|una semana/i.test(texto), `${archivo}: sin menciones a 7 días`);
-  assert((s.match(new RegExp(`registroHref\\("${ancla}", "hasta-50"\\)`, "g")) ?? []).length === 1, `${archivo}: un CTA plan 50`);
-  assert((s.match(new RegExp(`registroHref\\("${ancla}", "hasta-150"\\)`, "g")) ?? []).length === 1, `${archivo}: un CTA plan 150`);
-  assert((s.match(new RegExp(`registroHref\\("${ancla}"\\)`, "g")) ?? []).length === 3, `${archivo}: header, hero y CTA final → /registro`);
+  assert((s.match(new RegExp(`ctaHref\\("${ancla}", "hasta-50"\\)`, "g")) ?? []).length === 1, `${archivo}: un CTA plan 50`);
+  assert((s.match(new RegExp(`ctaHref\\("${ancla}", "hasta-150"\\)`, "g")) ?? []).length === 1, `${archivo}: un CTA plan 150`);
+  assert((s.match(new RegExp(`ctaHref\\("${ancla}"\\)`, "g")) ?? []).length === 3, `${archivo}: header, hero y CTA final → /registro (o demo)`);
+  assert(!s.includes("registroHref("), `${archivo}: todos los CTAs pasan por ctaHref (modo demo)`);
   assert(!s.includes(`href="${ancla}"`), `${archivo}: ningún "Probar gratis" queda como ancla fija`);
+  assert(!/>(Probar gratis|Comenzar prueba gratis)[^<{]*</.test(s) && (s.match(/>\{ctaTexto\(/g) ?? []).length === 5, `${archivo}: los 5 textos de CTA pasan por ctaTexto`);
+  assert(!/aria-label="Probar gratis/.test(s), `${archivo}: aria-label de los planes también cambia en modo demo`);
+  assert((s.match(/ctaTexto\(TEXTO_CTA_PRUEBA\)/g) ?? []).length === 7 && !/ctaTexto\("/.test(s), `${archivo}: todos los CTAs de prueba dicen «Probar 30 días gratis»`);
+  const legales = s.match(/V2_LINKS\.(privacidad|terminos)/g) ?? [];
+  const protegidos = s.match(/\{MOSTRAR_LEGALES && \(<><a href=\{V2_LINKS\.privacidad\}[^]*?Términos<\/a><\/>\)\}/g) ?? [];
+  assert(legales.length > 0 && legales.length === protegidos.length * 2, `${archivo}: cada enlace a Privacidad/Términos depende de MOSTRAR_LEGALES`);
   assert(/href=\{V2_LINKS\.contacto\} onClick=\{preventPendingLinkClick\} className="gf-ghost2"[^>]*>Contactar/.test(s), `${archivo}: >150 sigue en "Contactar" (V2_LINKS.contacto)`);
   assert(!/registro[^"]*plan=(?!hasta-50|hasta-150)/.test(s), `${archivo}: sin otros valores de plan`);
   assert(!/href="[^"]*gateflow\.mx/.test(s), `${archivo}: ningún link al dominio de producción`);
-  // Textos honestos para Argentina: sin contratación todavía, sin borrado automático.
-  assert(!/elegir un plan/i.test(texto), `${archivo}: no promete contratar al terminar`);
-  assert(!/USD|US\$|\/ mes|Precios? de referencia/i.test(texto), `${archivo}: sin importes en USD (Argentina no puede contratar; México se cobra en MXN)`);
-  assert(texto.includes("Durante la prueba no se cobra nada. En Argentina, por ahora solo está disponible la prueba gratuita de 30 días: la contratación todavía no está habilitada."), `${archivo}: planes: en Argentina, solo la prueba`);
-  assert(texto.includes("en Argentina, la contratación todavía no está disponible"), `${archivo}: "¿Qué pasa después de los 30 días?" sin promesa de contratación`);
+  // Lanzamiento solo en México: sin Argentina, sin importes en USD, sin borrado automático.
+  assert(!/Argentin/.test(texto), `${archivo}: sin menciones a Argentina (lanzamiento solo en México)`);
+  assert(!/elegir un plan/i.test(texto), `${archivo}: no promete contratar en línea al terminar`);
+  assert(!/USD|US\$|\/ mes|Precios? de referencia/i.test(texto), `${archivo}: sin importes en USD`);
+  assert(texto.includes("Durante la prueba no se cobra nada ni se pide tarjeta."), `${archivo}: planes: sin cobro ni tarjeta durante la prueba`);
+  assert(texto.includes("Por ahora, para residenciales en México."), `${archivo}: preguntas: disponible en México`);
+  assert(texto.includes("Para continuar se contrata un plan con el equipo de Gate Flow por WhatsApp."), `${archivo}: "¿Qué pasa después de los 30 días?": continuidad por WhatsApp, sin cobro automático`);
   assert(!/se elimina|eliminamos|se borra después/i.test(texto) && texto.includes("No se borra: al terminar la prueba o la suscripción, la información del residencial se conserva."), `${archivo}: sin eliminación automática de datos (no está implementada)`);
   assert(/30 d[ií]as gratis/i.test(texto), `${archivo}: mantiene los 30 días gratis`);
 }
@@ -66,13 +77,16 @@ const preview = readFileSync(join(APP, "v2-preview", "page.tsx"), "utf8");
 const rutas = [pagina, readFileSync(join(APP, "layout.tsx"), "utf8"), preview];
 assert(rutas.every((r) => !/components\/(DesktopLanding|MobileLanding)"|lib\/faq"/.test(r)), "ninguna ruta usa la V1 (textos de 7 días) ni su FAQ");
 assert(/redirect\("\/"\)/.test(preview), "/v2-preview lleva a \"/\"");
-assert(!/redirects\(/.test(readFileSync(join(APP, "..", "next.config.mjs"), "utf8")), "sin redirecciones solo-preview: lo mismo en preview y en producción");
+const config = readFileSync(join(APP, "..", "next.config.mjs"), "utf8");
+assert(!/VERCEL|CONTEXT|DEPLOY_PRIME_URL|NETLIFY/.test(config), "redirecciones iguales en preview y en producción (no dependen del contexto)");
 
 console.log("\nEnlaces secundarios");
 const links = readFileSync(join(__dirname, "..", "links.ts"), "utf8");
 assert(/ingresar: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/login` : "#"/.test(links), "Ingresar → /login del panel");
 assert(/privacidad: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/privacidad` : "#"/.test(links) && /terminos: ADMIN_APP_URL \? `\$\{ADMIN_APP_URL\}\/terminos` : "#"/.test(links), "Privacidad y Términos → las páginas que se aceptan en /registro");
-assert(/contacto: `mailto:\$\{CORREO_SOPORTE\}/.test(links) && /soporte: `mailto:\$\{CORREO_SOPORTE\}`/.test(links), "Contacto y Soporte → correo de soporte");
+const WA = "https://wa.me/525523248345?text=";
+assert(V2_LINKS.contacto.startsWith(WA) && decodeURIComponent(V2_LINKS.contacto).includes("me interesa Gate Flow") && V2_LINKS.soporte.startsWith(WA) && decodeURIComponent(V2_LINKS.soporte).includes("necesito ayuda"), "Contacto y Soporte → WhatsApp +52 55 2324 8345 (secundarios)");
+assert(!Object.values(V2_LINKS).some((v) => v.startsWith("mailto:")), "sin correos: contacto, soporte y demo van por WhatsApp");
 const evento = (href: string) => {
   let prevenido = false;
   preventPendingLinkClick({ currentTarget: { getAttribute: () => href }, preventDefault: () => (prevenido = true) } as never);
@@ -87,6 +101,33 @@ assert(/if \(!indexable\(\)\) return \{ rules: \{ userAgent: "\*", disallow: "\/
 assert(/if \(!indexable\(\)\) return \[\];/.test(readFileSync(join(APP, "sitemap.ts"), "utf8")), "sin sitemap por defecto");
 assert(/indexable\(\) \? \{\} : \{ robots: \{ index: false, follow: false \} \}/.test(readFileSync(join(APP, "layout.tsx"), "utf8")), "meta robots noindex por defecto");
 assert(/X-Robots-Tag", value: "noindex, nofollow"/.test(readFileSync(join(APP, "..", "next.config.mjs"), "utf8")), "cabecera X-Robots-Tag noindex por defecto");
+
+console.log("\nModo demo (NEXT_PUBLIC_LANDING_MODO=demo)");
+assert(MODO_DEMO === false, "sin variable: modo de registro (staging y previews sin cambios)");
+assert(ctaHref("#d-probar", "hasta-50", false) === registroHref("#d-probar", "hasta-50"), "fuera de demo: igual que antes");
+assert(ctaHref("#d-probar", undefined, true) === V2_LINKS.demo && ctaHref("#m-probar", "hasta-150", true) === V2_LINKS.demo, "en demo: todos los CTAs → contacto de demo");
+assert(TEXTO_CTA_PRUEBA === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, false) === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, true) === "Solicitar demo", "texto: «Probar 30 días gratis»; «Solicitar demo» solo en demo");
+assert(V2_LINKS.demo.startsWith("https://wa.me/525523248345?text=") && decodeURIComponent(V2_LINKS.demo).includes("demostración"), "contacto de demo por defecto: WhatsApp con el mensaje de demostración");
+assert(normalizarContactoDemo("mailto:ventas@gateflow.mx") === "mailto:ventas@gateflow.mx" && normalizarContactoDemo(" https://wa.me/5215500000000 ") === "https://wa.me/5215500000000", "acepta mailto: y https://");
+for (const malo of [undefined, "", "soporte@gateflow.mx", "http://inseguro.test", "javascript:alert(1)", "mailto:sin-arroba", "tel:+5215500000000"]) {
+  assert(normalizarContactoDemo(malo) === null, `rechaza ${JSON.stringify(malo)} (queda el WhatsApp)`);
+}
+const fuenteLinks = readFileSync(join(__dirname, "..", "links.ts"), "utf8");
+assert(/export const MOSTRAR_LEGALES = !MODO_DEMO;/.test(fuenteLinks), "en demo no se muestran Privacidad ni Términos (no hay página publicada a la que llevar)");
+
+console.log("\nRedirecciones de las rutas viejas del panel (gateflow.mx era el Admin)");
+assert(urlPanel("https://app.gateflow.mx/") === "https://app.gateflow.mx" && urlPanel(undefined) === null && urlPanel("app.gateflow.mx") === null, "urlPanel = normalizarUrlAdmin");
+for (const v of ["https://app.gateflow.mx", " https://app.gateflow.mx/ ", "", "x", "javascript:1"]) {
+  assert(urlPanel(v) === normalizarUrlAdmin(v), `urlPanel y normalizarUrlAdmin coinciden (${JSON.stringify(v)})`);
+}
+const ADMIN_APP = join(__dirname, "..", "..", "..", "..", "admin", "app");
+const directorios = (d: string) => readdirSync(d).filter((n) => statSync(join(d, n)).isDirectory());
+const rutasAdmin = [...directorios(ADMIN_APP), ...directorios(join(ADMIN_APP, "(app)"))].filter((n) => !n.startsWith("(") && n !== "api");
+const faltan = rutasAdmin.filter((r) => !RUTAS_PANEL.includes(r));
+assert(faltan.length === 0, "toda ruta de página del panel se redirige", faltan.join(", "));
+const rutasLanding = directorios(APP);
+assert(!RUTAS_PANEL.some((r) => rutasLanding.includes(r) || r === "v2" || r === "v2-preview"), "ninguna redirección pisa una ruta de la landing");
+assert(/source: `\/\$\{ruta\}\/:resto\*`, destination: `\$\{panel\}\/\$\{ruta\}\/:resto\*`, permanent: true/.test(config) && /if \(!panel\) return \[\];/.test(config), "misma ruta en el panel; sin URL del panel, ninguna redirección");
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas > 0) process.exit(1);

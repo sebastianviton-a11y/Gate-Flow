@@ -306,7 +306,7 @@ seccion("24. active manual nunca se considera trial vencido", () => {
 seccion("/suscripcion con billing V1: solo planId, sin secretos ni activación desde el navegador", () => {
   assert(PLANES.map((p) => `${p.id}:${p.precio ? "precio" : "-"}:${p.accion.tipo}`).join(",") === "hasta-50:precio:checkout,hasta-150:precio:checkout,mas-150:-:contacto", "planes y acciones");
   const contacto = PLANES.find((p) => p.id === "mas-150")!.accion;
-  assert(contacto.tipo === "contacto" && contacto.href.startsWith("mailto:soporte@gateflow.mx"), "más de 150 → mailto:soporte@gateflow.mx (sin checkout)");
+  assert(contacto.tipo === "contacto" && contacto.href.startsWith("https://wa.me/525523248345?text="), "más de 150 → WhatsApp +52 55 2324 8345 (sin checkout)");
   const pagina = fuente("apps/admin/app/suscripcion/page.tsx");
   assert(pagina.includes("<form action={elegirPlanAction}>") && pagina.includes('<input type="hidden" name="plan" value={plan.accion.planId} />') && pagina.includes("Activar plan"), "Activar plan envía solo planId a la server action");
   assert(!/name="(monto|moneda|precio|tenant|tenant_id)"/.test(pagina), "el formulario no envía monto, moneda ni tenant");

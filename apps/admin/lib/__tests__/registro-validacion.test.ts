@@ -2,7 +2,9 @@
  * Validación de /registro. Sin framework:
  *   npx tsx apps/admin/lib/__tests__/registro-validacion.test.ts
  */
-import { leerCampos, timezoneValida, validarRegistro, type CamposCrudos } from "../registro/validacion";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { leerCampos, paisesHabilitados, timezoneValida, validarRegistro, type CamposCrudos } from "../registro/validacion";
 
 let pasadas = 0;
 let fallidas = 0;
@@ -47,7 +49,8 @@ seccion("1-2. Registro válido MX y AR", () => {
     assert(mx.datos.pais === "MX" && mx.datos.viviendas === 48, "país y viviendas");
     assert(mx.datos.aceptaTerminos === true, "términos aceptados");
   }
-  const ar = validarRegistro(campos({ pais: "AR", viviendas: "150", timezone: "America/Argentina/Cordoba" }));
+  // Argentina solo con su registro abierto (REGISTRO_PAISES=MX,AR; segunda etapa).
+  const ar = validarRegistro(campos({ pais: "AR", viviendas: "150", timezone: "America/Argentina/Cordoba" }), ["MX", "AR"]);
   assert(ar.ok && ar.datos.pais === "AR" && ar.datos.viviendas === 150, "AR válido con 150 viviendas (límite incluido)");
   assert(ar.ok && ar.datos.timezone === "America/Argentina/Cordoba", "timezone IANA válida se conserva");
 });
@@ -139,6 +142,23 @@ seccion("7-8. Campos manipulados desde el cliente se ignoran", () => {
   const r = validarRegistro(c);
   assert(r.ok && !("rol" in r.datos) && !("tenantId" in r.datos) && !("trialEndsAt" in r.datos), "los datos validados tampoco los llevan");
 });
+
+{
+  // Lanzamiento solo en México: sin REGISTRO_PAISES (o con valores inválidos), solo MX.
+  assert(JSON.stringify(paisesHabilitados(undefined)) === '["MX"]' && JSON.stringify(paisesHabilitados("")) === '["MX"]', "sin variable: solo México");
+  assert(JSON.stringify(paisesHabilitados("xx, ar ,MX")) === '["MX","AR"]', "MX,AR (con espacios y minúsculas) en el orden del catálogo");
+  assert(JSON.stringify(paisesHabilitados("BR,US")) === '["MX"]', "solo códigos del catálogo; si ninguno vale, México");
+  const arCerrado = validarRegistro(campos({ pais: "AR", timezone: "America/Argentina/Cordoba" }));
+  assert(!arCerrado.ok && arCerrado.tipo === "campos" && arCerrado.errores.pais === "Por ahora Gate Flow está disponible solo en México.", "Argentina con el registro cerrado: rechazada en el servidor con un mensaje claro");
+  const mxSolo = validarRegistro(campos({ pais: "MX" }), ["MX"]);
+  assert(mxSolo.ok && mxSolo.datos.pais === "MX", "México con el registro de México abierto");
+  const RAIZ_ADMIN = join(__dirname, "..", "..");
+  const pagina = readFileSync(join(RAIZ_ADMIN, "app", "registro", "page.tsx"), "utf8");
+  const accion = readFileSync(join(RAIZ_ADMIN, "app", "registro", "actions.ts"), "utf8");
+  const formulario = readFileSync(join(RAIZ_ADMIN, "app", "registro", "registro-form.tsx"), "utf8");
+  assert(pagina.includes("paises={paisesHabilitados(process.env.REGISTRO_PAISES)}") && accion.includes("paises: paisesHabilitados(process.env.REGISTRO_PAISES)"), "la página y la acción usan la misma lista (REGISTRO_PAISES)");
+  assert(formulario.includes("opcionesPais.map(") && !formulario.includes("PAISES_REGISTRO.map("), "el formulario solo ofrece los países abiertos");
+}
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
 if (fallidas > 0) process.exit(1);

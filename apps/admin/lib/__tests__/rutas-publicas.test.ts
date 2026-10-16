@@ -35,6 +35,16 @@ assert(
 );
 assert(!esRutaPublica("/residentes"), "/residentes (panel) sigue protegida");
 
+console.log("\n31b. El login enlaza «¿Olvidaste tu contraseña?» a la recuperación (pública)");
+for (const ruta of ["/recuperar-password", "/restablecer-password"]) {
+  assert(esRutaPublica(ruta) && existsSync(join(APP, ruta.slice(1), "page.tsx")), `${ruta} es pública y existe`);
+}
+const login = readFileSync(join(APP, "..", "components", "shared", "login-form.tsx"), "utf8");
+assert(
+  /<Link href="\/recuperar-password"[^>]*>\s*¿Olvidaste tu contraseña\?\s*<\/Link>/.test(login),
+  "el formulario de login muestra «¿Olvidaste tu contraseña?» → /recuperar-password",
+);
+
 console.log("\n32. /registro enlaza /terminos y /privacidad por separado");
 const form = readFileSync(join(APP, "registro", "registro-form.tsx"), "utf8");
 // El enlace lleva el país elegido (?pais=MX|AR); sin país, la ruta sola (lib/legal/documentos.ts).
