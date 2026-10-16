@@ -19,6 +19,23 @@ const CORREO_SOPORTE = "soporte@gateflow.mx";
  */
 const ADMIN_APP_URL = normalizarUrlAdmin(process.env.NEXT_PUBLIC_ADMIN_APP_URL);
 
+/**
+ * Modo «Solicitar demo» (NEXT_PUBLIC_LANDING_MODO=demo): mientras el alta
+ * de prueba no esté abierta en el panel de clientes, todos los CTAs de
+ * prueba dicen «Solicitar demo» y abren el contacto de demo, y no se
+ * muestran los enlaces legales (son los documentos que se aceptan en
+ * /registro; hasta publicarlos no hay una página a la que llevar). Sin la
+ * variable (staging, previews) todo queda como antes. Se resuelve en
+ * build, igual que NEXT_PUBLIC_ADMIN_APP_URL.
+ */
+export const MODO_DEMO = process.env.NEXT_PUBLIC_LANDING_MODO === "demo";
+
+/** Contacto de demo: NEXT_PUBLIC_LANDING_CONTACTO_DEMO (mailto: o https://,
+ * p. ej. WhatsApp); sin valor válido, el correo de soporte. */
+const CONTACTO_DEMO =
+  normalizarContactoDemo(process.env.NEXT_PUBLIC_LANDING_CONTACTO_DEMO) ??
+  `mailto:${CORREO_SOPORTE}?subject=${encodeURIComponent("Solicitud de demo - Gate Flow")}`;
+
 export const V2_LINKS = {
   /** Header desktop y menú mobile: login del panel Admin. */
   ingresar: ADMIN_APP_URL ? `${ADMIN_APP_URL}/login` : "#",
@@ -30,7 +47,12 @@ export const V2_LINKS = {
   privacidad: ADMIN_APP_URL ? `${ADMIN_APP_URL}/privacidad` : "#",
   /** "Términos" (Seguridad y footer): los mismos que se aceptan en /registro. */
   terminos: ADMIN_APP_URL ? `${ADMIN_APP_URL}/terminos` : "#",
+  /** CTAs de prueba en modo demo. */
+  demo: CONTACTO_DEMO,
 } as const;
+
+/** Privacidad y Términos solo se muestran fuera del modo demo. */
+export const MOSTRAR_LEGALES = !MODO_DEMO;
 
 /**
  * Plan elegido en precios. Solo contexto comercial para /registro
@@ -42,6 +64,21 @@ export type PlanRegistro = "hasta-50" | "hasta-150";
 export function normalizarUrlAdmin(valor: string | undefined): string | null {
   const url = (valor ?? "").trim().replace(/\/+$/, "");
   return /^https?:\/\/[^/\s]+/.test(url) ? url : null;
+}
+
+export function normalizarContactoDemo(valor: string | undefined): string | null {
+  const contacto = (valor ?? "").trim();
+  return /^mailto:[^\s@/]+@[^\s@/]+\.[^\s@/]+|^https:\/\/[^/\s]+/.test(contacto) ? contacto : null;
+}
+
+/** Destino de un CTA de prueba: /registro del panel o, en modo demo, el contacto de demo. */
+export function ctaHref(anclaSinDestino: string, plan?: PlanRegistro, modoDemo: boolean = MODO_DEMO): string {
+  return modoDemo ? V2_LINKS.demo : registroHref(anclaSinDestino, plan);
+}
+
+/** Texto de un CTA de prueba («Probar gratis…») o «Solicitar demo» en modo demo. */
+export function ctaTexto(textoPrueba: string, modoDemo: boolean = MODO_DEMO): string {
+  return modoDemo ? "Solicitar demo" : textoPrueba;
 }
 
 export function registroHref(anclaSinDestino: string, plan?: PlanRegistro, base: string | null = ADMIN_APP_URL): string {

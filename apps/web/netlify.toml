@@ -24,8 +24,29 @@
 # entorno de backend. Si en el futuro se agrega analítica o un formulario
 # de contacto, sus variables se configuran en la UI de Netlify, nunca aquí.
 #
-# Única variable pública (opcional): NEXT_PUBLIC_ADMIN_APP_URL — URL del
-# panel Admin del mismo entorno (misma variable que apps/admin), sin "/"
-# final. Los CTAs "Probar gratis" de la V2 apuntan a <URL>/registro. Se
-# inlinea en build: cambiarla requiere redeploy. Sin variable, los CTAs
-# conservan su ancla interna (#d-probar / #m-probar).
+# Variables públicas (opcionales), todas se inlinean en build: cambiarlas
+# requiere redeploy.
+#   NEXT_PUBLIC_ADMIN_APP_URL — URL del panel Admin del mismo entorno
+#     (misma variable que apps/admin), sin "/" final. Los CTAs "Probar
+#     gratis" de la V2 apuntan a <URL>/registro, "Ingresar" a <URL>/login, y
+#     las rutas viejas del panel (/login, /aceptar-invitacion, /dashboard…;
+#     lib/v2/rutas-panel.mjs) redirigen ahí. Sin variable, los CTAs
+#     conservan su ancla interna (#d-probar / #m-probar) y no hay
+#     redirecciones.
+#   NEXT_PUBLIC_LANDING_MODO=demo — mientras el alta de prueba no esté
+#     abierta en el panel de clientes: los CTAs dicen "Solicitar demo" y
+#     abren el contacto de demo, y no se muestran Privacidad ni Términos.
+#   NEXT_PUBLIC_LANDING_CONTACTO_DEMO — contacto de demo (mailto: o
+#     https://, p. ej. WhatsApp); sin valor, soporte@gateflow.mx.
+#   GF_LANDING_INDEXAR=1 — solo en el sitio público (lib/indexacion.ts).
+
+# Rama de publicación de la landing comercial (gateflow.mx). Valores
+# públicos (se inlinean en el HTML): el panel de clientes y el modo
+# «Solicitar demo» mientras el alta de prueba no esté abierta en
+# producción. Así su branch deploy en el sitio de previews ya se ve igual
+# que el sitio público; en el sitio público (gateflow-web) las mismas
+# variables también están en la UI. GF_LANDING_INDEXAR=1 solo se activa en
+# el sitio público al conectar el dominio.
+[context.landing-produccion.environment]
+  NEXT_PUBLIC_ADMIN_APP_URL = "https://app.gateflow.mx"
+  NEXT_PUBLIC_LANDING_MODO = "demo"
