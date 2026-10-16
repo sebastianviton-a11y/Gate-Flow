@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
+import { Button, PasswordInput, Label, GateFlowLogo, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
 import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
 import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
@@ -235,7 +235,11 @@ export function AceptarInvitacionForm() {
                   ) : (
                     "Pide a quien te invitó que revise tu invitación"
                   )}
-                  . Si el problema sigue, escribe a soporte@gateflow.mx.
+                  . Si el problema sigue, escríbenos por WhatsApp al{" "}
+                  <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline">
+                    {WHATSAPP_SOPORTE_VISIBLE}
+                  </a>
+                  .
                 </p>
               </div>
             </div>

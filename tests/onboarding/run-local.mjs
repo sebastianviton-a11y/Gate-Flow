@@ -263,6 +263,8 @@ const huellaInicial = huella();
   ok(abiertas === 5, "E1 registro: las 5 ayudas se abren al tocarlas", String(abiertas));
   ok(sql(`select count(*) from public.registro_intentos`) === "0" && sql(`select count(*) from public.tenants`) === "4", "E2 abrir ayudas no envía el formulario ni crea nada");
   ok(await sinDesborde(page), "E3 registro sin desborde horizontal en celular");
+  const opcionesPais = await page.locator("select#pais option").evaluateAll((os) => os.map((o) => o.textContent.trim()));
+  ok(JSON.stringify(opcionesPais) === '["México"]' && (await page.locator("select#pais").inputValue()) === "MX", "E5 registro solo para México (sin REGISTRO_PAISES), ya elegido", JSON.stringify(opcionesPais));
   ok(errores.length === 0, "E4 sin errores de JavaScript", JSON.stringify(errores.slice(0, 3)));
   await ctx.close();
 }

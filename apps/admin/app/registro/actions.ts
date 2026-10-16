@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { createServiceRoleClient } from "@gateflow/supabase";
 import { ejecutarAlta, MENSAJES_ALTA, type DepsAlta, type ResultadoAlta } from "@/lib/registro/alta";
+import { paisesHabilitados } from "@/lib/registro/validacion";
 import { configuracionAntibot, verificarDesafio } from "@/lib/registro/antibot";
 import { urlPublicaAdmin } from "@/lib/entorno";
 import { enviarCorreoConfirmacion } from "@/lib/registro/confirmacion";
@@ -119,5 +120,5 @@ export async function registrarCuentaPrueba(formData: FormData): Promise<Resulta
     },
   };
 
-  return ejecutarAlta(deps, leerCampos(formData), { pepper, ip });
+  return ejecutarAlta(deps, leerCampos(formData), { pepper, ip, paises: paisesHabilitados(process.env.REGISTRO_PAISES) });
 }

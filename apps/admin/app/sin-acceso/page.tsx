@@ -34,7 +34,7 @@ const MENSAJES: Record<string, { titulo: string; detalle: string }> = {
   },
   error: {
     titulo: "No pudimos validar tu acceso",
-    detalle: "Intenta de nuevo en unos segundos. Si el problema continúa, escribe a soporte@gateflow.mx.",
+    detalle: "Intenta de nuevo en unos segundos. Si el problema continúa, escríbenos por WhatsApp al +52 55 2324 8345.",
   },
 };
 
