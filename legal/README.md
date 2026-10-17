@@ -53,8 +53,16 @@ separadores (`---`). Se guarda y se hashea (SHA-256) exactamente como
 queda tras normalizar saltos de línea; ese hash es el que queda en cada
 aceptación.
 
-Un texto con marcadores pendientes (`[PENDIENTE…]`, `{{…}}`, `TODO`) solo
-puede estar en `borrador`: el validador rechaza aprobarlo o publicarlo.
+Un texto con marcadores pendientes solo puede estar en `borrador`: el
+validador rechaza aprobarlo, publicarlo o retirarlo y muestra los marcadores
+encontrados (los cinco primeros y cuántos más hay).
+Cuentan como pendientes, en el cuerpo, en `aprobacion` y en `resumen_cambios`:
+
+- cualquier texto entre corchetes que no sea el de un enlace `[texto](url)`:
+  `[NOMBRE LEGAL DEL PRESTADOR]`, `[DOMICILIO LEGAL]`, `[PENDIENTE: …]`,
+  `[Razón social]`, `[…]`, `[ ]`. Solo se admiten `[1]` (llamadas numéricas)
+  y `[sic]`;
+- `{{…}}`, `<<…>>`, `TODO`, `TBD` y líneas para llenar (`____`, cuatro o más).
 
 ## Ciclo y carga
 

@@ -17,5 +17,10 @@ GF_POSTGREST_BIN=/ruta/postgrest GF_PLAYWRIGHT_CORE_DIR=/ruta/con/playwright-cor
 npx tsx apps/admin/lib/__tests__/legal-paginas.test.ts   # lectura y Markdown (sin base)
 ```
 
+En cada pull request, `.github/workflows/legal-tests.yml` valida `legal/` y
+corre `cargador.test.mjs` con un Postgres desechable y
+`GF_LEGAL_EXIGIR_BD=1`: si la parte con base no puede correr, la prueba falla
+en lugar de omitirse.
+
 Las pruebas SQL de la lectura pública están en `supabase/tests/security/91_*`
 y `supabase/tests/grants/98_*` (fase LP de los runners).
