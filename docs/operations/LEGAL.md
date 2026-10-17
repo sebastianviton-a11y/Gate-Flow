@@ -241,23 +241,60 @@ vigencia, repositorio atrasado respecto de la base, script editado).
 * Probado en Chromium (escritorio y móvil emulado); falta Safari/WebKit y
   dispositivos reales.
 
+## Fase 3 — evidencia en el registro y en las invitaciones
+
+Migración `20261017000000_aceptaciones_registro_invitacion.sql` (para
+revisión; **no aplicada**). Rollback:
+`supabase/rollback/20261017000000_aceptaciones_registro_invitacion.down.sql`.
+
+* **Registro** (`/registro`): la página lee las versiones vigentes del país
+  y el formulario envía las que MOSTRÓ (`version_ids`), con enlaces a esa
+  versión exacta. `crear_cuenta_prueba` (nueva sobrecarga de 8 argumentos,
+  solo `service_role`) valida ANTES de crear nada: si una versión ya no es
+  la vigente → `documento_cambiado`; si falta un requisito obligatorio de
+  `admin_residencial` para el país → `aceptacion_faltante`; si el Acuerdo
+  de Tratamiento (alcance residencial) va sin la declaración de facultades
+  → `falta_declaracion_facultades`. Registra la evidencia con origen
+  `registro` en la misma transacción que la cuenta; versión, hash y hora
+  los pone la base. Si los documentos cambiaron mientras se llenaba el
+  formulario, la pantalla muestra los nuevos y pide aceptarlos de nuevo.
+  La sobrecarga de 6 argumentos sigue (delega con lista vacía): solo sirve
+  mientras no haya requisitos cargados.
+* **Alta fallida**: `revertir_cuenta_prueba` descarta la evidencia con
+  `descartar_aceptaciones_alta_fallida` antes de borrar; si no puede
+  (cuenta ya usada), no borra nada (`evidencia_conservada`).
+* **Invitación** (`/aceptar-invitacion`): la nueva
+  `aceptar_documentos_invitacion(tenant, versiones)` (solo
+  `authenticated`, con membresía activa) registra los documentos de
+  alcance usuario con origen `invitacion` y fija
+  `users.terminos_aceptados_en = now()` del servidor. El navegador ya no
+  escribe esa fecha: el trigger `users_terminos_solo_servidor` lo impide
+  a `anon`/`authenticated`. La aceptación se registra antes de fijar la
+  contraseña; si falla, el alta no continúa.
+* El Acuerdo de Tratamiento se acepta solo en el registro (es del
+  residencial); en la invitación, solo Términos y Aviso de Privacidad.
+* **Orden de despliegue**: primero la migración, después la app (la app
+  llama a la RPC de 8 argumentos y a la de invitación). La app con la
+  migración ya aplicada y sin requisitos cargados se comporta como hoy.
+* Pruebas: `supabase/tests/security/97_aceptaciones_registro.sql` (fase
+  F3), `supabase/tests/grants/99_aceptaciones_registro.sql`,
+  `apps/admin/lib/__tests__/aceptacion-legal.test.ts` y los casos 7P–7U
+  de `tests/legal/paginas-local.mjs` (documentos ficticios «ZZ»).
+
 ## Pendiente para fases posteriores (nada de esto está activo)
 
 1. Textos aprobados por la revisión jurídica (domicilio de la prestadora,
    `privacidad@`/`soporte@` verificados) y su carga como versiones (el
    mecanismo de carga ya existe: Fase 2).
 2. Decidir los requisitos por rol y país (tabla vacía hoy) y si algún
-   tratamiento exige consentimiento.
+   tratamiento exige consentimiento. Sin requisitos cargados, la Fase 3
+   registra lo que se muestra pero no exige nada.
 3. Validación de facultades de representación para el Acuerdo de
-   Tratamiento.
-4. Fase de registro: `crear_cuenta_prueba` registrará las aceptaciones
-   con origen `registro`; `revertir_cuenta_prueba` deberá llamar a
-   `descartar_aceptaciones_alta_fallida` antes de borrar el usuario.
-5. Permisos para la API de pendientes y registro, y su interfaz (la
-   Fase 2 solo abre las lecturas de documentos publicados). Cualquier
-   bloqueo de acceso por pendientes se decidirá y probará en su propia
-   fase.
-6. Plazo de conservación y depuración.
+   Tratamiento (hoy: declaración en una casilla).
+4. Aceptación posterior (versiones nuevas para cuentas existentes) y su
+   interfaz; cualquier bloqueo de acceso por pendientes se decidirá y
+   probará en su propia fase.
+5. Plazo de conservación y depuración.
 
 ## Pruebas
 
