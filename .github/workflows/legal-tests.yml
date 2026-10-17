@@ -1,0 +1,56 @@
+# Documentos legales en cada pull request: validador de legal/ (marcadores
+# pendientes, campos, vigencias), normalización y hash, SQL generado y su
+# carga contra el esquema real en un Postgres desechable del propio job.
+# Solo documentos ficticios generados en un directorio temporal; sin
+# secretos ni red hacia staging o producción.
+name: legal · pruebas (PR)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legal-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cargador:
+    name: validador y carga de documentos legales
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        # Misma versión mayor que staging (PostgreSQL 17).
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      # En CI omitir la parte con base de datos es un fallo.
+      GF_LEGAL_EXIGIR_BD: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # igual que Netlify (NODE_VERSION = "20")
+      - name: Cliente de PostgreSQL
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
+          psql -X -At -c 'select version()'
+      - name: Documentos del repositorio (legal/)
+        run: node scripts/legal/documentos-legales.mjs validar
+      - name: Validador y carga (tests/legal/cargador.test.mjs)
+        run: node tests/legal/cargador.test.mjs
