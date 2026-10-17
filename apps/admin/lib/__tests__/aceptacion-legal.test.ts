@@ -70,7 +70,7 @@ assert(errorDeAceptacion("23505 duplicate key") === null && errorDeAceptacion(nu
 
 console.log("\nEl formulario de registro manda versiones y declaración");
 const form = new FormData();
-for (const [k, v] of Object.entries({ nombreCompleto: "Ana Pérez", email: "ana@x.com", password: "contraseña-1", nombreResidencial: "Res X", pais: "MX", viviendas: "10", aceptaTerminos: "on", timezone: "", sitio_web: "", t: "x" })) form.set(k, v);
+for (const [k, v] of Object.entries({ nombreCompleto: "Ana Pérez", email: "ana@example.com", password: "contraseña-1", nombreResidencial: "Res X", pais: "MX", viviendas: "10", aceptaTerminos: "on", timezone: "", sitio_web: "", t: "x" })) form.set(k, v);
 form.append("version_ids", T);
 form.append("version_ids", P);
 form.set("declaraFacultades", "on");
