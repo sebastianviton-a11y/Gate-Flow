@@ -104,7 +104,6 @@ export {
   actualizarResidencial,
   cambiarEstadoServicio,
   actualizarPlanResidencial,
-  eliminarResidencial,
   obtenerResidencialDetalle,
   obtenerSuscripcionResidencial,
   superadminExtenderTrial,

@@ -47,8 +47,9 @@
 #        rollback LP → idéntico a LG; LP se reaplica idéntico; LP se
 #        revierte antes que LG
 #   ER + eliminación manual asistida de residenciales (20261018) sobre LP
-#        → 0 FAIL; el catálogo solo GANA la tabla de registro y sus 8
-#        funciones; rollback ER → idéntico a LP; ER se reaplica idéntico;
+#        → 0 FAIL; el catálogo gana la tabla de registro y sus 10
+#        funciones y solo cambia la política de borrado de Super Admin
+#        (residenciales vacíos); rollback ER → idéntico a LP; ER se reaplica idéntico;
 #        con una eliminación registrada, el rollback aborta sin cambios;
 #        ER se revierte antes que LP
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
@@ -348,12 +349,16 @@ same_catalog "$OUT/snap_LP.txt" "$OUT/snap_LP2.txt" "reaplicar_LP"
 sql_file "$SUPA/migrations/$MIG_ER"
 run_suites ER "… + eliminación asistida" C
 snapshot "$OUT/snap_ER.txt"
-# Solo se AGREGAN la tabla de registro (ACL, restricciones, índices) y sus funciones.
-ER_FN='eliminacion_residencial_(servicio|conteo|cuentas|cuenta_referenciada|archivos|simular|ejecutar|completar)'
+# Se AGREGAN la tabla de registro (ACL, restricciones, índices) y sus
+# funciones; lo único existente que cambia es la política de borrado de
+# Super Admin en tenants (ahora solo residenciales vacíos).
+ER_FN='eliminacion_residencial_(servicio|conteo|cuentas|cuenta_referenciada|archivos|simular|ejecutar|completar|pendientes|vacio)'
 diff "$OUT/snap_LP2.txt" "$OUT/snap_ER.txt" | grep '^[<>]' > "$OUT/diff_ER_sobre_LP.txt" || true
-if [[ "$(grep -c '^<' "$OUT/diff_ER_sobre_LP.txt")" == "0" && "$(grep -c '^> FN|' "$OUT/diff_ER_sobre_LP.txt")" == "8" ]] \
-   && ! grep -vE "^> (FN\|(public\.)?$ER_FN\(|(ACL|CON)\|(public\.)?eliminaciones_residencial\||IDX\|(public\.)?eliminaciones_residencial_[a-z_]+\|)" "$OUT/diff_ER_sobre_LP.txt" >/dev/null; then
-  echo "  eliminación asistida: el catálogo solo gana la tabla de registro y sus 8 funciones (nada existente cambia)"
+if [[ "$(grep -c '^<' "$OUT/diff_ER_sobre_LP.txt")" == "1" && "$(grep -c '^> FN|' "$OUT/diff_ER_sobre_LP.txt")" == "10" ]] \
+   && grep -q '^< POL|public.tenants|tenants_delete_super_admin|DELETE|' "$OUT/diff_ER_sobre_LP.txt" \
+   && grep -q '^> POL|public.tenants|tenants_delete_super_admin|DELETE|.*eliminacion_residencial_vacio(id)' "$OUT/diff_ER_sobre_LP.txt" \
+   && ! grep -vE "^(< POL\|public\.tenants\|tenants_delete_super_admin\||> (POL\|public\.tenants\|tenants_delete_super_admin\||FN\|(public\.)?$ER_FN\(|(ACL|CON)\|(public\.)?eliminaciones_residencial\||IDX\|(public\.)?eliminaciones_residencial_[a-z_]+\|))" "$OUT/diff_ER_sobre_LP.txt" >/dev/null; then
+  echo "  eliminación asistida: el catálogo gana la tabla de registro y sus 10 funciones; solo cambia la política de borrado de Super Admin"
 else
   echo "  eliminación asistida: cambios de catálogo inesperados (ver $OUT/diff_ER_sobre_LP.txt)"; FALLAS=$((FALLAS + 1))
 fi

@@ -178,6 +178,11 @@ async function main() {
     return r;
   };
 
+  // 0. Plazos: la base dice qué vence (nadie tiene que recordar fechas).
+  let pen = await run(["pendientes"]);
+  ok("00", pen.codigo === 0 && /Elegibles hoy: 1\n\s+ZZ Residencial Eliminable/.test(pen.salida) && !pen.salida.includes(V) && /Eliminaciones a medias: 0/.test(pen.salida),
+    "pendientes: el residencial vencido aparece como elegible con su fecha; el vecino en prueba no aparece", pen.salida);
+
   // 1. Simulación.
   let s = await run(["simular", "--residencial", T, "--operador", "ticket-e2e"]);
   let codigo = codigoDe(s.salida);
@@ -215,6 +220,10 @@ async function main() {
     && sql(`select count(*) from storage.objects where name like '${T}/%'`) === "3" && sql(`select count(*) from auth.users where id in ('${u.admin}', '${u.guardia}')`) === "2",
     "la base ya no tiene el residencial; el registro sigue «en_curso»; archivos y cuentas siguen pendientes (Auth espera a Storage)");
 
+  pen = await run(["pendientes"]);
+  ok("32", pen.codigo === 0 && pen.salida.includes(`reanudar --eliminacion ${id}`) && /Elegibles hoy: 0/.test(pen.salida),
+    "pendientes: la eliminación a medias aparece para reanudar", pen.salida);
+
   // 5. Reanudar con Storage disponible pero Auth fallando, y después todo bien.
   fallasSimuladas.storage = false;
   fallasSimuladas.auth = true;
@@ -229,6 +238,8 @@ async function main() {
   ok("43", huellaVecino() === vecinoAntes && sql(`select string_agg(tenant_id::text, ',') from public.user_tenants where user_id = '${u.compartida}'`) === V,
     "el residencial vecino no cambió; la cuenta compartida conserva solo su acceso al vecino");
   ok("44", sql(`select count(*) from public.empresas where id = '${T}'`) === "0" && sql(`select public.eliminacion_residencial_conteo('${T}') = '{}'::jsonb`) === "t", "sin restos del residencial ni de su empresa");
+  pen = await run(["pendientes"]);
+  ok("44b", pen.codigo === 0 && /Elegibles hoy: 0/.test(pen.salida) && /Eliminaciones a medias: 0/.test(pen.salida), "pendientes: ya no queda nada pendiente", pen.salida);
   e = await run(["reanudar", "--eliminacion", id]);
   ok("45", e.codigo === 0 && /COMPLETADA/.test(e.salida), "reanudar una completada es idempotente");
   const reg = sql(`select row_to_json(e)::text from public.eliminaciones_residencial e where id = '${id}'`);

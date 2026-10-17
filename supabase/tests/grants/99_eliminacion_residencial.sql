@@ -17,7 +17,8 @@ begin
   foreach f in array array[
     'public.eliminacion_residencial_simular(uuid,text)',
     'public.eliminacion_residencial_ejecutar(uuid,text,text)',
-    'public.eliminacion_residencial_completar(uuid)'
+    'public.eliminacion_residencial_completar(uuid)',
+    'public.eliminacion_residencial_pendientes()'
   ] loop
     perform tests.igual('GER-01', 'staging: EXECUTE solo service_role: ' || f,
       format($q$select has_function_privilege('anon', %L, 'execute')::text || has_function_privilege('authenticated', %L, 'execute')::text || has_function_privilege('service_role', %L, 'execute')::text$q$, f, f, f),
@@ -32,6 +33,11 @@ begin
       format($q$select (has_function_privilege('anon', %L, 'execute') or has_function_privilege('authenticated', %L, 'execute') or has_function_privilege('service_role', %L, 'execute'))::text$q$, f, f, f),
       'false');
   end loop;
+  perform tests.igual('GER-02b', 'staging: la verificación de residencial vacío solo la ejecuta authenticated',
+    $q$select has_function_privilege('anon', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text
+           || has_function_privilege('authenticated', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text
+           || has_function_privilege('service_role', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text$q$,
+    'falsetruefalse');
   perform tests.igual('GER-03', 'staging: el registro de eliminaciones no es accesible desde la API',
     $q$select (has_table_privilege('anon', 'public.eliminaciones_residencial', 'select,insert,update,delete,truncate')
             or has_table_privilege('authenticated', 'public.eliminaciones_residencial', 'select,insert,update,delete,truncate')
@@ -101,6 +107,21 @@ begin
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
   execute 'set local role anon';
   perform tests.debe_fallar('GER-14', 'staging: anon no completa', format('select public.eliminacion_residencial_completar(%L)', gen_random_uuid()), '42501');
+  execute 'reset role';
+end $$;
+rollback;
+
+-- Super Admin con los grants de staging: solo borra residenciales vacíos.
+begin;
+insert into public.tenants (id, nombre, tipo, empresa_id) values
+  ('e9100000-0000-0000-0000-000000000000', 'ZZ Recién creado', 'residencial', 'e0000000-0000-0000-0000-000000000001');
+insert into public.unidades (tenant_id, tipo, identificador) values ('aaaaaaaa-0000-0000-0000-000000000000', 'casa', 'ZZ Casa grants');
+do $$
+begin
+  perform tests.como('00000000-0000-0000-0000-000000000001');
+  execute 'set local role authenticated';
+  perform tests.filas('GER-15', 'staging: Super Admin no borra un residencial con datos por la API', 'delete from public.tenants where id = ''aaaaaaaa-0000-0000-0000-000000000000''', 0);
+  perform tests.filas('GER-16', 'staging: Super Admin sí borra uno vacío (reversión de un alta)', 'delete from public.tenants where id = ''e9100000-0000-0000-0000-000000000000''', 1);
   execute 'reset role';
 end $$;
 rollback;

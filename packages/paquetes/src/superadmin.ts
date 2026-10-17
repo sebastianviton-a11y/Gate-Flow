@@ -276,11 +276,6 @@ export async function actualizarPlanResidencial(
  * unidades, usuarios vinculados, historial). La confirmación de "escribe
  * el nombre para confirmar" vive en la UI, no aquí — esta función no
  * vuelve a preguntar, asume que quien la llama ya confirmó. */
-export async function eliminarResidencial(supabase: SupabaseClient, id: string): Promise<void> {
-  const { error } = await supabase.from("tenants").delete().eq("id", id);
-  if (error) throw error;
-}
-
 export interface ResidencialDetalle extends ResidencialListItem {
   pais: string;
   /** tenants.timezone: las fechas "hasta" de la suscripción son días de esta zona. */

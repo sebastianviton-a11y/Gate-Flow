@@ -18,12 +18,21 @@
 --      ya no quedan archivos en Storage ni cuentas de Auth pendientes (el
 --      script los borra por la API, como manda Supabase).
 --
+--   eliminacion_residencial_pendientes → qué residenciales terminaron su
+--      servicio y desde qué fecha se pueden eliminar, y qué eliminaciones
+--      quedaron a medias: los plazos salen de la base, no de la memoria.
+--
 -- Se conservan: aceptaciones_legales (evidencia; inmutable, sin FK) y
 -- billing_eventos (registro de pagos; su FK pone tenant_id en null).
 -- Las cuentas compartidas con otro residencial solo pierden la membresía.
 -- El registro de la operación no guarda nombres, correos ni teléfonos.
 --
--- Solo service_role ejecuta las tres funciones. Rollback:
+-- El borrado directo de Super Admin (política tenants_delete_super_admin)
+-- queda limitado a residenciales VACÍOS (recién creados, como al revertir
+-- un alta con invitación): ya no puede borrar uno con datos dejando fotos
+-- y cuentas.
+--
+-- Solo service_role ejecuta las cuatro funciones. Rollback:
 -- supabase/rollback/20261018000000_eliminacion_residencial.down.sql
 -- ============================================================
 
@@ -477,6 +486,66 @@ begin
 end;
 $$;
 
+-- ── 4. Plazos: qué vence y qué quedó a medias ────────────────────────
+
+-- Residenciales que ya no tienen servicio (o lo pierden en una fecha
+-- conocida) con la fecha desde la que se pueden eliminar, y eliminaciones
+-- «en_curso» para reanudar. El nombre se devuelve para verificar; no se guarda.
+create function public.eliminacion_residencial_pendientes()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with r as (
+    select t.id, t.nombre, t.pais, s.elegible, s.motivo, s.fin_servicio
+    from public.tenants t
+    cross join lateral public.eliminacion_residencial_servicio(t.id) s
+  )
+  select jsonb_build_object(
+    'generado_en', now(),
+    'residenciales', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'tenant_id', r.id, 'nombre', r.nombre, 'pais', r.pais,
+               'elegible', r.elegible, 'motivo', r.motivo, 'fin_servicio', r.fin_servicio,
+               'eliminar_desde', r.fin_servicio + interval '30 days')
+             order by r.fin_servicio, r.id)
+      from r
+      where r.fin_servicio is not null
+        and (r.elegible
+             or r.motivo in ('menos_de_30_dias', 'contratacion_en_curso')
+             or (r.motivo = 'suscripcion_en_impago' and r.fin_servicio <= now()))
+    ), '[]'::jsonb),
+    'a_medias', coalesce((
+      select jsonb_agg(jsonb_build_object('eliminacion_id', e.id, 'tenant_id', e.tenant_id, 'ejecutada_en', e.ejecutada_en)
+             order by e.ejecutada_en)
+      from public.eliminaciones_residencial e
+      where e.estado = 'en_curso'
+    ), '[]'::jsonb)
+  );
+$$;
+
+-- ── 5. Borrado directo de Super Admin: solo residenciales vacíos ─────
+
+-- Verdadero solo para Super Admin y solo si el residencial no tiene nada
+-- más que su fila y su suscripción (ni membresías, ni datos, ni archivos).
+-- Para cualquier otra persona devuelve false (no revela nada).
+create function public.eliminacion_residencial_vacio(p_tenant_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.is_super_admin()
+     and (public.eliminacion_residencial_conteo(p_tenant_id) - 'tenants' - 'suscripciones') = '{}'::jsonb
+     and public.eliminacion_residencial_archivos(p_tenant_id) = '{}'::jsonb;
+$$;
+
+alter policy tenants_delete_super_admin on public.tenants
+  using (public.eliminacion_residencial_vacio(id));
+
 -- ── Permisos ─────────────────────────────────────────────────────────
 
 revoke all on function public.eliminacion_residencial_servicio(uuid) from public, anon, authenticated, service_role;
@@ -490,3 +559,8 @@ revoke all on function public.eliminacion_residencial_completar(uuid) from publi
 grant execute on function public.eliminacion_residencial_simular(uuid, text) to service_role;
 grant execute on function public.eliminacion_residencial_ejecutar(uuid, text, text) to service_role;
 grant execute on function public.eliminacion_residencial_completar(uuid) to service_role;
+revoke all on function public.eliminacion_residencial_pendientes() from public, anon, authenticated;
+grant execute on function public.eliminacion_residencial_pendientes() to service_role;
+-- La política de borrado de tenants la evalúa authenticated.
+revoke all on function public.eliminacion_residencial_vacio(uuid) from public, anon, service_role;
+grant execute on function public.eliminacion_residencial_vacio(uuid) to authenticated;

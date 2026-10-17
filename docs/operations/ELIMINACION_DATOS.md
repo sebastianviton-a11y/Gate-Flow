@@ -54,6 +54,35 @@ export GF_ELIMINACION_SUPABASE_URL="https://<ref>.supabase.co"
 read -rs GF_ELIMINACION_SERVICE_ROLE_KEY && export GF_ELIMINACION_SERVICE_ROLE_KEY   # se pega sin que se vea
 ```
 
+## Plazos — qué vence y desde cuándo (semanal)
+
+Las fechas salen de la base; nadie tiene que recordarlas:
+
+```bash
+node scripts/eliminacion/eliminar-residencial.mjs pendientes
+```
+
+No borra nada. Lista:
+
+* **Elegibles hoy**: terminaron hace 30 días o más (nombre, país, fin del
+  servicio y fecha desde la que se pueden eliminar);
+* **Todavía no**: sin servicio o con cancelación programada, con la fecha
+  en que serán elegibles (y los que están en impago: primero hay que
+  cancelar en el proveedor);
+* **Eliminaciones a medias**: con el comando `reanudar` para cada una.
+
+Rutina recomendada: correrlo una vez por semana (el mismo día) y abrir un
+ticket por cada elegible. La fecha exacta la decide la base al simular.
+
+## Super Admin ya no borra residenciales con datos
+
+El botón «Eliminar residencial» de la ficha del residencial se quitó
+(borraba la fila y dejaba fotos en Storage y cuentas en Auth). Además, la
+política `tenants_delete_super_admin` ahora solo permite borrar un
+residencial **vacío** (sin membresías, datos ni archivos: el caso de
+revertir un alta con invitación que falló). Cualquier otro borrado pasa
+por este procedimiento.
+
 ## Paso 0 — verificar a mano
 
 1. Confirmar con quien atiende al cliente que no contrató ni pidió más tiempo.
@@ -112,7 +141,7 @@ Es idempotente; sobre una eliminación completada vuelve a confirmar
 
 | Código | Significado |
 |---|---|
-| 0 | Simulación elegible, o eliminación **COMPLETADA**. |
+| 0 | `pendientes` leído, simulación elegible, o eliminación **COMPLETADA**. |
 | 1 | Uso incorrecto o configuración faltante (no llamó a la base). |
 | 2 | No elegible, o la base rechazó la ejecución: **no se borró nada**. |
 | 3 | **CANCELADA** (el cliente contrató o algo cambió): no se borró nada. |

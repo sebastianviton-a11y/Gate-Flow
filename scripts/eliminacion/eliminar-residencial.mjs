@@ -4,6 +4,7 @@
  * un residencial (opción A, migración 20261018000000). Runbook:
  * docs/operations/ELIMINACION_DATOS.md.
  *
+ *   node scripts/eliminacion/eliminar-residencial.mjs pendientes
  *   node scripts/eliminacion/eliminar-residencial.mjs simular  --residencial <uuid> --operador <alias-o-ticket>
  *   node scripts/eliminacion/eliminar-residencial.mjs ejecutar --eliminacion <uuid> --codigo <código>
  *   node scripts/eliminacion/eliminar-residencial.mjs reanudar --eliminacion <uuid>
@@ -12,6 +13,8 @@
  *   GF_ELIMINACION_SUPABASE_URL        https://<ref>.supabase.co del proyecto
  *   GF_ELIMINACION_SERVICE_ROLE_KEY    clave service_role de ESE proyecto
  *
+ * 0. pendientes no borra nada: lista los residenciales sin servicio con la
+ *    fecha desde la que se pueden eliminar y las eliminaciones a medias.
  * 1. simular no borra nada: dice si el residencial es elegible, qué se
  *    borraría y qué se conserva, y entrega un código válido 30 minutos.
  * 2. ejecutar pide escribir el nombre exacto del residencial. La base
@@ -98,6 +101,26 @@ export function crearApi({ url, clave }, fetchImpl) {
 function formatearConteo(obj) {
   const pares = Object.entries(obj ?? {});
   return pares.length ? pares.map(([k, v]) => `${k}=${v}`).join(", ") : "ninguno";
+}
+
+const dia = (iso) => (typeof iso === "string" ? iso.slice(0, 10) : "?");
+
+async function pendientes(api, io, proyecto) {
+  const r = await api.rpc("eliminacion_residencial_pendientes", {});
+  if (!r.ok) return io.error(`No se pudieron leer los plazos: ${r.error}`), SALIDA.rechazada;
+  const residenciales = Array.isArray(r.datos?.residenciales) ? r.datos.residenciales : [];
+  const aMedias = Array.isArray(r.datos?.a_medias) ? r.datos.a_medias : [];
+  const elegibles = residenciales.filter((x) => x.elegible);
+  const proximos = residenciales.filter((x) => !x.elegible);
+  io.escribir(`PLAZOS DE ELIMINACIÓN (no se borró nada) · proyecto ${proyecto} · ${r.datos?.generado_en ?? ""}`);
+  io.escribir(`  Elegibles hoy: ${elegibles.length}`);
+  for (const x of elegibles) io.escribir(`    ${x.nombre} (${x.tenant_id}) · ${x.pais} · terminó ${dia(x.fin_servicio)} · eliminable desde ${dia(x.eliminar_desde)}`);
+  io.escribir(`  Sin servicio o por terminar (todavía no): ${proximos.length}`);
+  for (const x of proximos) io.escribir(`    ${x.nombre} (${x.tenant_id}) · ${x.pais} · ${x.motivo} · fin ${dia(x.fin_servicio)} · eliminable desde ${dia(x.eliminar_desde)}`);
+  io.escribir(`  Eliminaciones a medias: ${aMedias.length}`);
+  for (const x of aMedias) io.escribir(`    ${x.eliminacion_id} (residencial ${x.tenant_id}) → reanudar --eliminacion ${x.eliminacion_id}`);
+  if (elegibles.length) io.escribir("Para cada elegible: simular --residencial <id> --operador <ticket> (y seguir el runbook).");
+  return SALIDA.ok;
 }
 
 async function simular(api, opciones, io, proyecto) {
@@ -191,13 +214,14 @@ async function reanudar(api, opciones, io) {
 
 export async function principal(argv, { env = process.env, fetchImpl = globalThis.fetch, io } = {}) {
   const { comando, opciones, error } = leerArgs(argv);
-  if (error || !["simular", "ejecutar", "reanudar"].includes(comando)) {
-    io.error(error ?? "uso: eliminar-residencial.mjs simular|ejecutar|reanudar … (ver docs/operations/ELIMINACION_DATOS.md)");
+  if (error || !["pendientes", "simular", "ejecutar", "reanudar"].includes(comando)) {
+    io.error(error ?? "uso: eliminar-residencial.mjs pendientes|simular|ejecutar|reanudar … (ver docs/operations/ELIMINACION_DATOS.md)");
     return SALIDA.uso;
   }
   const config = leerConfiguracion(env);
   if (config.error) return io.error(config.error), SALIDA.uso;
   const api = crearApi(config, fetchImpl);
+  if (comando === "pendientes") return pendientes(api, io, config.proyecto);
   if (comando === "simular") return simular(api, opciones, io, config.proyecto);
   if (comando === "ejecutar") return ejecutar(api, opciones, io, config.proyecto);
   return reanudar(api, opciones, io);

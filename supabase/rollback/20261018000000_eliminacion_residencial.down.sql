@@ -13,6 +13,10 @@ begin
   end if;
 end $$;
 
+alter policy tenants_delete_super_admin on public.tenants
+  using (public.is_super_admin());
+drop function public.eliminacion_residencial_vacio(uuid);
+drop function public.eliminacion_residencial_pendientes();
 drop function public.eliminacion_residencial_completar(uuid);
 drop function public.eliminacion_residencial_ejecutar(uuid, text, text);
 drop function public.eliminacion_residencial_simular(uuid, text);

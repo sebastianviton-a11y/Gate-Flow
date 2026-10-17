@@ -153,7 +153,8 @@ grant execute on all functions in schema tests to anon, authenticated, service_r
 do $$
 declare f text;
 begin
-  foreach f in array array['public.eliminacion_residencial_simular(uuid,text)', 'public.eliminacion_residencial_ejecutar(uuid,text,text)', 'public.eliminacion_residencial_completar(uuid)'] loop
+  foreach f in array array['public.eliminacion_residencial_simular(uuid,text)', 'public.eliminacion_residencial_ejecutar(uuid,text,text)', 'public.eliminacion_residencial_completar(uuid)',
+                           'public.eliminacion_residencial_pendientes()'] loop
     perform tests.igual('ER-01', 'solo service_role ejecuta ' || f,
       format($q$select has_function_privilege('anon', %L, 'execute')::text || has_function_privilege('authenticated', %L, 'execute')::text || has_function_privilege('service_role', %L, 'execute')::text$q$, f, f, f),
       'falsefalsetrue');
@@ -164,6 +165,11 @@ begin
       format($q$select (has_function_privilege('anon', %L, 'execute') or has_function_privilege('authenticated', %L, 'execute') or has_function_privilege('service_role', %L, 'execute'))::text$q$, f, f, f),
       'false');
   end loop;
+  perform tests.igual('ER-02b', 'la verificación de residencial vacío solo la ejecuta authenticated (la usa la política de borrado)',
+    $q$select has_function_privilege('anon', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text
+           || has_function_privilege('authenticated', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text
+           || has_function_privilege('service_role', 'public.eliminacion_residencial_vacio(uuid)', 'execute')::text$q$,
+    'falsetruefalse');
   perform tests.igual('ER-03', 'el registro no se lee ni se escribe desde la API (ni con service_role)',
     $q$select (has_table_privilege('anon', 'public.eliminaciones_residencial', 'select,insert,update,delete')
             or has_table_privilege('authenticated', 'public.eliminaciones_residencial', 'select,insert,update,delete')
@@ -232,7 +238,7 @@ begin
   r := tests.er_simular((x->>'t')::uuid);
   perform tests.lg_ok('ER-13', 'checkout abierto → no elegible (contratacion_en_curso)', r->>'motivo' = 'contratacion_en_curso', r::text);
   perform tests.debe_fallar('ER-14', 'residencial inexistente → error', format('select tests.er_simular(%L)', gen_random_uuid()), '22023');
-  perform tests.debe_fallar('ER-15', 'operador con @ (un correo) → rechazado', format('select tests.er_simular(%L, %L)', x->>'t', 'ana@empresa.com'), '22023');
+  perform tests.debe_fallar('ER-15', 'operador con @ (un correo) → rechazado', format('select tests.er_simular(%L, %L)', x->>'t', 'ana@example.com'), '22023');
   perform tests.debe_fallar('ER-16', 'operador con espacios (un nombre) → rechazado', format('select tests.er_simular(%L, %L)', x->>'t', 'Ana Pérez'), '22023');
 end $$;
 rollback;
@@ -433,6 +439,87 @@ begin
   c := tests.er_completar((r->>'eliminacion_id')::uuid);
   perform tests.lg_ok('ER-83', 'una eliminación fallida nunca se marca completada', c->>'ok' = 'false' and c->>'estado' = 'fallida', c::text);
   perform tests.debe_fallar('ER-84', 'la simulación fallida no se reutiliza: hay que simular de nuevo', format('select tests.er_ejecutar(%L, %L)', r->>'eliminacion_id', r->>'codigo'), '22023');
+end $$;
+rollback;
+
+-- ── El borrado directo de Super Admin ya no deja eliminaciones a medias ──
+begin;
+do $$
+declare
+  x jsonb;
+  v_vacio uuid := gen_random_uuid();
+  v_logo uuid := gen_random_uuid();
+begin
+  x := tests.er_escenario('expired');
+  -- Recién creados (como al revertir un alta con invitación): solo la fila y su suscripción.
+  insert into public.tenants (id, nombre, tipo, empresa_id) values
+    (v_vacio, 'ZZ Recién creado', 'residencial', 'e0000000-0000-0000-0000-000000000001'),
+    (v_logo, 'ZZ Con logo', 'residencial', 'e0000000-0000-0000-0000-000000000001');
+  insert into public.suscripciones (tenant_id, estado, origen) values (v_vacio, 'active', 'alta_manual'), (v_logo, 'active', 'alta_manual');
+  insert into storage.objects (bucket_id, name) values ('logos', v_logo || '/logo.png');
+
+  perform tests.como('00000000-0000-0000-0000-000000000001');   -- Super Admin
+  execute 'set local role authenticated';
+  perform tests.filas('ER-90', 'Super Admin por la API: un residencial con datos NO se borra (0 filas)', format('delete from public.tenants where id = %L', x->>'t'), 0);
+  perform tests.filas('ER-91', 'Super Admin por la API: con un archivo en Storage tampoco (0 filas)', format('delete from public.tenants where id = %L', v_logo), 0);
+  perform tests.filas('ER-92', 'Super Admin por la API: un residencial vacío sí (reversión de un alta)', format('delete from public.tenants where id = %L', v_vacio), 1);
+  execute 'reset role';
+  perform tests.lg_ok('ER-93', 'el residencial con datos y el del logo siguen intactos',
+    public.eliminacion_residencial_conteo((x->>'t')::uuid) ? 'paquetes' and exists (select 1 from public.tenants where id = v_logo));
+
+  insert into public.tenants (id, nombre, tipo, empresa_id) values (v_vacio, 'ZZ Recién creado', 'residencial', 'e0000000-0000-0000-0000-000000000001');
+  perform tests.como('00000000-0000-0000-0000-00000000000a');   -- admin de A, no Super Admin
+  execute 'set local role authenticated';
+  perform tests.filas('ER-94', 'un admin de residencial no borra residenciales, ni vacíos', format('delete from public.tenants where id = %L', v_vacio), 0);
+  perform tests.lg_ok('ER-95', 'para quien no es Super Admin la verificación siempre dice false (no revela nada)', not public.eliminacion_residencial_vacio(v_vacio));
+  execute 'reset role';
+end $$;
+rollback;
+
+-- ── Plazos: la base dice qué vence y desde cuándo ──
+begin;
+do $$
+declare
+  vencido jsonb := tests.er_escenario('expired', interval '40 days');
+  cancelado jsonb := tests.er_escenario('canceled', interval '10 days');
+  impago jsonb := tests.er_escenario('past_due', interval '20 days');
+  en_prueba jsonb := tests.er_escenario('trialing', interval '-5 days');
+  activo jsonb := tests.er_escenario('active', interval '-20 days');
+  medias jsonb := tests.er_escenario('expired', interval '45 days');
+  p jsonb;
+  r jsonb;
+  e jsonb;
+  fila jsonb;
+  ids text[];
+begin
+  -- Una eliminación que quedó a medias (archivos pendientes).
+  r := tests.er_simular((medias->>'t')::uuid);
+  e := tests.er_ejecutar((r->>'eliminacion_id')::uuid, r->>'codigo');
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  execute 'set local role service_role';
+  p := public.eliminacion_residencial_pendientes();
+  execute 'reset role';
+  ids := array(select x->>'tenant_id' from jsonb_array_elements(p->'residenciales') x);
+  select x into fila from jsonb_array_elements(p->'residenciales') x where x->>'tenant_id' = vencido->>'t';
+  perform tests.lg_ok('ER-100', 'vencido hace 40 días: elegible, con fin y fecha desde la que se puede eliminar',
+    (fila->>'elegible')::boolean and fila->>'nombre' = 'ZZ Residencial Eliminable'
+      and (fila->>'eliminar_desde')::timestamptz = (fila->>'fin_servicio')::timestamptz + interval '30 days', coalesce(fila::text, 'sin fila'));
+  select x into fila from jsonb_array_elements(p->'residenciales') x where x->>'tenant_id' = cancelado->>'t';
+  perform tests.lg_ok('ER-101', 'cancelado hace 10 días: listado como todavía no (menos_de_30_dias), eliminable en unos 20 días',
+    not (fila->>'elegible')::boolean and fila->>'motivo' = 'menos_de_30_dias'
+      and (fila->>'eliminar_desde')::timestamptz between now() + interval '19 days' and now() + interval '21 days', coalesce(fila::text, 'sin fila'));
+  select x into fila from jsonb_array_elements(p->'residenciales') x where x->>'tenant_id' = impago->>'t';
+  perform tests.lg_ok('ER-102', 'en impago sin servicio: listado (hay que cancelar en el proveedor), no elegible',
+    not (fila->>'elegible')::boolean and fila->>'motivo' = 'suscripcion_en_impago', coalesce(fila::text, 'sin fila'));
+  perform tests.lg_ok('ER-103', 'en prueba, activos y los de los fixtures no aparecen',
+    not (ids && array[en_prueba->>'t', activo->>'t', 'aaaaaaaa-0000-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000000']));
+  perform tests.lg_ok('ER-104', 'la eliminación a medias aparece para reanudar (y su residencial ya no)',
+    exists (select 1 from jsonb_array_elements(p->'a_medias') x where x->>'eliminacion_id' = r->>'eliminacion_id')
+      and not (ids && array[medias->>'t']), p->'a_medias'->>0);
+  perform tests.como('00000000-0000-0000-0000-000000000001');
+  execute 'set local role authenticated';
+  perform tests.debe_fallar('ER-105', 'ni el Super Admin consulta los plazos por la API (solo service_role)', 'select public.eliminacion_residencial_pendientes()', '42501');
+  execute 'reset role';
 end $$;
 rollback;
 

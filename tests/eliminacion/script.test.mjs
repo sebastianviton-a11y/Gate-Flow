@@ -4,7 +4,12 @@
  * que nunca dice «COMPLETADA» si algo quedó pendiente.
  *   node tests/eliminacion/script.test.mjs
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SALIDA, leerConfiguracion, principal } from "../../scripts/eliminacion/eliminar-residencial.mjs";
+
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 let pasadas = 0;
 let fallidas = 0;
@@ -92,7 +97,7 @@ console.log("\nSimulación");
   const { fetchImpl, llamadas } = falsa();
   const { io } = consola();
   ok((await principal(["simular", "--residencial", "no-uuid", "--operador", "ticket-42"], { env: ENV, fetchImpl, io })) === SALIDA.uso && llamadas.length === 0, "residencial que no es uuid → uso, sin llamadas");
-  ok((await principal(["simular", "--residencial", T, "--operador", "ana@empresa.com"], { env: ENV, fetchImpl, io })) === SALIDA.uso && llamadas.length === 0, "operador con @ → uso, sin llamadas");
+  ok((await principal(["simular", "--residencial", T, "--operador", "ana@example.com"], { env: ENV, fetchImpl, io })) === SALIDA.uso && llamadas.length === 0, "operador con @ → uso, sin llamadas");
   ok((await principal(["borrar-todo"], { env: ENV, fetchImpl, io })) === SALIDA.uso, "comando desconocido → uso");
 }
 
@@ -217,6 +222,46 @@ console.log("\nNunca informa falsamente que terminó");
   };
   const { io, salida } = consola();
   ok((await principal(["reanudar", "--eliminacion", ID], { env: ENV, fetchImpl, io })) === SALIDA.incompleta && salida.join("\n").includes("sin conexión (ECONNREFUSED)") && !salida.join("\n").includes(CLAVE), "sin conexión → NO terminó, sin imprimir la clave");
+}
+
+console.log("\nPlazos (pendientes)");
+{
+  const { fetchImpl, llamadas } = falsa({
+    rpc: {
+      eliminacion_residencial_pendientes: () => [200, {
+        generado_en: "2026-10-17T12:00:00Z",
+        residenciales: [
+          { tenant_id: T, nombre: "ZZ Vencido", pais: "MX", elegible: true, motivo: null, fin_servicio: "2026-09-01T05:00:00Z", eliminar_desde: "2026-10-01T05:00:00Z" },
+          { tenant_id: U1, nombre: "ZZ Cancelado", pais: "MX", elegible: false, motivo: "menos_de_30_dias", fin_servicio: "2026-10-07T05:00:00Z", eliminar_desde: "2026-11-06T05:00:00Z" },
+        ],
+        a_medias: [{ eliminacion_id: ID, tenant_id: U2, ejecutada_en: "2026-10-16T10:00:00Z" }],
+      }],
+    },
+  });
+  const { io, salida } = consola();
+  const codigo = await principal(["pendientes"], { env: ENV, fetchImpl, io });
+  const texto = salida.join("\n");
+  ok(codigo === SALIDA.ok && llamadas.length === 1 && llamadas[0].ruta === "/rest/v1/rpc/eliminacion_residencial_pendientes", "pendientes: una sola lectura, salida 0");
+  ok(/Elegibles hoy: 1\n\s+ZZ Vencido .* terminó 2026-09-01 · eliminable desde 2026-10-01/.test(texto), "muestra los elegibles con su fin y la fecha desde la que se pueden eliminar", texto);
+  ok(/todavía no\): 1\n\s+ZZ Cancelado .* menos_de_30_dias · fin 2026-10-07 · eliminable desde 2026-11-06/.test(texto), "muestra los que vencen después, con su fecha");
+  ok(texto.includes(`reanudar --eliminacion ${ID}`), "muestra las eliminaciones a medias con el comando para reanudar");
+  ok(!llamadas.some((l) => l.ruta.includes("simular") || l.ruta.includes("ejecutar") || l.metodo === "DELETE"), "pendientes no simula, no ejecuta ni borra nada");
+}
+{
+  const { fetchImpl } = falsa({ rpc: { eliminacion_residencial_pendientes: () => [403, { code: "42501", message: "permission denied" }] } });
+  const { io, salida } = consola();
+  ok((await principal(["pendientes"], { env: ENV, fetchImpl, io })) === SALIDA.rechazada && salida.join("\n").includes("No se pudieron leer los plazos: HTTP 403"), "sin permiso → error claro, salida 2");
+}
+
+console.log("\nSuper Admin sin borrado directo");
+{
+  const detalle = readFileSync(join(RAIZ, "apps/admin/app/superadmin/residenciales/[id]/detalle-client.tsx"), "utf8");
+  const superadmin = readFileSync(join(RAIZ, "packages/paquetes/src/superadmin.ts"), "utf8");
+  const indice = readFileSync(join(RAIZ, "packages/paquetes/src/index.ts"), "utf8");
+  ok(!/eliminarResidencial|Confirmar eliminación|\.delete\(/.test(detalle) && detalle.includes('data-testid="eliminacion-procedimiento"'), "la ficha del residencial ya no tiene el botón de borrado; remite al procedimiento");
+  ok(!/eliminarResidencial/.test(superadmin + indice) && !/from\("tenants"\)\.delete\(\)/.test(superadmin), "packages/paquetes ya no exporta el borrado directo de residenciales");
+  const migracion = readFileSync(join(RAIZ, "supabase/migrations/20261018000000_eliminacion_residencial.sql"), "utf8");
+  ok(/alter policy tenants_delete_super_admin on public\.tenants\s+using \(public\.eliminacion_residencial_vacio\(id\)\)/.test(migracion), "la base solo deja a Super Admin borrar residenciales vacíos");
 }
 
 console.log(`\n${pasadas} pasadas, ${fallidas} fallidas`);
