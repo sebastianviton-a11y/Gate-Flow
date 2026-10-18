@@ -237,6 +237,25 @@ begin
   values ((x->>'t')::uuid, (x->>'admin')::uuid, 'hasta-50', 'stripe', 'MXN', 100, 'cs_zz_' || (x->>'t'), now() + interval '20 minutes');
   r := tests.er_simular((x->>'t')::uuid);
   perform tests.lg_ok('ER-13', 'checkout abierto → no elegible (contratacion_en_curso)', r->>'motivo' = 'contratacion_en_curso', r::text);
+  -- Pagado en el proveedor con el webhook pendiente: la base ya lo ve vencido.
+  x := tests.er_escenario('expired');
+  insert into public.billing_checkouts (tenant_id, user_id, plan, provider, moneda, monto, provider_checkout_id, expires_at, created_at)
+  values ((x->>'t')::uuid, (x->>'admin')::uuid, 'hasta-50', 'stripe', 'MXN', 100, 'cs_zz_v_' || (x->>'t'), now() - interval '1 hour', now() - interval '2 hours');
+  r := tests.er_simular((x->>'t')::uuid);
+  perform tests.lg_ok('ER-13b', 'checkout vencido hace 1 hora (pudo pagarse, webhook pendiente) → no elegible', r->>'motivo' = 'contratacion_en_curso', r::text);
+  -- Uno cancelado por un checkout posterior (pudo pagarse antes) y el posterior vencido: hace 2 días.
+  x := tests.er_escenario('expired');
+  insert into public.billing_checkouts (tenant_id, user_id, plan, provider, moneda, monto, provider_checkout_id, estado, expires_at, created_at)
+  values ((x->>'t')::uuid, (x->>'admin')::uuid, 'hasta-50', 'stripe', 'MXN', 100, 'cs_zz_c1_' || (x->>'t'), 'canceled', now() - interval '2 days', now() - interval '2 days 1 hour'),
+         ((x->>'t')::uuid, (x->>'admin')::uuid, 'hasta-50', 'stripe', 'MXN', 100, 'cs_zz_c2_' || (x->>'t'), 'expired', now() - interval '2 days', now() - interval '2 days 1 hour');
+  r := tests.er_simular((x->>'t')::uuid);
+  perform tests.lg_ok('ER-13c', 'checkouts cancelado y vencido hace 2 días → no elegible', r->>'motivo' = 'contratacion_en_curso', r::text);
+  -- Pasados 7 días sin aviso del proveedor, ya no frena la eliminación.
+  x := tests.er_escenario('expired');
+  insert into public.billing_checkouts (tenant_id, user_id, plan, provider, moneda, monto, provider_checkout_id, estado, expires_at, created_at)
+  values ((x->>'t')::uuid, (x->>'admin')::uuid, 'hasta-50', 'stripe', 'MXN', 100, 'cs_zz_8_' || (x->>'t'), 'expired', now() - interval '8 days', now() - interval '8 days 1 hour');
+  r := tests.er_simular((x->>'t')::uuid);
+  perform tests.lg_ok('ER-13d', 'último checkout vencido hace 8 días → elegible', (r->>'elegible')::boolean, r::text);
   perform tests.debe_fallar('ER-14', 'residencial inexistente → error', format('select tests.er_simular(%L)', gen_random_uuid()), '22023');
   perform tests.debe_fallar('ER-15', 'operador con @ (un correo) → rechazado', format('select tests.er_simular(%L, %L)', x->>'t', 'ana@example.com'), '22023');
   perform tests.debe_fallar('ER-16', 'operador con espacios (un nombre) → rechazado', format('select tests.er_simular(%L, %L)', x->>'t', 'Ana Pérez'), '22023');

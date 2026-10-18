@@ -56,7 +56,8 @@
 #        funciones y solo cambia la política de borrado de Super Admin
 #        (residenciales vacíos); rollback ER → idéntico a F3; ER se reaplica idéntico;
 #        con una eliminación registrada, el rollback aborta sin cambios;
-#        ER se revierte antes que F3
+#        contratación a la vez que la eliminación (concurrencia_eliminacion.sh)
+#        → 4 PASS; ER se revierte antes que F3
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -375,6 +376,10 @@ same_catalog "$OUT/snap_F3.txt" "$OUT/snap_F3b.txt" "reaplicar_F3"
 
 sql_file "$SUPA/migrations/$MIG_ER"
 run_suites ER "… + eliminación asistida" C
+echo "  eliminación asistida frente a una contratación (dos sesiones, en una copia de la base):"
+bash "$DIR/concurrencia_eliminacion.sh" "$DB" > "$OUT/concurrencia_eliminacion.log" 2>&1 || true
+sed 's/^/    /' "$OUT/concurrencia_eliminacion.log"
+if grep -qv '^PASS|' "$OUT/concurrencia_eliminacion.log" || [[ "$(grep -c '^PASS|' "$OUT/concurrencia_eliminacion.log")" != "4" ]]; then FALLAS=$((FALLAS + 1)); fi
 snapshot "$OUT/snap_ER.txt"
 # Se AGREGAN la tabla de registro (ACL, restricciones, índices) y sus
 # funciones; lo único existente que cambia es la política de borrado de

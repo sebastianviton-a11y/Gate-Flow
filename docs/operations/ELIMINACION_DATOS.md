@@ -33,7 +33,7 @@ La base lo decide (`eliminacion_residencial_servicio`), nunca el script:
 | `menos_de_30_dias` | Terminó hace menos de 30 días (fin = la fecha más tardía entre fin de prueba, fin del período pagado y impago + 7 días de gracia). |
 | `suscripcion_activa` | Tiene suscripción activa (aunque esté por cancelarse). |
 | `suscripcion_en_impago` | Está en impago: primero debe cancelarse en el proveedor. |
-| `contratacion_en_curso` | Hay un checkout abierto (el cliente está pagando). |
+| `contratacion_en_curso` | Hay un checkout abierto o uno que pudo pagarse en los últimos 7 días, aunque figure vencido o cancelado: el pago puede estar hecho en el proveedor con su aviso (webhook) todavía pendiente. |
 | `sin_suscripcion` | Alta antigua sin suscripción: se decide a mano, no con este procedimiento. |
 | `fin_desconocido` | No hay fecha de fin. |
 | `residencial_de_plataforma` | Es el residencial del Super Admin. |
@@ -113,7 +113,10 @@ cancela). La base, con la suscripción bloqueada:
 * comprueba código, vigencia y nombre (si no coinciden, no borra nada);
 * vuelve a evaluar la elegibilidad: si el cliente contrató o la
   suscripción cambió desde la simulación → **CANCELADA** sin borrar nada
-  (hay que simular de nuevo si corresponde);
+  (hay que simular de nuevo si corresponde). Una contratación que empieza
+  mientras tanto espera a que esto termine (residencial y suscripción
+  quedan bloqueados) y después falla porque ya no hay suscripción; nunca
+  queda un checkout de un residencial eliminado;
 * borra los datos de la base en **una sola transacción** y verifica que
   no quede ninguna fila con ese `tenant_id`. Ante cualquier error deshace
   todo → **FALLÓ**, sin borrar nada; el registro guarda solo el código de
@@ -169,7 +172,7 @@ vacía al completar. El rollback de la migración aborta si hay registros.
 ## Pruebas (locales, datos sintéticos)
 
 ```bash
-PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/security/run-local.sh   # fase ER (99_eliminacion_residencial.sql)
+PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/security/run-local.sh   # fase ER (99_eliminacion_residencial.sql y concurrencia_eliminacion.sh)
 PGHOST=/tmp PGPORT=54329 PGUSER=postgres supabase/tests/grants/run-local.sh     # grants de staging (99_eliminacion_residencial.sql)
 node tests/eliminacion/script.test.mjs                                          # script con una API falsa
 PGHOST=/tmp PGPORT=54329 PGUSER=postgres GF_POSTGREST_BIN=/ruta/postgrest \

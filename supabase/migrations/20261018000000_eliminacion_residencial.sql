@@ -74,7 +74,8 @@ revoke all on public.eliminaciones_residencial from public, anon, authenticated,
 
 -- ¿Se puede eliminar? Elegible solo si la prueba o la suscripción terminó
 -- hace 30 días o más. Activa, en prueba, en impago o con una contratación
--- abierta: no. La huella detecta cualquier cambio desde la simulación.
+-- abierta o reciente (7 días): no. La huella detecta cualquier cambio
+-- desde la simulación.
 create function public.eliminacion_residencial_servicio(
   p_tenant_id uuid,
   out elegible boolean,
@@ -117,8 +118,12 @@ begin
   elsif fin_servicio > now() - interval '30 days' then
     motivo := 'menos_de_30_dias';
   elsif exists (
+    -- Cualquier checkout que pudo pagarse en los últimos 7 días, abierto
+    -- o no: el pago puede estar hecho en el proveedor con su webhook aún
+    -- pendiente (Stripe lo reintenta hasta 3 días), aunque la base ya lo
+    -- marque vencido o cancelado por un checkout posterior.
     select 1 from public.billing_checkouts c
-    where c.tenant_id = p_tenant_id and c.estado = 'created' and c.expires_at > now()
+    where c.tenant_id = p_tenant_id and c.expires_at > now() - interval '7 days'
   ) then
     motivo := 'contratacion_en_curso';
   else
