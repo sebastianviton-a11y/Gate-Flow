@@ -7,6 +7,7 @@ import { AyudaCampo, Button, GateFlowLogo, Input, Label, MENSAJE_MAS_DE_150, Pas
 import type { ResultadoAlta } from "@/lib/registro/alta";
 import { MAX_VIVIENDAS_AUTOSERVICIO, MENSAJE_CONTACTO, PAISES_REGISTRO, type ErroresRegistro, type PaisRegistro } from "@/lib/registro/validacion";
 import { DOCUMENTOS, hrefDocumento, type ClaveDocumento } from "@/lib/legal/documentos";
+import type { DocumentoAceptable } from "@/lib/legal/aceptacion";
 import { registrarCuentaPrueba } from "./actions";
 import { TurnstileWidget, type TurnstileHandle } from "./turnstile-widget";
 
@@ -27,11 +28,14 @@ export function RegistroForm({
   tokenTiempo,
   turnstileSiteKey,
   paises,
+  documentos,
 }: {
   tokenTiempo: string;
   turnstileSiteKey: string | null;
   /** Países con registro abierto (lo decide el servidor). */
   paises: readonly PaisRegistro[];
+  /** Versiones vigentes por país: se muestran, se enlazan y se envían (version_ids). */
+  documentos: Partial<Record<PaisRegistro, DocumentoAceptable[]>>;
 }) {
   const opcionesPais = PAISES_REGISTRO.filter((p) => paises.includes(p.codigo));
   // Con un solo país abierto (lanzamiento: México) queda elegido; con varios, se elige explícitamente.
@@ -43,9 +47,18 @@ export function RegistroForm({
   const [mensajeFinal, setMensajeFinal] = useState("");
   const [timezone, setTimezone] = useState("");
   const [viviendas, setViviendas] = useState("");
-  // Solo para los enlaces legales: se lee el documento del país elegido.
+  // Documentos del país elegido: los que se muestran son los que se aceptan.
   const [pais, setPais] = useState<string>(paisUnico);
-  const enlaceLegal = (clave: ClaveDocumento) => (pais === "MX" || pais === "AR" ? hrefDocumento(clave, pais) : DOCUMENTOS[clave].ruta);
+  const [vigentes, setVigentes] = useState(documentos);
+  // Si los documentos cambian, las casillas se vuelven a montar sin marcar.
+  const [rondaAceptacion, setRondaAceptacion] = useState(0);
+  const mostrados = pais === "MX" || pais === "AR" ? (vigentes[pais] ?? []) : [];
+  const acuerdo = mostrados.find((d) => d.clave === "acuerdo_tratamiento");
+  const enlaceLegal = (clave: ClaveDocumento) => {
+    if (pais !== "MX" && pais !== "AR") return DOCUMENTOS[clave].ruta;
+    const doc = mostrados.find((d) => d.clave === clave);
+    return doc ? hrefDocumento(clave, pais, doc.versionId) : hrefDocumento(clave, pais);
+  };
   // Turnstile: sin token no se puede enviar; cada token sirve una vez.
   const [tokenDesafio, setTokenDesafio] = useState<string | null>(null);
   const [errorDesafio, setErrorDesafio] = useState(false);
@@ -95,6 +108,14 @@ export function RegistroForm({
         setErrores(resultado.errores);
         return;
       case "error":
+        setErrorGeneral(resultado.mensaje);
+        return;
+      case "documentos":
+        // Cambiaron mientras se llenaba el formulario: se muestran los
+        // nuevos y hay que volver a aceptarlos.
+        if (pais === "MX" || pais === "AR") setVigentes((prev) => ({ ...prev, [pais]: resultado.documentos }));
+        setRondaAceptacion((n) => n + 1);
+        desafio.current?.reset();
         setErrorGeneral(resultado.mensaje);
         return;
     }
@@ -202,7 +223,10 @@ export function RegistroForm({
           </Campo>
         </div>
 
-        <div>
+        <div key={`aceptacion-${rondaAceptacion}`} className="space-y-3">
+          {mostrados.map((d) => (
+            <input key={d.versionId} type="hidden" name="version_ids" value={d.versionId} />
+          ))}
           <label className="flex items-start gap-2 text-sm text-white/80">
             <input type="checkbox" name="aceptaTerminos" value="on" required className="mt-0.5 h-4 w-4" />
             <span>
@@ -218,6 +242,19 @@ export function RegistroForm({
             </span>
           </label>
           {errores.aceptaTerminos && <p className="mt-1 text-xs text-destructive">{errores.aceptaTerminos}</p>}
+          {acuerdo && (
+            <label className="flex items-start gap-2 text-sm text-white/80">
+              <input type="checkbox" name="declaraFacultades" value="on" required className="mt-0.5 h-4 w-4" />
+              <span>
+                Acepto el{" "}
+                <a href={enlaceLegal("acuerdo_tratamiento")} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  Acuerdo de Tratamiento de Datos
+                </a>{" "}
+                en nombre del residencial y declaro que tengo facultades para hacerlo.
+              </span>
+            </label>
+          )}
+          {errores.declaraFacultades && <p className="mt-1 text-xs text-destructive">{errores.declaraFacultades}</p>}
         </div>
 
         {/* Campos invisibles: zona horaria, token de tiempo y honeypot. */}

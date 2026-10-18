@@ -46,13 +46,13 @@ assert(accion.includes("supabase.auth.getUser()") && accion.includes("createServ
 assert(/\.eq\("user_id", user\.id\)\.eq\("activo", true\)/.test(accion), "solo las membresías activas del usuario de la sesión");
 assert(!/console\.error\([^)]*(user\.|email|id\b)/.test(accion), "el log no lleva datos de la persona");
 assert(form.includes("await paisDeLaInvitacion()") && !/paisDeLaInvitacion\([^)]/.test(form), "el formulario pide el país sin enviar nada");
-assert(!form.includes('href="/terminos"') && form.includes('hrefDocumento("terminos", paisLegal.pais)'), "el enlace usa el país del servidor (ya no /terminos a secas)");
+assert(!form.includes('href="/terminos"') && form.includes('hrefDocumento("terminos", paisLegal.pais)') && form.includes('hrefDocumento("terminos", paisLegal.pais, terminos.versionId)'), "el enlace usa el país del servidor y, si hay versión vigente, esa versión exacta");
 assert(form.includes('disabled={paisLegal?.estado !== "ok"}'), "sin país, el checkbox no se puede marcar");
 assert(form.includes('if (paisLegal?.estado !== "ok") {') && form.indexOf('if (paisLegal?.estado !== "ok") {') < form.indexOf("if (!aceptaTerminos) {"), "sin país, no se envía");
 assert(form.includes('data-testid="invitacion-pais-indeterminado"') && form.includes("No pudimos confirmar el país de tu residencial."), "estado claro cuando no hay país");
 
-console.log("\nLa aceptación existente no cambia");
-assert(form.includes(".update({ nombre_completo: nombreCompleto.trim(), terminos_aceptados_en: new Date().toISOString() })"), "se sigue guardando nombre y fecha de aceptación igual que antes");
+console.log("\nAceptación (Fase 3): la fecha la fija el servidor");
+assert(form.includes(".update({ nombre_completo: nombreCompleto.trim() })") && !form.includes("terminos_aceptados_en"), "el navegador guarda solo el nombre; la fecha de aceptación la fija el servidor (aceptar_documentos_invitacion)");
 assert(form.includes("const resultado = await establecerPasswordInvitado(password);"), "la contraseña se sigue estableciendo igual");
 assert((form.match(/type="checkbox"/g) ?? []).length === 1 && form.includes("if (!aceptaTerminos) {"), "un solo checkbox, obligatorio como antes");
 assert(!/pais/i.test(form.slice(form.indexOf(".update({"), form.indexOf(".eq(\"id\", userData.user.id)"))), "el país no se guarda ni se envía con la aceptación");

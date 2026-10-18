@@ -34,8 +34,11 @@
 #        → 0 FAIL
 #   …BOFMRSLP + lectura pública de documentos publicados (20261015)
 #        → 0 FAIL
-#   …BOFMRSLPE + eliminación manual asistida (20261018) → 0 FAIL; contrato aquí
-#        rollback ER = …BOFMRSLP
+#   …BOFMRSLPF + aceptación en el registro y en las invitaciones (20261017)
+#        → 0 FAIL
+#   …BOFMRSLPFE + eliminación manual asistida (20261018) → 0 FAIL; contrato aquí
+#        rollback ER = …BOFMRSLPF
+#        rollback F3 = …BOFMRSLP
 #        rollback LP = …BOFMRSL
 #        rollback LG = …BOFMRS
 #        rollback SM = …BOFMR
@@ -93,6 +96,8 @@ MIG_LG="20261014000000_documentos_legales.sql"
 DOWN_LG="$SUPA/rollback/20261014000000_documentos_legales.down.sql"
 MIG_LP="20261015000000_documentos_legales_lectura_publica.sql"
 DOWN_LP="$SUPA/rollback/20261015000000_documentos_legales_lectura_publica.down.sql"
+MIG_F3="20261017000000_aceptaciones_registro_invitacion.sql"
+DOWN_F3="$SUPA/rollback/20261017000000_aceptaciones_registro_invitacion.down.sql"
 MIG_ER="20261018000000_eliminacion_residencial.sql"
 DOWN_ER="$SUPA/rollback/20261018000000_eliminacion_residencial.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
@@ -184,7 +189,7 @@ sql_file "$SEC/harness/supabase_stub.sql"
 sql_file "$DIR/harness/acl_staging.sql"
 sql_file "$DIR/harness/extensions_supabase.sql"
 for m in "$SUPA"/migrations/*.sql; do
-  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM"|"$MIG_RE"|"$MIG_SM"|"$MIG_LG"|"$MIG_LP"|"$MIG_ER") continue ;; esac
+  case "$(basename "$m")" in "$MIG_G"|"$MIG_R"|"$MIG_A"|"$MIG_C"|"$MIG_T"|"$MIG_O"|"$MIG_I"|"$MIG_P"|"$MIG_B"|"$MIG_OB"|"$MIG_BF"|"$MIG_IM"|"$MIG_RE"|"$MIG_SM"|"$MIG_LG"|"$MIG_LP"|"$MIG_F3"|"$MIG_ER") continue ;; esac
   sql_file "$m"
 done
 sql_file "$SUPA/seed.sql"
@@ -288,10 +293,13 @@ snapshot "$OUT/snap_GRACTOIPBOFMRSL.txt"
 sql_file "$SUPA/migrations/$MIG_LP"
 run_suites GRACTOIPBOFMRSLP "… + lectura pública legal"
 snapshot "$OUT/snap_GRACTOIPBOFMRSLP.txt"
+sql_file "$SUPA/migrations/$MIG_F3"
+run_suites GRACTOIPBOFMRSLPF "… + aceptación en registro e invitación"
+snapshot "$OUT/snap_GRACTOIPBOFMRSLPF.txt"
 
 sql_file "$SUPA/migrations/$MIG_ER"
-run_suites GRACTOIPBOFMRSLPE "… + eliminación asistida"
-snapshot "$OUT/snap_GRACTOIPBOFMRSLPE.txt"
+run_suites GRACTOIPBOFMRSLPFE "… + eliminación asistida"
+snapshot "$OUT/snap_GRACTOIPBOFMRSLPFE.txt"
 
 # El código llama a las RPC de registro, Super Admin, billing y
 # residentes, lee suscripciones (con las columnas de billing) y
@@ -319,7 +327,8 @@ else
   echo "  la autoprueba NO detecta lo esperado:"; sed 's/^/    /' "$OUT/contrato_autoprueba.log"; FALLAS=$((FALLAS + 1))
 fi
 
-sql_file "$DOWN_ER";                   snapshot "$OUT/snap_GRACTOIPBOFMRSLPb.txt"; igual "$OUT/snap_GRACTOIPBOFMRSLP.txt" "$OUT/snap_GRACTOIPBOFMRSLPb.txt" rollback_ER
+sql_file "$DOWN_ER";                   snapshot "$OUT/snap_GRACTOIPBOFMRSLPFb.txt"; igual "$OUT/snap_GRACTOIPBOFMRSLPF.txt" "$OUT/snap_GRACTOIPBOFMRSLPFb.txt" rollback_ER
+sql_file "$DOWN_F3";                   snapshot "$OUT/snap_GRACTOIPBOFMRSLPb.txt"; igual "$OUT/snap_GRACTOIPBOFMRSLP.txt" "$OUT/snap_GRACTOIPBOFMRSLPb.txt" rollback_F3
 sql_file "$DOWN_LP";                   snapshot "$OUT/snap_GRACTOIPBOFMRSLb.txt"; igual "$OUT/snap_GRACTOIPBOFMRSL.txt" "$OUT/snap_GRACTOIPBOFMRSLb.txt" rollback_LP
 sql_file "$DOWN_LG";                   snapshot "$OUT/snap_GRACTOIPBOFMRSb.txt"; igual "$OUT/snap_GRACTOIPBOFMRS.txt" "$OUT/snap_GRACTOIPBOFMRSb.txt" rollback_LG
 sql_file "$DOWN_SM";                   snapshot "$OUT/snap_GRACTOIPBOFMRb.txt"; igual "$OUT/snap_GRACTOIPBOFMR.txt" "$OUT/snap_GRACTOIPBOFMRb.txt" rollback_SM

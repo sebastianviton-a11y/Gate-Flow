@@ -1,3 +1,4 @@
+import { MENSAJES_ACEPTACION, errorDeAceptacion, mismasVersiones, type DocumentoAceptable } from "../legal/aceptacion";
 import { hashEmail, hashIp, verificarTokenTiempo } from "./hash";
 import {
   MENSAJE_CONTACTO,
@@ -15,8 +16,11 @@ import {
  * Orden fijo:
  *   1. rate limit (registro_intento_permitido)
  *   2. honeypot + token de tiempo
+ *   2b. documentos legales: lo mostrado debe ser lo vigente (si cambió,
+ *       no se crea nada y se muestran de nuevo para aceptarlos)
  *   3. auth.admin.createUser (email sin confirmar)
- *   4. RPC crear_cuenta_prueba (empresa + tenant + admin + trial)
+ *   4. RPC crear_cuenta_prueba (empresa + tenant + admin + trial + evidencia
+ *      de aceptación, todo en una transacción)
  *   5. correo de confirmación
  *   6. cierre del intento
  *
@@ -39,6 +43,9 @@ export interface DatosNuevaCuenta {
   viviendas: number;
   timezone: string | null;
   aceptaTerminos: true;
+  /** Versiones mostradas: la RPC registra la evidencia o rechaza el alta. */
+  versionIds: string[];
+  declaraFacultades: boolean;
 }
 
 export interface DepsAlta {
@@ -49,6 +56,8 @@ export interface DepsAlta {
   crearCuenta(datos: DatosNuevaCuenta): Promise<{ ok: true; tenantId: string } | { ok: false; detalle: string }>;
   revertirCuenta(userId: string): Promise<{ revertido: boolean; motivo: string | null }>;
   enviarConfirmacion(email: string): Promise<{ ok: true } | { ok: false; detalle: string }>;
+  /** Documentos legales vigentes del país que se muestran en /registro. */
+  documentosVigentes(pais: PaisRegistro): Promise<{ ok: true; documentos: DocumentoAceptable[] } | { ok: false; detalle: string }>;
   /** Nunca recibe correo, IP ni contraseña: solo nombres de evento y códigos. */
   log(evento: string, datos?: Record<string, unknown>): void;
 }
@@ -65,7 +74,9 @@ export type ResultadoAlta =
   | { tipo: "revisa_correo"; mensaje: string }
   | { tipo: "contacto"; mensaje: string }
   | { tipo: "campos"; errores: ErroresRegistro }
-  | { tipo: "error"; mensaje: string };
+  | { tipo: "error"; mensaje: string }
+  /** Los documentos cambiaron mientras se llenaba el formulario: hay que aceptarlos de nuevo. */
+  | { tipo: "documentos"; mensaje: string; documentos: DocumentoAceptable[] };
 
 export const MENSAJES_ALTA = {
   bloqueado: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
@@ -126,6 +137,33 @@ export async function ejecutarAlta(deps: DepsAlta, campos: CamposCrudos, ctx: Co
     return token.motivo === "expirado" ? { tipo: "error", mensaje: MENSAJES_ALTA.expirado } : REVISA_CORREO;
   }
 
+  // 2b. Documentos legales. Lo que se mostró debe ser exactamente lo
+  //     vigente; si no, no se crea nada. La RPC lo vuelve a comprobar
+  //     dentro de la transacción (por si cambia justo entre medio).
+  const leerDocumentos = async (): Promise<DocumentoAceptable[] | null> => {
+    try {
+      const r = await deps.documentosVigentes(datos.pais);
+      if (r.ok) return r.documentos;
+      deps.log("registro.documentos_error", { detalle: r.detalle });
+    } catch (e) {
+      deps.log("registro.documentos_excepcion", { detalle: detalle(e) });
+    }
+    return null;
+  };
+  const vigentes = await leerDocumentos();
+  if (!vigentes) {
+    await cerrar("fallo", "documentos_lectura");
+    return { tipo: "error", mensaje: MENSAJES_ALTA.generico };
+  }
+  if (!mismasVersiones(datos.versionIds, vigentes.map((d) => d.versionId))) {
+    await cerrar("fallo", "documentos_cambiados");
+    return { tipo: "documentos", mensaje: MENSAJES_ACEPTACION.actualizados, documentos: vigentes };
+  }
+  if (vigentes.some((d) => d.clave === "acuerdo_tratamiento") && !datos.declaraFacultades) {
+    await cerrar("fallo", "sin_declaracion");
+    return { tipo: "campos", errores: { declaraFacultades: MENSAJES_ACEPTACION.declaracion } };
+  }
+
   // 3. Usuario de Auth (sin confirmar). Un correo que ya existe recibe
   //    la misma respuesta pública que un alta: no se revela nada.
   let userId: string;
@@ -165,11 +203,21 @@ export async function ejecutarAlta(deps: DepsAlta, campos: CamposCrudos, ctx: Co
       viviendas: datos.viviendas,
       timezone: datos.timezone,
       aceptaTerminos: true,
+      versionIds: datos.versionIds,
+      declaraFacultades: datos.declaraFacultades,
     });
     if (!cuenta.ok) {
+      // La transacción se revirtió entera (tampoco hay evidencia): solo
+      // queda borrar el usuario de Auth.
+      const motivo = errorDeAceptacion(cuenta.detalle);
       deps.log("registro.rpc_error", { detalle: cuenta.detalle });
       await borrarUsuario("rpc");
-      await cerrar("fallo", "rpc");
+      await cerrar("fallo", motivo ? `aceptacion_${motivo}` : "rpc");
+      if (motivo === "actualizados") {
+        return { tipo: "documentos", mensaje: MENSAJES_ACEPTACION.actualizados, documentos: (await leerDocumentos()) ?? [] };
+      }
+      if (motivo === "declaracion") return { tipo: "campos", errores: { declaraFacultades: MENSAJES_ACEPTACION.declaracion } };
+      if (motivo === "no_disponible") return { tipo: "error", mensaje: MENSAJES_ALTA.noDisponible };
       return { tipo: "error", mensaje: MENSAJES_ALTA.generico };
     }
     tenantId = cuenta.tenantId;

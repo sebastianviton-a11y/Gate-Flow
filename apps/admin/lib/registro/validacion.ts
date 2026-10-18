@@ -4,6 +4,7 @@
  * antes de tocar Auth o la base; la RPC crear_cuenta_prueba vuelve a
  * validar lo suyo (defensa en profundidad).
  */
+import { MENSAJES_ACEPTACION, leerVersionIds } from "../legal/aceptacion";
 
 export const PAISES_REGISTRO = [
   { codigo: "MX", nombre: "México" },
@@ -52,9 +53,12 @@ export const CAMPOS_REGISTRO = [
   "t", // token de tiempo firmado por el servidor
 ] as const;
 export type CampoRegistro = (typeof CAMPOS_REGISTRO)[number];
-export type CamposCrudos = Record<CampoRegistro, string>;
+/** Además de los campos de texto: las versiones de los documentos legales
+ * que el formulario MOSTRÓ (version_ids, uno por documento) y la
+ * declaración de facultades del Acuerdo de Tratamiento. */
+export type CamposCrudos = Record<CampoRegistro, string> & { version_ids?: string[]; declaraFacultades?: string };
 
-export type CampoVisible = Exclude<CampoRegistro, "timezone" | "sitio_web" | "t">;
+export type CampoVisible = Exclude<CampoRegistro, "timezone" | "sitio_web" | "t"> | "declaraFacultades";
 export type ErroresRegistro = Partial<Record<CampoVisible, string>>;
 
 export interface DatosRegistro {
@@ -67,6 +71,10 @@ export interface DatosRegistro {
   /** Zona del residencial: la del navegador si es de su país; si no, la del país. */
   timezone: string;
   aceptaTerminos: true;
+  /** Versiones de los documentos legales mostrados (lo vigente lo comprueba el servidor). */
+  versionIds: string[];
+  /** Declaró facultades para aceptar el Acuerdo de Tratamiento en nombre del residencial. */
+  declaraFacultades: boolean;
 }
 
 export type ResultadoValidacion =
@@ -80,6 +88,9 @@ export function leerCampos(form: FormData): CamposCrudos {
     const valor = form.get(nombre);
     campos[nombre] = typeof valor === "string" ? valor : "";
   }
+  campos.version_ids = form.getAll("version_ids").map((v) => (typeof v === "string" ? v : ""));
+  const declara = form.get("declaraFacultades");
+  campos.declaraFacultades = typeof declara === "string" ? declara : "";
   return campos;
 }
 
@@ -216,6 +227,10 @@ export function validarRegistro(campos: CamposCrudos, habilitados: readonly Pais
   if (!aceptaTerminos) {
     errores.aceptaTerminos = "Debes aceptar los Términos y Condiciones y el Aviso de Privacidad.";
   }
+  const versionIds = leerVersionIds(campos.version_ids ?? []);
+  if (versionIds === null && !errores.aceptaTerminos) {
+    errores.aceptaTerminos = MENSAJES_ACEPTACION.invalidos;
+  }
 
   if (Object.keys(errores).length > 0 || !esPais(pais) || !habilitados.includes(pais)) {
     return { ok: false, tipo: "campos", errores };
@@ -233,6 +248,8 @@ export function validarRegistro(campos: CamposCrudos, habilitados: readonly Pais
       viviendas,
       timezone: zonaHorariaParaRegistro(tz, pais),
       aceptaTerminos: true,
+      versionIds: versionIds ?? [],
+      declaraFacultades: ["on", "true", "1"].includes((campos.declaraFacultades ?? "").trim()),
     },
   };
 }

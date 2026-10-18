@@ -135,7 +135,7 @@ seccion("7-8. Campos manipulados desde el cliente se ignoran", () => {
   const c = leerCampos(form);
   const claves = Object.keys(c).sort().join(",");
   assert(
-    claves === "aceptaTerminos,email,nombreCompleto,nombreResidencial,pais,password,sitio_web,t,timezone,viviendas",
+    claves === "aceptaTerminos,declaraFacultades,email,nombreCompleto,nombreResidencial,pais,password,sitio_web,t,timezone,version_ids,viviendas",
     `solo se leen los campos conocidos (${claves})`,
   );
   assert(!("rol" in c) && !("tenant_id" in c) && !("trial_ends_at" in c) && !("plan" in c), "rol, tenant_id, trial_ends_at y plan no existen en los campos");
@@ -156,7 +156,7 @@ seccion("7-8. Campos manipulados desde el cliente se ignoran", () => {
   const pagina = readFileSync(join(RAIZ_ADMIN, "app", "registro", "page.tsx"), "utf8");
   const accion = readFileSync(join(RAIZ_ADMIN, "app", "registro", "actions.ts"), "utf8");
   const formulario = readFileSync(join(RAIZ_ADMIN, "app", "registro", "registro-form.tsx"), "utf8");
-  assert(pagina.includes("paises={paisesHabilitados(process.env.REGISTRO_PAISES)}") && accion.includes("paises: paisesHabilitados(process.env.REGISTRO_PAISES)"), "la página y la acción usan la misma lista (REGISTRO_PAISES)");
+  assert(pagina.includes("const paises = paisesHabilitados(process.env.REGISTRO_PAISES);") && pagina.includes("paises={paises}") && pagina.includes("documentosPorPais(paises)") && accion.includes("paises: paisesHabilitados(process.env.REGISTRO_PAISES)"), "la página y la acción usan la misma lista (REGISTRO_PAISES)");
   assert(formulario.includes("opcionesPais.map(") && !formulario.includes("PAISES_REGISTRO.map("), "el formulario solo ofrece los países abiertos");
 }
 

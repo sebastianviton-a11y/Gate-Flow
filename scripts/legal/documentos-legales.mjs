@@ -35,8 +35,20 @@ export const PAISES = ["MX", "AR"];
 export const ESTADOS = ["borrador", "aprobado", "publicado", "retirado"];
 const CAMPOS = ["identificador", "version", "jurisdicciones", "estado", "vigente_desde", "aprobacion", "requiere_nueva_aceptacion", "resumen_cambios"];
 const ORDEN_ESTADO = { borrador: 0, aprobado: 1, publicado: 2, retirado: 3 };
-/** Marcadores de texto incompleto: ninguna versión aprobada o publicada puede llevarlos. */
-const MARCADORES_PENDIENTES = [/\[PENDIENTE/i, /\{\{/, /\bTODO\b/];
+/**
+ * Marcadores de texto incompleto: ninguna versión aprobada o publicada puede llevarlos.
+ * Corchetes: cualquier [texto] que no sea el texto de un enlace [texto](url) —
+ * [NOMBRE LEGAL DEL PRESTADOR], [DOMICILIO LEGAL], [PENDIENTE: …], [Razón social], […] —.
+ * Se admiten solo las llamadas numéricas [1] y [sic]: el resto se mostraría tal cual en la página.
+ */
+const MARCADORES_PENDIENTES = [/\[(?![0-9]{1,3}\]|sic\])[^\[\]\n]+\](?!\()/gi, /\{\{[^\n]*?(?:\}\}|$)/gm, /<<[^\n]*?>>/g, /\bTODO\b/g, /\bTBD\b/g, /_{4,}/g];
+
+/** Los marcadores pendientes de un texto (como aparecen, sin repetir), en orden de aparición. */
+export function marcadoresPendientes(texto) {
+  const encontrados = [];
+  for (const re of MARCADORES_PENDIENTES) for (const m of String(texto ?? "").matchAll(re)) encontrados.push([m.index, m[0].trim()]);
+  return [...new Set(encontrados.sort((a, b) => a[0] - b[0]).map(([, t]) => t))];
+}
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})$/;
 
 export function sha256Hex(texto) {
@@ -121,7 +133,12 @@ export function leerArchivo(ruta, carpeta, ahora = new Date()) {
   const contenido = normalizarContenido(cuerpo ?? "");
   if (!contenido.trim()) errores.push("el contenido está vacío");
   if (avanzado) {
-    for (const re of MARCADORES_PENDIENTES) if (re.test(contenido)) errores.push(`el contenido tiene marcadores de texto pendiente (${re}) y el estado es ${estado}`);
+    const pendientes = marcadoresPendientes(contenido);
+    if (pendientes.length) errores.push(`el contenido tiene marcadores de texto pendiente y el estado es ${estado}: ${pendientes.slice(0, 5).join(", ")}${pendientes.length > 5 ? ` (y ${pendientes.length - 5} más)` : ""}`);
+    for (const [campo, valor] of [["aprobacion", aprobacion], ["resumen_cambios", resumen]]) {
+      const enCampo = typeof valor === "string" ? marcadoresPendientes(valor) : [];
+      if (enCampo.length) errores.push(`${campo} tiene marcadores de texto pendiente y el estado es ${estado}: ${enCampo.join(", ")}`);
+    }
   }
   // Nombre: v<versión>.md, o v<versión>-mx.md / -ar.md si aplica a un solo país.
   const nombre = basename(ruta);
