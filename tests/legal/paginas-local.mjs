@@ -43,6 +43,9 @@ const URL_ADMIN = `http://localhost:${P.admin}`;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "gf-legal-paginas-"));
 const MIG_LP = path.join(RAIZ, "supabase/migrations/20261015000000_documentos_legales_lectura_publica.sql");
 const DOWN_LP = path.join(RAIZ, "supabase/rollback/20261015000000_documentos_legales_lectura_publica.down.sql");
+// Fase 3 (aceptación en registro e invitación): se aplica junto con LP.
+const MIG_F3 = path.join(RAIZ, "supabase/migrations/20261017000000_aceptaciones_registro_invitacion.sql");
+const DOWN_F3 = path.join(RAIZ, "supabase/rollback/20261017000000_aceptaciones_registro_invitacion.down.sql");
 const CAPTURAS = process.env.GF_LEGAL_CAPTURAS ? path.resolve(process.env.GF_LEGAL_CAPTURAS) : null;
 
 let fallas = 0;
@@ -234,6 +237,9 @@ async function main() {
     ...envPublico,
     SUPABASE_SERVICE_ROLE_KEY: servicio,
     REGISTRO_HASH_PEPPER: crypto.randomBytes(24).toString("hex"),
+    // Desde el lanzamiento solo México está abierto por defecto; aquí se
+    // abren los dos para probar los documentos de cada país.
+    REGISTRO_PAISES: "MX,AR",
   };
   iniciar("admin", "npx", ["next", "start", "-p", String(P.admin)], { cwd: path.join(RAIZ, "apps/admin"), env: envAdmin });
   if (!(await esperar(`${URL_ADMIN}/login`, 90_000))) return res("--", "FAIL", "Admin no arrancó");
@@ -254,6 +260,7 @@ async function main() {
 
     // ── 2. Con 20261015 ──
     sqlArchivo(MIG_LP);
+    sqlArchivo(MIG_F3);
     await recargarEsquema(anon);
     const perfiles = [
       { id: "escritorio", contexto: { viewport: { width: 1366, height: 900 }, locale: "es-MX", timezoneId: "America/Mexico_City" } },
@@ -261,12 +268,15 @@ async function main() {
     ];
     for (const perfil of perfiles) await paginas(navegador, perfil, ID);
     await sesiones(navegador, { secreto, ua, ub, ua_correo: correo("a"), ub_correo: correo("b") });
-    await registroEInvitacion(navegador);
+    await registroEInvitacion(navegador, ID);
     await invitacion(navegador, { secreto, usuarios: { mx: [ua, correo("a")], ar: [ub, correo("b")], ab: [uab, correo("ab")], sin: [usin, correo("sin")] } });
     await api(anon, ID);
     ok("80", sql(HUELLA) === huellaInicial, "leer páginas y API no escribió nada (versiones, aceptaciones, auditoría, residenciales y membresías intactos)");
+    // Fase 3: aceptar la invitación sí escribe (evidencia y fecha del servidor).
+    await aceptacionInvitacion(navegador, { secreto, ID, mx: [ua, correo("a")], ar: [ub, correo("b")] });
 
-    // ── 3. Rollback de 20261015 ──
+    // ── 3. Rollback de 20261015 (antes, el de la Fase 3) ──
+    sqlArchivo(DOWN_F3);
     sqlArchivo(DOWN_LP);
     await recargarEsquema(anon);
     const r = await fetch(`${URL_ADMIN}/terminos?pais=MX`);
@@ -412,7 +422,7 @@ async function sesiones(navegador, { secreto, ua, ub, ua_correo, ub_correo }) {
   ok("72", ![ua, ub].some((u) => a.articulo.includes(u) || b.articulo.includes(u)) && !/ZZ_AUTOTEST_\d/.test(a.articulo + b.articulo), "la página no muestra datos de la sesión ni del residencial");
 }
 
-async function registroEInvitacion(navegador) {
+async function registroEInvitacion(navegador, ID) {
   for (const perfil of [
     { id: "escritorio", contexto: { viewport: { width: 1366, height: 900 } } },
     { id: "movil", contexto: { ...playwright.devices["iPhone 13"] } },
@@ -425,13 +435,15 @@ async function registroEInvitacion(navegador) {
       const privacidad = page.locator("label", { has: page.locator('input[name="aceptaTerminos"]') }).locator("a", { hasText: "Aviso de Privacidad" });
       ok(`75-${perfil.id}`, (await terminos.getAttribute("href")) === "/terminos" && (await privacidad.getAttribute("href")) === "/privacidad" && (await page.locator('input[name="aceptaTerminos"]').count()) === 1, "/registro: sin país elegido, enlaces a /terminos y /privacidad; un solo checkbox");
       await page.selectOption("#pais", "AR");
-      ok(`76-${perfil.id}`, (await terminos.getAttribute("href")) === "/terminos?pais=AR" && (await privacidad.getAttribute("href")) === "/privacidad?pais=AR", "/registro con Argentina: los enlaces llevan ?pais=AR");
+      const versionesOcultas = async () => (await page.locator('input[name="version_ids"]').evaluateAll((els) => els.map((e) => e.value))).sort().join(",");
+      ok(`76-${perfil.id}`, (await terminos.getAttribute("href")) === `/terminos?pais=AR&version=${ID.ar10}` && (await privacidad.getAttribute("href")) === `/privacidad?pais=AR&version=${ID.privAr}`, "/registro con Argentina: los enlaces abren la versión vigente exacta de Argentina");
+      ok(`76b-${perfil.id}`, (await versionesOcultas()) === [ID.ar10, ID.privAr].sort().join(",") && (await page.locator('input[name="declaraFacultades"]').count()) === 0, "/registro con Argentina: el formulario envía esas versiones; sin Acuerdo publicado, sin declaración de facultades");
       const [nueva] = await Promise.all([ctx.waitForEvent("page"), terminos.click()]);
       await nueva.waitForLoadState();
       ok(`77-${perfil.id}`, /Argentina/.test(await textoDe(nueva, '[data-testid="legal-meta"]')) && (await textoDe(nueva, '[data-testid="legal-contenido"]')).includes("ZZ_TEXTO_COMUN_MX_AR"), "el enlace abre (pestaña nueva) los Términos de Argentina");
       await nueva.close();
       await page.selectOption("#pais", "MX");
-      ok(`78-${perfil.id}`, (await terminos.getAttribute("href")) === "/terminos?pais=MX", "/registro con México: ?pais=MX");
+      ok(`78-${perfil.id}`, (await terminos.getAttribute("href")) === `/terminos?pais=MX&version=${ID.mx11}` && (await versionesOcultas()) === ID.mx11, "/registro con México: la versión vigente de México (1.1), mostrada y enviada");
       ok(`79-${perfil.id}`, await sinScrollHorizontal(page), "/registro sin scroll horizontal");
     } finally {
       await ctx.close();
@@ -472,7 +484,9 @@ async function invitacion(navegador, { secreto, usuarios }) {
     const { ctx, page } = await abrir(usuarios[clave], perfil);
     try {
       const enlace = page.locator('label a:has-text("términos y condiciones")');
-      ok(`${caso}a`, (await enlace.getAttribute("href")) === `/terminos?pais=${pais}` && (await page.locator("label").filter({ has: page.locator('input[type="checkbox"]') }).innerText()).includes(`(${nombre})`), `/aceptar-invitacion, residencial de ${nombre}: enlace a los Términos de ${nombre}`);
+      // Fase 3: el enlace abre exactamente la versión vigente que se acepta.
+      const idVigente = sql(`select id from public.documentos_legales_versiones where documento_clave = 'terminos' and jurisdiccion = '${pais}' and version = '${version}'`);
+      ok(`${caso}a`, (await enlace.getAttribute("href")) === `/terminos?pais=${pais}&version=${idVigente}` && (await page.locator("label").filter({ has: page.locator('input[type="checkbox"]') }).innerText()).includes(`(${nombre})`), `/aceptar-invitacion, residencial de ${nombre}: enlace a la versión vigente de los Términos de ${nombre}`);
       ok(`${caso}b`, await page.locator('input[type="checkbox"]').isEnabled(), "el checkbox se puede marcar");
       const [nueva] = await Promise.all([ctx.waitForEvent("page"), enlace.click()]);
       await nueva.waitForLoadState();
@@ -538,7 +552,8 @@ async function invitacion(navegador, { secreto, usuarios }) {
       sql("grant select on public.user_tenants to authenticated");
       await boton.click();
       await page.locator('label a:has-text("términos y condiciones")').waitFor({ timeout: 15_000 });
-      ok("7L", (await page.locator('label a:has-text("términos y condiciones")').getAttribute("href")) === "/terminos?pais=AR" && (await page.locator('input[type="checkbox"]').isEnabled()), "tras «Reintentar», el enlace de Argentina y el checkbox habilitado");
+      const ar10 = sql("select id from public.documentos_legales_versiones where documento_clave = 'terminos' and jurisdiccion = 'AR' and version = '1.0'");
+      ok("7L", (await page.locator('label a:has-text("términos y condiciones")').getAttribute("href")) === `/terminos?pais=AR&version=${ar10}` && (await page.locator('input[type="checkbox"]').isEnabled()), "tras «Reintentar», el enlace de la versión vigente de Argentina y el checkbox habilitado");
     } finally {
       await ctx.close();
     }
@@ -550,6 +565,74 @@ async function invitacion(navegador, { secreto, usuarios }) {
 }
 
 /** La API pública solo expone las tres lecturas; nada de tablas ni escrituras. */
+// Fase 3: aceptar la invitación registra la evidencia (versión, hash,
+// origen invitacion) y la fecha con la hora del SERVIDOR; si un documento
+// cambia mientras se llena el formulario, no registra nada y pide aceptar
+// la versión nueva. Requisitos y documentos ficticios.
+async function aceptacionInvitacion(navegador, { secreto, ID, mx, ar }) {
+  sql(`insert into public.requisitos_legales (rol_clave, documento_clave, jurisdiccion, tipo, alcance) values
+         ('admin_residencial', 'terminos', 'MX', 'aceptacion', 'usuario'),
+         ('guardia', 'terminos', 'AR', 'aceptacion', 'usuario'),
+         ('guardia', 'privacidad', 'AR', 'acuse', 'usuario')`);
+  const abrir = async ([id, email]) => {
+    const ctx = await navegador.newContext({ viewport: { width: 1366, height: 900 } });
+    const c = cookieSesion({ urlSupabase: URL_SUPABASE, secreto, userId: id, email });
+    await ctx.addCookies([{ name: c.nombre, value: c.valor, url: URL_ADMIN }]);
+    const page = await ctx.newPage();
+    await page.goto(`${URL_ADMIN}/aceptar-invitacion`);
+    await page.locator('label a:has-text("términos y condiciones")').waitFor({ timeout: 15_000 });
+    await page.fill("#ai-nombre", "ZZ Invitado Sintético");
+    await page.fill("#ai-password", "Zz-123456789-aa");
+    await page.fill("#ai-password2", "Zz-123456789-aa");
+    await page.locator('input[type="checkbox"]').check();
+    return { ctx, page };
+  };
+  const evidencia = (uid) =>
+    sql(`select coalesce(string_agg(v.documento_clave || ':' || v.version || ':' || a.tipo || ':' || a.origen || ':' || (a.contenido_sha256 = v.contenido_sha256), ',' order by v.documento_clave), '')
+         from public.aceptaciones_legales a join public.documentos_legales_versiones v on v.id = a.version_id where a.user_id = '${uid}'`);
+  const enviar = async (page) => {
+    await page.getByRole("button", { name: "Crear contraseña y continuar" }).click();
+    // La aceptación va antes que la contraseña: se espera a que el botón vuelva o la página cambie.
+    await page.waitForFunction(() => !document.body.innerText.includes("Creando cuenta…"), null, { timeout: 30_000 }).catch(() => null);
+  };
+
+  // México (administración): registra los Términos 1.1 y fija la fecha en el servidor.
+  {
+    const { ctx, page } = await abrir(mx);
+    try {
+      await enviar(page);
+      ok("7P", evidencia(mx[0]) === "terminos:1.1:aceptacion:invitacion:true", "invitación MX: evidencia de los Términos vigentes (1.1) con origen invitacion y el hash de la versión", evidencia(mx[0]));
+      ok("7Q", sql(`select (terminos_aceptados_en is not null and now() - terminos_aceptados_en < interval '5 minutes' and terminos_aceptados_en <= now()) from public.users where id = '${mx[0]}'`) === "t", "invitación MX: terminos_aceptados_en con la hora del servidor");
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  // Argentina (guardia): se publica una versión nueva de los Términos mientras llena el formulario.
+  {
+    const { ctx, page } = await abrir(ar);
+    try {
+      const nueva = sql(`with v as (insert into public.documentos_legales_versiones (documento_clave, version, jurisdiccion, contenido, contenido_sha256)
+                                  values ('terminos', '1.1', 'AR', 'ZZ_TEXTO_AR_NUEVO texto ficticio. No es un documento legal.', repeat('0', 64)) returning id)
+                         select id from v`);
+      sql(`update public.documentos_legales_versiones set estado = 'aprobado', aprobado_por = 'ZZ referencia ficticia' where id = '${nueva}'`);
+      sql(`update public.documentos_legales_versiones set estado = 'publicado', vigente_desde = now() - interval '1 minute' where id = '${nueva}'`);
+      await enviar(page);
+      const aviso = await page.locator("p.text-destructive").innerText().catch(() => "");
+      const enlace = page.locator('label a:has-text("términos y condiciones")');
+      ok("7R", aviso.includes("Los documentos legales se actualizaron") && evidencia(ar[0]) === "" && !(await page.locator('input[type="checkbox"]').isChecked()), "documento cambiado durante el formulario: no registra nada, avisa y desmarca", `${aviso} | ${evidencia(ar[0])}`);
+      ok("7S", (await enlace.getAttribute("href")) === `/terminos?pais=AR&version=${nueva}`, "el enlace pasa a la versión nueva que hay que aceptar");
+      await page.locator('input[type="checkbox"]').check();
+      await enviar(page);
+      ok("7T", evidencia(ar[0]) === "privacidad:1.0:acuse:invitacion:true,terminos:1.1:aceptacion:invitacion:true", "al aceptar de nuevo: acuse del Aviso y Términos 1.1 (la versión nueva)", evidencia(ar[0]));
+      ok("7U", !/zz_autotest\+/.test(leerLog("admin")), "el log del servidor no lleva correos");
+    } finally {
+      await ctx.close();
+    }
+  }
+  void ID;
+}
+
 async function api(anon, ID) {
   const h = { apikey: anon, authorization: `Bearer ${anon}`, "content-type": "application/json" };
   const rpc = (fn, body) => fetch(`${URL_SUPABASE}/rest/v1/rpc/${fn}`, { method: "POST", headers: h, body: JSON.stringify(body) });

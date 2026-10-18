@@ -133,8 +133,16 @@ set local role authenticated;
 do $$
 begin
   if (select e from etapa) = 'S0' then return; end if;
-  perform tests.filas('RO-07', 'aceptación: el invitado actualiza su propio perfil',
-    $q$update public.users set nombre_completo = 'Invitado', terminos_aceptados_en = now() where id = auth.uid()$q$, 1);
+  if to_regprocedure('public.aceptar_documentos_invitacion(uuid,uuid[])') is null then
+    perform tests.filas('RO-07', 'aceptación: el invitado actualiza su propio perfil',
+      $q$update public.users set nombre_completo = 'Invitado', terminos_aceptados_en = now() where id = auth.uid()$q$, 1);
+  else
+    -- Fase 3 (20261017): la fecha de aceptación la fija el servidor.
+    perform tests.filas('RO-07', 'aceptación: el invitado actualiza su propio perfil (nombre)',
+      $q$update public.users set nombre_completo = 'Invitado' where id = auth.uid()$q$, 1);
+    perform tests.igual('RO-07c', 'aceptación: la fecha de aceptación la fija el servidor (aceptar_documentos_invitacion)',
+      $q$select ((public.aceptar_documentos_invitacion('bbbbbbbb-0000-0000-0000-000000000000', '{}')->>'terminos_aceptados_en')::timestamptz = now())::text$q$, 'true');
+  end if;
   perform tests.igual('RO-07b', 'aceptación: el invitado inicia sesión en su residencial',
     $q$select count(*)::text from public.user_tenants where user_id = auth.uid() and activo$q$, '2');
 end $$;

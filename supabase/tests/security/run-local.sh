@@ -46,6 +46,11 @@
 #        EXECUTE de anon/authenticated en las 2 lecturas existentes;
 #        rollback LP → idéntico a LG; LP se reaplica idéntico; LP se
 #        revierte antes que LG
+#   F3 + evidencia de aceptación en el registro y en las invitaciones
+#        (20261017, Fase 3) sobre LP → 0 FAIL; solo cambian las 2
+#        funciones del alta y se agregan 3 funciones y 1 trigger;
+#        rollback F3 → idéntico a LP; F3 se reaplica idéntico; F3 se
+#        revierte antes que LP
 #   rollback OB → catálogo idéntico a B; rollback B → idéntico a P;
 #   B y OB se reaplican (idénticos) y se revierten; luego rollback P
 #   rollback I → catálogo idéntico a O; con una referencia cruzada en
@@ -91,6 +96,8 @@ MIG_LG="20261014000000_documentos_legales.sql"
 DOWN_LG="$SUPA/rollback/20261014000000_documentos_legales.down.sql"
 MIG_LP="20261015000000_documentos_legales_lectura_publica.sql"
 DOWN_LP="$SUPA/rollback/20261015000000_documentos_legales_lectura_publica.down.sql"
+MIG_F3="20261017000000_aceptaciones_registro_invitacion.sql"
+DOWN_F3="$SUPA/rollback/20261017000000_aceptaciones_registro_invitacion.down.sql"
 DOWN_A="$SUPA/rollback/20260930000000_privilegios_fase_a.down.sql"
 DOWN_C="$SUPA/rollback/privilegios_fase_c.down.sql"
 OUT="${GF_TEST_OUT:-$(mktemp -d)}"
@@ -178,7 +185,7 @@ if [[ -n "${GF_BASE_PRODUCCION:-}" ]]; then
   sql_file "$SUPA/migrations/20260729200000_reconciliacion_paridad_produccion.sql"
 else
   for m in "$SUPA"/migrations/*.sql; do
-    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" || "$(basename "$m")" == "$MIG_LP" ]] && continue
+    [[ "$(basename "$m")" == "$MIG_A" || "$(basename "$m")" == "$MIG_C" || "$(basename "$m")" == "$MIG_T" || "$(basename "$m")" == "$MIG_O" || "$(basename "$m")" == "$MIG_I" || "$(basename "$m")" == "$MIG_P" || "$(basename "$m")" == "$MIG_B" || "$(basename "$m")" == "$MIG_OB" || "$(basename "$m")" == "$MIG_BF" || "$(basename "$m")" == "$MIG_IM" || "$(basename "$m")" == "$MIG_RE" || "$(basename "$m")" == "$MIG_SM" || "$(basename "$m")" == "$MIG_LG" || "$(basename "$m")" == "$MIG_LP" || "$(basename "$m")" == "$MIG_F3" ]] && continue
     # Estas suites modelan producción (grants amplios de Supabase, RLS
     # como única barrera). Los grants de mínimo privilegio tienen su
     # propia suite: supabase/tests/grants/run-local.sh.
@@ -337,6 +344,27 @@ same_catalog "$OUT/snap_LG.txt" "$OUT/snap_LG_tras_down_LP.txt" "rollback_LP"
 sql_file "$SUPA/migrations/$MIG_LP"
 snapshot "$OUT/snap_LP2.txt"
 same_catalog "$OUT/snap_LP.txt" "$OUT/snap_LP2.txt" "reaplicar_LP"
+
+sql_file "$SUPA/migrations/$MIG_F3"
+run_suites F3 "… + aceptación en registro e invitación" C
+snapshot "$OUT/snap_F3.txt"
+# Cambian solo crear_cuenta_prueba (6 args: delega) y revertir_cuenta_prueba
+# (descarta la evidencia); se agregan la firma de 8 args, la de invitación
+# y el trigger de users.terminos_aceptados_en. Tablas y políticas, igual.
+diff "$OUT/snap_LP2.txt" "$OUT/snap_F3.txt" | grep '^[<>]' > "$OUT/diff_F3_sobre_LP.txt" || true
+if [[ "$(grep -c '^<' "$OUT/diff_F3_sobre_LP.txt")" == "2" && "$(grep -c '^>' "$OUT/diff_F3_sobre_LP.txt")" == "6" ]] \
+   && ! grep -qvE '^[<>] (FN\|(public\.)?(crear_cuenta_prueba|revertir_cuenta_prueba|aceptar_documentos_invitacion|users_terminos_solo_servidor)\(|TG\|(public\.)?users\|users_terminos_solo_servidor\|)' "$OUT/diff_F3_sobre_LP.txt"; then
+  echo "  aceptación (fase 3): solo cambian las 2 funciones del alta y se agregan 3 funciones y 1 trigger"
+else
+  echo "  aceptación (fase 3): cambios de catálogo inesperados (ver $OUT/diff_F3_sobre_LP.txt)"; FALLAS=$((FALLAS + 1))
+fi
+sql_file "$DOWN_F3"
+snapshot "$OUT/snap_LP_tras_down_F3.txt"
+same_catalog "$OUT/snap_LP2.txt" "$OUT/snap_LP_tras_down_F3.txt" "rollback_F3"
+sql_file "$SUPA/migrations/$MIG_F3"
+snapshot "$OUT/snap_F3b.txt"
+same_catalog "$OUT/snap_F3.txt" "$OUT/snap_F3b.txt" "reaplicar_F3"
+sql_file "$DOWN_F3"
 sql_file "$DOWN_LP"
 
 sql_file "$DOWN_LG"
