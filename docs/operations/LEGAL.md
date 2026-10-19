@@ -134,7 +134,8 @@ nunca del llamador.
 * **Pendiente (decisión legal):** el plazo de conservación (MX: LFPDPPP;
   AR: Ley 25.326) y el mecanismo de depuración posterior. Hasta entonces
   todo se conserva. La depuración, cuando se decida, será una migración
-  nueva con su prueba.
+  nueva con su prueba. La eliminación manual de un residencial a los 30
+  días (`docs/operations/ELIMINACION_DATOS.md`) conserva esta evidencia.
 
 ## Fase 2 — lectura pública y páginas (la aceptación sigue inactiva)
 

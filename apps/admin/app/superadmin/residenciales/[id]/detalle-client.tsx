@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, PauseCircle, PlayCircle, Trash2, LogIn } from "lucide-react";
+import { ShieldCheck, PauseCircle, PlayCircle, LogIn } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import {
   actualizarResidencial,
   cambiarEstadoServicio,
   actualizarPlanResidencial,
-  eliminarResidencial,
   ESTADO_SERVICIO_LABEL,
   PLAN_LABEL,
   type ResidencialDetalle,
@@ -30,8 +29,6 @@ export function ResidencialDetalleClient({ residencial, suscripcion }: { residen
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const [tab, setTab] = useState<Tab>("Información general");
-  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
-  const [textoConfirmacion, setTextoConfirmacion] = useState("");
   const [procesando, setProcesando] = useState(false);
 
   async function handleCambiarEstado(estado: EstadoServicio) {
@@ -39,17 +36,6 @@ export function ResidencialDetalleClient({ residencial, suscripcion }: { residen
     try {
       await cambiarEstadoServicio(supabase, residencial.id, estado);
       router.refresh();
-    } finally {
-      setProcesando(false);
-    }
-  }
-
-  async function handleEliminar() {
-    if (textoConfirmacion !== residencial.nombre) return;
-    setProcesando(true);
-    try {
-      await eliminarResidencial(supabase, residencial.id);
-      router.push("/superadmin/residenciales");
     } finally {
       setProcesando(false);
     }
@@ -132,37 +118,15 @@ export function ResidencialDetalleClient({ residencial, suscripcion }: { residen
       )}
       {tab === "Consumo" && <TabProximamente descripcion="Métricas de uso (paquetes por mes, usuarios activos) específicas de este residencial llegan en una siguiente versión." />}
 
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
-        <p className="mb-1 text-sm font-medium text-destructive">Eliminar residencial</p>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Borra permanentemente este residencial y TODOS sus datos (paquetes, unidades, usuarios vinculados, historial). No se puede deshacer.
+      {/* Sin botón de borrado: borrar desde aquí dejaba fotos y cuentas. Los
+          datos se eliminan con el procedimiento asistido (simulación, código,
+          Storage y Auth por la API) a los 30 días del fin del servicio. */}
+      <div className="rounded-lg border border-border bg-muted/30 p-5" data-testid="eliminacion-procedimiento">
+        <p className="mb-1 text-sm font-medium">Eliminar los datos del residencial</p>
+        <p className="text-xs text-muted-foreground">
+          Se hace con el procedimiento asistido, 30 días después de que termina la prueba o la suscripción (docs/operations/ELIMINACION_DATOS.md). No se
+          borra desde este panel.
         </p>
-        {!confirmandoEliminar ? (
-          <Button variant="outline" size="sm" onClick={() => setConfirmandoEliminar(true)} className="border-destructive text-destructive">
-            <Trash2 className="h-4 w-4" />
-            Eliminar residencial
-          </Button>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Escribe <strong>{residencial.nombre}</strong> para confirmar.
-            </p>
-            <Input value={textoConfirmacion} onChange={(e) => setTextoConfirmacion(e.target.value)} className="max-w-xs" />
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmandoEliminar(false)}>
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleEliminar}
-                disabled={textoConfirmacion !== residencial.nombre || procesando}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {procesando ? "Eliminando…" : "Confirmar eliminación"}
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
