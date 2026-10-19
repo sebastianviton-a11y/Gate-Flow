@@ -30,6 +30,24 @@ export function cargarXLSXDesdeCDN(): Promise<NonNullable<Window["XLSX"]>> {
   });
 }
 
+/**
+ * Encabezados y fila de ejemplo de la plantilla. El ejemplo del teléfono
+ * sigue el país del residencial (como la carga manual); los encabezados
+ * son siempre los de RESIDENT_IMPORT_COLUMNS.
+ */
+export function filasPlantilla(pais: string | null = null): { encabezado: string[]; ejemplo: string[] } {
+  return {
+    encabezado: RESIDENT_IMPORT_COLUMNS.map((c) => c.label),
+    ejemplo: RESIDENT_IMPORT_COLUMNS.map((c) => (c.key === "residente_telefono" && pais === "AR" ? "11 2345-6789" : c.example)),
+  };
+}
+
+/** Contenido de la plantilla CSV (sin BOM): lo mismo que lee validarCSVUnidades. */
+export function contenidoPlantillaCSV(pais: string | null = null): string {
+  const { encabezado, ejemplo } = filasPlantilla(pais);
+  return `${encabezado.join(",")}\n${ejemplo.map((v) => `"${v}"`).join(",")}\n`;
+}
+
 function descargarBlob(blob: Blob, nombreArchivo: string) {
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement("a");
@@ -47,11 +65,9 @@ function descargarBlob(blob: Blob, nombreArchivo: string) {
  * exista en el servidor. Encabezados y fila de ejemplo vienen de
  * RESIDENT_IMPORT_COLUMNS, nunca escritos a mano aquí.
  */
-export function descargarPlantillaCSV() {
-  const encabezado = RESIDENT_IMPORT_COLUMNS.map((c) => c.label).join(",");
-  const ejemplo = RESIDENT_IMPORT_COLUMNS.map((c) => `"${c.example}"`).join(",");
-  const contenido = `${encabezado}\n${ejemplo}\n`;
-  // \uFEFF (BOM) para que Excel abra acentos como "Teléfono" bien al doble clic.
+export function descargarPlantillaCSV(pais: string | null = null) {
+  const contenido = contenidoPlantillaCSV(pais);
+  // \uFEFF (BOM) para que Excel abra acentos como "Teléfono" y "Dirección" bien al doble clic.
   const blob = new Blob([`\uFEFF${contenido}`], { type: "text/csv;charset=utf-8;" });
   descargarBlob(blob, "plantilla-residentes.csv");
 }
@@ -63,11 +79,10 @@ export function descargarPlantillaCSV() {
  * los conserva como texto y nunca los convierte a "9981234567.0" ni a
  * notación científica.
  */
-export async function descargarPlantillaXLSX() {
+export async function descargarPlantillaXLSX(pais: string | null = null) {
   const XLSX = await cargarXLSXDesdeCDN();
 
-  const encabezado = RESIDENT_IMPORT_COLUMNS.map((c) => c.label);
-  const ejemplo = RESIDENT_IMPORT_COLUMNS.map((c) => c.example);
+  const { encabezado, ejemplo } = filasPlantilla(pais);
   const hoja = XLSX.utils.aoa_to_sheet([encabezado, ejemplo]);
 
   const idxTelefono = RESIDENT_IMPORT_COLUMNS.findIndex((c) => c.key === "residente_telefono");

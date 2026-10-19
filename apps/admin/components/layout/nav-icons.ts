@@ -7,6 +7,7 @@ import {
   UserCog,
   Settings,
   ShieldCheck,
+  LifeBuoy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,4 +25,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   UserCog,
   Settings,
   ShieldCheck,
+  LifeBuoy,
 };

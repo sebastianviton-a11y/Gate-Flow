@@ -23,7 +23,7 @@ export default async function IncidenciasPage() {
           description="Cuando un guardia reporte un paquete dañado, extraviado o con algún problema, aparecerá aquí."
         />
       ) : (
-        <IncidenciasClient incidenciasIniciales={incidencias} />
+        <IncidenciasClient incidenciasIniciales={incidencias} zonaHoraria={session.tenant.timezone ?? null} />
       )}
     </div>
   );

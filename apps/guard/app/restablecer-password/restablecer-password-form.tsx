@@ -6,6 +6,7 @@ import { Loader2, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Label, GateFlowLogo } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "exito";
 
@@ -27,14 +28,18 @@ export function RestablecerPasswordForm() {
     async function verificarSesion() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
-      if (code) {
+      // Enlace PKCE (de antes del flujo implícito): el cliente del navegador
+      // ya canjea el código al iniciarse; canjearlo otra vez falla aunque
+      // la sesión exista. Solo se canjea si todavía no hay sesión.
+      const yaCanjeado = code ? (await supabase.auth.getSession()).data.session : null;
+      if (code && !yaCanjeado) {
         const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
         if (errorCambio) {
           console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
           setEstado("invalida");
           return;
         }
-      } else {
+      } else if (!code) {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
@@ -74,6 +79,7 @@ export function RestablecerPasswordForm() {
       return;
     }
 
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     setEstado("exito");
     setTimeout(() => {

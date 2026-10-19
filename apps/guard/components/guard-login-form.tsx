@@ -37,9 +37,7 @@ export function GuardLoginForm() {
         "status:",
         signInError.status,
       );
-      setError(
-        `[DEBUG] ${signInError.message} | code: ${(signInError as { code?: string }).code ?? "—"} | status: ${signInError.status ?? "—"}`,
-      );
+      setError(mensajeErrorLogin((signInError as { code?: string }).code));
       setLoading(false);
       return;
     }
@@ -122,4 +120,12 @@ export function GuardLoginForm() {
       </div>
     </div>
   );
+}
+
+/** Mensaje para la persona; el detalle técnico queda solo en la consola. */
+function mensajeErrorLogin(codigo: string | undefined): string {
+  if (codigo === "email_not_confirmed") return "Tu correo todavía no está confirmado. Abre el enlace que te enviamos al registrarte.";
+  if (codigo === "invalid_credentials") return "Correo o contraseña incorrectos.";
+  if (codigo === "over_request_rate_limit" || codigo === "over_email_send_rate_limit") return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+  return "No pudimos iniciar sesión. Inténtalo de nuevo en unos minutos.";
 }

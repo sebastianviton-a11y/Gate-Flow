@@ -6,6 +6,7 @@ import { listarPaquetes, buscarPaquetes } from "@gateflow/paquetes";
 import { EstadoBadge, Button, formatearFecha } from "@gateflow/ui";
 import type { EstadoPaquete } from "@gateflow/types";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { FiltrosPaquetes } from "@/components/paquetes/filtros-paquetes";
 import { Paginacion } from "@/components/paquetes/paginacion";
 
@@ -55,6 +56,7 @@ export default async function PaquetesPage({
           </Link>
         </Button>
       </div>
+      <GuiaSeccion clave="paquetes" />
 
       <FiltrosPaquetes estadoActual={searchParams.estado} textoActual={searchParams.q} />
 
@@ -63,7 +65,7 @@ export default async function PaquetesPage({
           <thead className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-2.5">Código</th>
-              <th className="px-4 py-2.5">Unidad</th>
+              <th className="px-4 py-2.5">Dirección</th>
               <th className="px-4 py-2.5">Residente</th>
               <th className="px-4 py-2.5">Remitente / Guía</th>
               <th className="px-4 py-2.5">Ubicación</th>
@@ -100,7 +102,7 @@ export default async function PaquetesPage({
                   </Link>
                 </td>
                 <td className="px-4 py-2.5 font-medium">{p.unidadIdentificador}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{p.residenteNombre ?? "—"}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{p.residenteNombre ?? p.destinatarioNombre ?? "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">
                   {p.remitente ?? p.empresaPaqueteria ?? "—"}
                   {p.numeroGuia ? ` · ${p.numeroGuia}` : ""}
@@ -109,9 +111,9 @@ export default async function PaquetesPage({
                 <td className="px-4 py-2.5">
                   <EstadoBadge estado={p.estado} />
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(p.fechaRecepcion)}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(p.fechaRecepcion, session.tenant.timezone)}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">
-                  {formatearFecha(p.fechaEntrega)}
+                  {formatearFecha(p.fechaEntrega, session.tenant.timezone)}
                 </td>
               </tr>
             ))}

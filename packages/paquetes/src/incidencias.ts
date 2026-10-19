@@ -165,9 +165,12 @@ interface IncidenciaRow {
   incidencia_fotografias: { id: string }[] | null;
 }
 
+// FKs explícitas en paquetes y unidades: con la integridad multitenant
+// hay dos FKs por par (simple + compuesta con tenant_id) y PostgREST no
+// embebe sin saber cuál (300 / PGRST201). Ver PAQUETE_SELECT.
 const INCIDENCIA_SELECT = `
   id, paquete_id, tipo, estado, descripcion, nivel_danio, created_at, resuelta_en,
-  paquetes ( codigo_gateflow, unidades ( identificador ) ),
+  paquetes!incidencias_paquete_id_fkey ( codigo_gateflow, unidades!paquetes_unidad_id_fkey ( identificador ) ),
   reportada:users!incidencias_reportada_por_fkey ( nombre_completo ),
   resuelta:users!incidencias_resuelta_por_fkey ( nombre_completo ),
   incidencia_fotografias ( id )

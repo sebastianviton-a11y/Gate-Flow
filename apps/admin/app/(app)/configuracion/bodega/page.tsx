@@ -2,6 +2,7 @@ import { getSessionContext, requireRole } from "@gateflow/auth";
 import { createServerSupabaseClient } from "@gateflow/supabase";
 import { listarUbicacionesAdmin } from "@gateflow/paquetes";
 import { PageHeader } from "@/components/shared/page-header";
+import { GuiaSeccion } from "@/components/ayuda/ayuda-contexto";
 import { BodegaClient } from "./bodega-client";
 
 export default async function BodegaPage() {
@@ -18,6 +19,7 @@ export default async function BodegaPage() {
         title="Bodega"
         description="Las áreas, estantes o espacios donde se almacenan los paquetes de este residencial."
       />
+      <GuiaSeccion clave="bodega" />
       <BodegaClient tenantId={session.tenant.id} userId={session.user.id} ubicacionesIniciales={ubicaciones} />
     </div>
   );

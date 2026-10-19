@@ -1,16 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@gateflow/supabase";
+import { COOKIE_TENANT } from "@gateflow/auth/client";
+import { SELECT_MEMBRESIA_PANEL, destinoDeDecision, resultadoPanel } from "@/lib/acceso-panel";
+import { RUTAS_CUENTA, RUTAS_SIEMPRE_PUBLICAS, RUTAS_SOLO_INVITADOS } from "@/lib/rutas-publicas";
 
-// "Solo para invitados": si ya hay sesión, no tiene sentido seguir
-// viéndolas — se redirige al dashboard.
-const RUTAS_SOLO_INVITADOS = ["/login"];
-
-// "Siempre accesibles", con o sin sesión: /aceptar-invitacion porque
-// establece una sesión ANTES de que la contraseña esté creada (aplicar
-// la regla de "solo invitados" ahí sacaría a la persona a mitad del
-// proceso), y /terminos porque es contenido informativo que cualquiera
-// — con sesión o sin ella — debe poder leer sin ser redirigido.
-const RUTAS_SIEMPRE_PUBLICAS = ["/aceptar-invitacion", "/terminos", "/residencial-suspendido", "/recuperar-password", "/restablecer-password"];
+// Qué rutas no exigen sesión y por qué: lib/rutas-publicas.ts.
 
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);
@@ -21,6 +15,7 @@ export async function middleware(request: NextRequest) {
   const esPublica = esSoloInvitados || esSiemprePublica;
   const esRutaOnboarding = pathname.startsWith("/onboarding");
   const esRutaSuperadmin = pathname.startsWith("/superadmin");
+  const esRutaCuenta = RUTAS_CUENTA.some((path) => pathname.startsWith(path));
 
   // Sin sesión + ruta protegida → login, conservando a dónde iba (BR-01/BR-02:
   // ninguna ruta protegida se sirve sin que el usuario esté autenticado en un tenant).
@@ -37,42 +32,39 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Onboarding obligatorio y bloqueo de tenant suspendido: una sola
-  // consulta liviana trae ambos datos — solo cuando aplica, nunca en
-  // rutas públicas ni dentro del propio /onboarding.
-  if (user && !esPublica && !esRutaOnboarding && !esRutaSuperadmin) {
-    const { data: membership } = await supabase
+  // Una sola consulta liviana trae rol, tenant y suscripción; el orden
+  // de decisión (suspensión → suscripción → rol → onboarding) vive en
+  // @gateflow/auth (acceso.ts). También cubre /onboarding: con el trial
+  // vencido el asistente no se puede usar. No aplica en rutas públicas,
+  // /superadmin (su layout exige super_admin), /suscripcion ni
+  // /seleccionar-residencial (las páginas deciden con la misma lógica:
+  // sin bucles). El residencial es el de la cookie gf_tenant, validada
+  // contra las membresías activas; nunca una fila arbitraria.
+  // Falla cerrado: si la consulta falla o la membresía no se puede leer
+  // completa, no se deja pasar a la ruta protegida.
+  if (user && !esPublica && !esRutaSuperadmin && !esRutaCuenta) {
+    const { data: filas, error } = await supabase
       .from("user_tenants")
-      .select("tenants(onboarding_completado, estado_servicio)")
+      .select(SELECT_MEMBRESIA_PANEL)
       .eq("user_id", user.id)
-      .eq("activo", true)
-      .limit(1)
-      .maybeSingle();
+      .eq("activo", true);
 
-    const tenantData = membership?.tenants as unknown as { onboarding_completado: boolean; estado_servicio: string } | null;
-
-    // RIESGO 3 (PERMISSIONS.md): antes, "suspendido" era solo
-    // informativo — un residencial suspendido seguía operando con
-    // normalidad. Ahora se bloquea de verdad, salvo para super_admin
-    // (que necesita poder entrar como soporte a un tenant suspendido
-    // para resolver el motivo de la suspensión).
-    if (tenantData?.estado_servicio === "suspendido") {
-      const { data: rolReal } = await supabase
-        .from("user_tenants")
-        .select("roles(clave)")
-        .eq("user_id", user.id)
-        .eq("activo", true)
-        .limit(1)
-        .maybeSingle();
-      const claveRol = (rolReal?.roles as unknown as { clave: string } | null)?.clave;
-
-      if (claveRol !== "super_admin") {
-        return NextResponse.redirect(new URL("/residencial-suspendido", request.url));
-      }
+    if (error) {
+      console.error("[GateFlow] middleware: no se pudo leer user_tenants:", { code: error.code, message: error.message });
     }
 
-    if (tenantData && tenantData.onboarding_completado === false) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
+    // Solo super_admin y admin_residencial usan este panel. Un guardia
+    // activo va a la app Guard (URL absoluta); cualquier otro caso va a
+    // /sin-acceso (ver lib/acceso-panel.ts).
+    const { decision } = resultadoPanel(error, filas, request.cookies.get(COOKIE_TENANT)?.value);
+    const destino = destinoDeDecision(decision);
+    if (destino && !(destino === "/onboarding" && esRutaOnboarding)) {
+      const redireccion = NextResponse.redirect(new URL(destino, request.url));
+      // gf_tenant sin membresía activa: falla cerrado y se borra.
+      if (decision.tipo === "seleccionar_residencial" && decision.limpiarCookie) {
+        redireccion.cookies.delete(COOKIE_TENANT);
+      }
+      return redireccion;
     }
   }
 
@@ -83,8 +75,10 @@ export const config = {
   matcher: [
     /*
      * Aplica a todas las rutas excepto assets estáticos y archivos internos
-     * de Next.js, para no interceptar el propio bundle de la app.
+     * de Next.js, para no interceptar el propio bundle de la app, y los
+     * webhooks de billing (lib/rutas-publicas.ts, RUTA_WEBHOOKS_BILLING):
+     * los llama el proveedor sin sesión y se autentican por firma.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/billing/webhook/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

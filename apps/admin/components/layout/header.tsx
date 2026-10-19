@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 import type { SessionContext } from "@gateflow/types";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@gateflow/ui";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ export function Header({ session }: { session: SessionContext }) {
 
   async function handleSignOut() {
     const supabase = createBrowserSupabaseClient();
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
     router.replace("/login");
     router.refresh();
@@ -45,9 +47,11 @@ export function Header({ session }: { session: SessionContext }) {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
-            <div className="text-right">
-              <p className="text-sm font-medium leading-tight">{session.user.nombreCompleto}</p>
+          <button className="flex min-w-0 shrink-0 items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted" aria-label={`Cuenta de ${session.user.nombreCompleto}`}>
+            {/* En celular solo el avatar: un nombre largo (o un correo sin
+                espacios) no puede tapar el botón del menú. */}
+            <div className="hidden min-w-0 text-right sm:block">
+              <p className="max-w-[14rem] truncate text-sm font-medium leading-tight">{session.user.nombreCompleto}</p>
               <p className="text-xs leading-tight text-muted-foreground">{ROLE_LABELS[session.role]}</p>
             </div>
             <Avatar>

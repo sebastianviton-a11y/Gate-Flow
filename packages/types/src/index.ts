@@ -39,6 +39,12 @@ export interface Tenant {
   /** Toda tenant pertenece a una empresa desde la migración de
    * empresas — obligatorio a nivel de base de datos, no opcional. */
   empresaId: string;
+  /** País del residencial (MX/AR): define el código de país de los
+   * teléfonos (WhatsApp) y el proveedor de cobro. */
+  pais?: string | null;
+  /** Zona horaria IANA del residencial (tenants.timezone): en ella se
+   * muestran todas las fechas y se define qué es "hoy". */
+  timezone?: string | null;
 }
 
 /**
@@ -86,14 +92,6 @@ export interface SessionContext {
   role: RoleKey;
   /** Tenants adicionales a los que el usuario pertenece, para el selector de tenant. */
   availableTenants: Tenant[];
-  /**
-   * true si esta sesión es un fallback de demostración (Sprint 01), no una
-   * resolución real contra `user_tenants`. Debe ser visible en la UI —
-   * nunca ocultarse — hasta que se elimine en Sprint 02.
-   */
-  isDemo: boolean;
-  /** Motivo del fallback, solo presente cuando isDemo === true. */
-  demoReason?: "schema_not_migrated" | "no_membership_row" | "unexpected_error";
   /**
    * "Entrar como soporte": true cuando un super_admin está viendo el
    * panel de OTRO residencial bajo su propia identidad — nunca se crea
@@ -164,6 +162,9 @@ export interface Paquete {
   residenteNombre?: string | null;
   residenteTelefono?: string | null;
   contactoTelefono?: string | null;
+  /** A quién avisó la guardia (sin cuenta: contacto o persona aprobada). */
+  destinatarioNombre?: string | null;
+  destinatarioTelefono?: string | null;
   remitente?: string | null;
   empresaPaqueteria?: string | null;
   estado: EstadoPaquete;
@@ -228,6 +229,8 @@ export interface RegistrarPaqueteInput {
    * (caso común: contacto importado sin cuenta de Auth todavía). */
   destinatarioNombre?: string | null;
   destinatarioTelefono?: string | null;
+  /** Persona de residentes_unidades elegida (misma vivienda); null si es el contacto. */
+  destinatarioResidenteId?: string | null;
 }
 
 export interface EntregarPaqueteInput {
@@ -244,6 +247,8 @@ export interface UnidadConResidentes {
   id: string;
   identificador: string;
   residentes: { id: string; nombreCompleto: string }[];
+  /** Personas sin cuenta aprobadas para la vivienda (destinatarios posibles). */
+  adicionales?: { id: string; nombre: string; telefono: string }[];
   contactoNombre?: string | null;
   contactoTelefono?: string | null;
 }
@@ -291,3 +296,41 @@ export interface NavItem {
   /** Roles que pueden ver este ítem. Vacío = visible para todos los roles autenticados. */
   roles?: RoleKey[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Suscripción (migración 20261006000000_registro_trial)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type EstadoSuscripcion = "trialing" | "active" | "past_due" | "canceled" | "expired";
+export type OrigenSuscripcion = "registro_publico" | "alta_manual";
+
+/** Una fila por residencial (suscripciones.tenant_id es único). Los
+ * residenciales dados de alta a mano quedan active + alta_manual sin
+ * fechas; los de /registro empiezan trialing con 30 días. */
+export interface Suscripcion {
+  id: string;
+  tenantId: string;
+  estado: EstadoSuscripcion;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  viviendasDeclaradas: number | null;
+  origen: OrigenSuscripcion;
+  /** Billing (migración 20261008100000). null en altas manuales y trials. */
+  plan: "hasta-50" | "hasta-150" | null;
+  provider: "stripe" | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  /** Inicio del impago (solo past_due): base de los 7 días de gracia. */
+  impagoDesde: string | null;
+  /** Hay cliente en el proveedor: habilita "Administrar suscripción". */
+  tieneClienteProveedor: boolean;
+}
+
+export {
+  ZONA_HORARIA_RESPALDO,
+  esZonaHorariaValida,
+  resolverZonaHoraria,
+  claveDiaLocal,
+  sumarDias,
+  inicioDiaLocal,
+} from "./zona-horaria";

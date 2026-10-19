@@ -7,6 +7,7 @@ import { buscarPaquetes, entregarPaquete, guardarFirmaEntrega, listarIncidencias
 import type { Paquete } from "@gateflow/types";
 import { Button, Input, EstadoBadge, ejecutarConTimeout, obtenerMensajeErrorConTimeout } from "@gateflow/ui";
 import { OperationalHeader } from "@/components/operational-header";
+import { GuiaGuard } from "@/components/ayuda-guard";
 import { SignaturePad } from "@/components/signature-pad";
 import { useGuardSession } from "@/components/session-provider";
 
@@ -133,13 +134,14 @@ export default function DeliverPackagePage() {
       <OperationalHeader title="Entregar paquete" />
 
       <div className="flex-1 space-y-4 p-4 pb-28">
+        <GuiaGuard clave="entregar" />
         {!seleccionado ? (
           <>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
-                placeholder="Unidad, nombre o código GateFlow…"
+                placeholder="Dirección, nombre o código GateFlow…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-14 pl-11 text-lg"

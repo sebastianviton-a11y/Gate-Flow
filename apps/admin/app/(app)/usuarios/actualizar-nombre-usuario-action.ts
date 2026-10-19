@@ -2,6 +2,7 @@
 
 import { getSessionContext } from "@gateflow/auth";
 import { createServiceRoleClient } from "@gateflow/supabase";
+import { MENSAJE_SERVICIO_INACTIVO, residencialPuedeOperar } from "@/lib/operacion";
 
 export interface ActualizarNombreUsuarioInput {
   userId: string;
@@ -21,6 +22,12 @@ export async function actualizarNombreUsuario(input: ActualizarNombreUsuarioInpu
   const session = await getSessionContext();
   if (!session || (session.role !== "admin_residencial" && session.role !== "super_admin")) {
     return { ok: false, mensaje: "No tienes permiso para editar usuarios." };
+  }
+
+  // Escribe con la clave de servicio (sin RLS): el bloqueo por trial
+  // vencido / suscripción inactiva se verifica aquí.
+  if (!(await residencialPuedeOperar())) {
+    return { ok: false, mensaje: MENSAJE_SERVICIO_INACTIVO };
   }
 
   const nombreLimpio = input.nombreCompleto.trim();

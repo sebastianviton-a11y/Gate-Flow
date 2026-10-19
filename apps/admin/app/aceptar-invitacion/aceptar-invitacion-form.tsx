@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
-import { Button, PasswordInput, Label, GateFlowLogo, DebugConsole } from "@gateflow/ui";
+import { Button, PasswordInput, Label, GateFlowLogo, WHATSAPP_SOPORTE_VISIBLE, enlaceWhatsAppSoporte } from "@gateflow/ui";
 import { establecerPasswordInvitado } from "../establecer-password-action";
+import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
+import { hrefDocumento, nombrePais } from "@/lib/legal/documentos";
+import { reintentable, type PaisInvitacion } from "@/lib/legal/pais-invitacion";
+import { MENSAJES_ACEPTACION, type DocumentoAceptable } from "@/lib/legal/aceptacion";
+import { aceptarDocumentosDeLaInvitacion, documentosDeLaInvitacion, paisDeLaInvitacion } from "./actions";
 
 type Estado = "verificando" | "lista" | "invalida" | "enviando" | "error";
 
@@ -19,20 +25,43 @@ export function AceptarInvitacionForm() {
   const [confirmarPassword, setConfirmarPassword] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // País de los documentos legales: el del residencial de la invitación,
+  // decidido en el servidor (actions.ts). null mientras se consulta; sin
+  // país no hay enlace ni se puede aceptar (nunca se supone México).
+  const [paisLegal, setPaisLegal] = useState<PaisInvitacion | null>(null);
+  // Versiones vigentes del país: las que se muestran son las que se aceptan.
+  const [documentos, setDocumentos] = useState<DocumentoAceptable[]>([]);
+  const terminos = documentos.find((d) => d.clave === "terminos");
+  const privacidad = documentos.find((d) => d.clave === "privacidad");
+
+  async function cargarDocumentos(pais: PaisInvitacion) {
+    if (pais.estado !== "ok") return;
+    try {
+      setDocumentos((await documentosDeLaInvitacion(pais.pais)) ?? []);
+    } catch {
+      setDocumentos([]);
+    }
+  }
+
+  async function cargarPaisLegal() {
+    setPaisLegal(null);
+    let resultado: PaisInvitacion;
+    try {
+      resultado = await paisDeLaInvitacion();
+    } catch {
+      resultado = { estado: "indeterminado", motivo: "error" };
+    }
+    await cargarDocumentos(resultado);
+    setPaisLegal(resultado);
+  }
 
   useEffect(() => {
     async function verificarSesion() {
-      console.log("STEP 1: aceptar-invitacion montado. URL completa:", window.location.href);
-      console.log("STEP 1b: hash presente:", window.location.hash ? "SÍ" : "NO", "| search presente:", window.location.search ? "SÍ" : "NO");
-
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
-      console.log("STEP 2: ?code= en la URL:", code ? `presente (${code.slice(0, 8)}...)` : "ausente");
 
       if (code) {
-        const { data: dataExchange, error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
-        console.log("STEP 2b: exchangeCodeForSession data:", JSON.stringify({ hasSession: !!dataExchange?.session, userId: dataExchange?.user?.id }));
-        console.log("STEP 2c: exchangeCodeForSession error:", errorCambio ? `${errorCambio.message} | status: ${errorCambio.status}` : "ninguno");
+        const { error: errorCambio } = await supabase.auth.exchangeCodeForSession(code);
         if (errorCambio) {
           console.error("[GateFlow] exchangeCodeForSession falló:", errorCambio.message, errorCambio.status);
           setEstado("invalida");
@@ -42,34 +71,24 @@ export function AceptarInvitacionForm() {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
-        console.log("STEP 2d: token en el fragmento ->", JSON.stringify({ hayAccessToken: !!accessToken, hayRefreshToken: !!refreshToken }));
 
         if (accessToken && refreshToken) {
-          const { data: dataSetSession, error: errorSetSession } = await supabase.auth.setSession({
+          const { error: errorSetSession } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          console.log(
-            "STEP 2e: setSession() forzado ->",
-            JSON.stringify({ userId: dataSetSession?.user?.id, email: dataSetSession?.user?.email, error: errorSetSession?.message }),
-          );
+          if (errorSetSession) console.error("[GateFlow] aceptar-invitacion: setSession falló:", errorSetSession.message, errorSetSession.status);
         }
       }
 
       const { data, error: errorSesion } = await supabase.auth.getSession();
-      console.log(
-        "STEP 3: getSession() ->",
-        JSON.stringify({
-          haySesion: !!data.session,
-          userId: data.session?.user?.id,
-          email: data.session?.user?.email,
-          expiresAt: data.session?.expires_at,
-        }),
-      );
+      // Sin tokens en la URL ni en la consola una vez leídos.
+      window.history.replaceState(null, "", window.location.pathname);
       if (errorSesion) {
         console.error("[GateFlow] getSession falló:", errorSesion.message, errorSesion.status);
       }
       setEstado(data.session ? "lista" : "invalida");
+      if (data.session) await cargarPaisLegal();
     }
     verificarSesion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -88,6 +107,10 @@ export function AceptarInvitacionForm() {
       setError("Las contraseñas no coinciden.");
       return;
     }
+    if (paisLegal?.estado !== "ok") {
+      setError("No pudimos confirmar el país de tu residencial, así que no podemos mostrarte los términos que te corresponden.");
+      return;
+    }
     if (!aceptaTerminos) {
       setError("Debes aceptar los términos y condiciones para continuar.");
       return;
@@ -96,14 +119,51 @@ export function AceptarInvitacionForm() {
     setEstado("enviando");
     setError(null);
 
-    const { data: sesionAntes } = await supabase.auth.getSession();
-    console.log(
-      "STEP 4: sesión justo antes de establecerPasswordInvitado ->",
-      JSON.stringify({ haySesion: !!sesionAntes.session, userId: sesionAntes.session?.user?.id, email: sesionAntes.session?.user?.email }),
-    );
+    // Aceptación ANTES de la contraseña (cambiarla cierra la sesión). La
+    // fecha y la evidencia las fija el servidor; si no se registra, no se
+    // continúa.
+    const aceptacion = await aceptarDocumentosDeLaInvitacion(documentos.map((d) => d.versionId)).catch(() => ({ ok: false as const, motivo: "error" as const }));
+    if (!aceptacion.ok) {
+      if (aceptacion.motivo === "actualizados") {
+        await cargarDocumentos(paisLegal);
+        setAceptaTerminos(false);
+        setError(MENSAJES_ACEPTACION.actualizados);
+      } else {
+        setError("No pudimos registrar tu aceptación de los términos. Inténtalo de nuevo.");
+      }
+      setEstado("lista");
+      return;
+    }
+
+    // Perfil y destino ANTES de la contraseña: Supabase Auth cierra todas
+    // las sesiones del usuario al cambiarla (admin.updateUserById), así
+    // que después ya no hay sesión para leer membresías ni guardar el
+    // nombre y la aceptación de términos.
+    const { data: userData } = await supabase.auth.getUser();
+    // Un guardia invitado inicia sesión en la app Guard, no en Admin.
+    // Con membresías previas se evalúan TODAS: si alguna es de Admin, va
+    // al login de Admin y después a /seleccionar-residencial.
+    let destino = { enGuard: false, url: "/login?password_created=1" };
+    if (userData.user) {
+      const { data: membresias, error: errorMembresia } = await supabase
+        .from("user_tenants")
+        .select(SELECT_MEMBRESIA_PANEL)
+        .eq("user_id", userData.user.id)
+        .eq("activo", true);
+      destino = destinoTrasAutenticar(errorMembresia, membresias ?? [], {
+        admin: "/login?password_created=1",
+        guard: "/login?password_created=1",
+      });
+    }
+    if (userData.user) {
+      const { error: errorPerfil } = await supabase
+        .from("users")
+        .update({ nombre_completo: nombreCompleto.trim() })
+        .eq("id", userData.user.id);
+      if (errorPerfil) console.error("[GateFlow] aceptar-invitacion: no se guardó el perfil:", errorPerfil.message);
+    }
 
     const resultado = await establecerPasswordInvitado(password);
-    console.log("STEP 5: resultado de establecerPasswordInvitado ->", JSON.stringify(resultado));
 
     if (!resultado.ok) {
       setError(resultado.mensaje);
@@ -111,21 +171,13 @@ export function AceptarInvitacionForm() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    console.log("STEP 6: getUser() después del éxito ->", JSON.stringify({ userId: userData.user?.id, email: userData.user?.email }));
-    if (userData.user) {
-      const { error: errorPerfil } = await supabase
-        .from("users")
-        .update({ nombre_completo: nombreCompleto.trim(), terminos_aceptados_en: new Date().toISOString() })
-        .eq("id", userData.user.id);
-      console.log("STEP 6b: update perfil (nombre + términos) error:", errorPerfil ? errorPerfil.message : "ninguno");
-    }
-
+    await borrarResidencialSeleccionado();
     await supabase.auth.signOut();
-    const { data: sesionDespues } = await supabase.auth.getSession();
-    console.log("STEP 7: signOut() ejecutado. Sesión residual:", sesionDespues.session ? "TODAVÍA HAY SESIÓN (inesperado)" : "ninguna, correcto");
-    console.log("STEP 7b: redirigiendo a /login?password_created=1");
-    router.replace("/login?password_created=1");
+    if (destino.enGuard) {
+      window.location.assign(destino.url);
+      return;
+    }
+    router.replace(destino.url);
     router.refresh();
   }
 
@@ -133,7 +185,6 @@ export function AceptarInvitacionForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink-950">
         <Loader2 className="h-6 w-6 animate-spin text-white/60" />
-        <DebugConsole />
       </div>
     );
   }
@@ -146,7 +197,6 @@ export function AceptarInvitacionForm() {
           <p className="font-display text-lg font-semibold">Este enlace ya no es válido</p>
           <p className="text-sm text-white/60">Puede haber expirado o ya haberse usado. Solicita una nueva invitación.</p>
         </div>
-        <DebugConsole />
       </div>
     );
   }
@@ -184,15 +234,63 @@ export function AceptarInvitacionForm() {
           </div>
 
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={aceptaTerminos} onChange={(e) => setAceptaTerminos(e.target.checked)} className="mt-0.5 h-4 w-4" />
+            <input
+              type="checkbox"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              disabled={paisLegal?.estado !== "ok"}
+              className="mt-0.5 h-4 w-4"
+            />
             <span>
               Acepto los{" "}
-              <a href="/terminos" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                términos y condiciones
-              </a>{" "}
-              de GateFlow.
+              {paisLegal?.estado === "ok" ? (
+                <a
+                  href={terminos ? hrefDocumento("terminos", paisLegal.pais, terminos.versionId) : hrefDocumento("terminos", paisLegal.pais)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
+                  términos y condiciones
+                </a>
+              ) : (
+                "términos y condiciones"
+              )}{" "}
+              de GateFlow{paisLegal?.estado === "ok" ? ` (${nombrePais(paisLegal.pais)})` : ""}
+              {paisLegal?.estado === "ok" && privacidad && (
+                <>
+                  {" "}y he leído el{" "}
+                  <a href={hrefDocumento("privacidad", paisLegal.pais, privacidad.versionId)} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    Aviso de Privacidad
+                  </a>
+                </>
+              )}
+              .
+              {paisLegal === null && <Loader2 className="ml-1 inline h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Cargando" />}
             </span>
           </label>
+          {paisLegal?.estado === "indeterminado" && (
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn-foreground" data-testid="invitacion-pais-indeterminado">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">No pudimos confirmar el país de tu residencial.</p>
+                <p className="mt-1">
+                  Sin ese dato no podemos mostrarte los términos que te corresponden, así que todavía no puedes continuar.{" "}
+                  {reintentable(paisLegal.motivo) ? (
+                    <button type="button" onClick={cargarPaisLegal} className="font-medium text-primary underline">
+                      Reintentar
+                    </button>
+                  ) : (
+                    "Pide a quien te invitó que revise tu invitación"
+                  )}
+                  . Si el problema sigue, escríbenos por WhatsApp al{" "}
+                  <a href={enlaceWhatsAppSoporte()} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline">
+                    {WHATSAPP_SOPORTE_VISIBLE}
+                  </a>
+                  .
+                </p>
+              </div>
+            </div>
+          )}
 
           {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 
@@ -201,7 +299,6 @@ export function AceptarInvitacionForm() {
           </Button>
         </div>
       </div>
-      <DebugConsole />
     </div>
   );
 }

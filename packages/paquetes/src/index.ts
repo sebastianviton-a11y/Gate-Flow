@@ -13,6 +13,8 @@ export {
   obtenerPorUbicacion,
   obtenerCatalogos,
   obtenerVolumen30Dias,
+  agruparVolumenPorDia,
+  limitesDiaLocal,
   obtenerActividadReciente,
   listarUnidades,
   obtenerFirmaEntrega,
@@ -102,8 +104,11 @@ export {
   actualizarResidencial,
   cambiarEstadoServicio,
   actualizarPlanResidencial,
-  eliminarResidencial,
   obtenerResidencialDetalle,
+  obtenerSuscripcionResidencial,
+  superadminExtenderTrial,
+  superadminActivarSuscripcionManual,
+  superadminExtenderSuscripcionManual,
   ESTADO_SERVICIO_LABEL,
   PLAN_LABEL,
   type MetricasGlobales,
@@ -112,6 +117,8 @@ export {
   type ResidencialInput,
   type EstadoServicio,
   type PlanClave,
+  type SuscripcionSuperAdmin,
+  type ResultadoRpcSuscripcion,
 } from "./superadmin";
 
 export {
@@ -126,7 +133,8 @@ export {
   type EmpresaInput,
 } from "./empresas";
 
-export { listarUsuariosTenant, ROLES_INVITABLES, type UsuarioTenant } from "./usuarios";
+export { listarUsuariosTenant, ROLES_INVITABLES, puedeInvitar, type UsuarioTenant } from "./usuarios";
+export { situacionSuscripcion, diasRestantesTrial, obtenerSuscripcion, type SituacionSuscripcion } from "./suscripciones";
 
 export {
   buscarGrupoAbiertoDeUnidad,
@@ -151,3 +159,57 @@ export {
   type IncidenciaConFotos,
   type FotoIncidencia,
 } from "./incidencias-historial";
+
+export {
+  validarDatosResidente,
+  validarWhatsApp,
+  errorCampoResidente,
+  formatearWhatsApp,
+  telefonoParaMostrar,
+  limpiarEspacios,
+  esPaisResidencial,
+  destinatariosDeVivienda,
+  idPersonaDestinataria,
+  LIMITES_RESIDENTE,
+  PREFIJO_WHATSAPP,
+  EJEMPLO_WHATSAPP,
+  AYUDA_WHATSAPP,
+  type PaisResidencial,
+  type CampoResidente,
+  type DatosResidente,
+  type ValidacionResidente,
+  type ResultadoWhatsApp,
+  type DestinatarioVivienda,
+} from "./residentes-registro";
+
+export {
+  obtenerEnlaceResidentes,
+  urlEnlaceResidentes,
+  urlCompartirEnlaceWhatsApp,
+  TEXTO_COMPARTIR_ENLACE,
+  generarEnlaceResidentes,
+  desactivarEnlaceResidentes,
+  listarSolicitudesResidentes,
+  aprobarSolicitudResidente,
+  rechazarSolicitudResidente,
+  listarResidentesAdicionales,
+  actualizarResidenteAdicional,
+  quitarResidenteAdicional,
+  type EnlaceResidentes,
+  type SolicitudResidente,
+  type CoincidenciaResidente,
+  type TipoCoincidencia,
+  type ResultadoAprobacion,
+  type MotivoNoAprobada,
+  type MotivoRechazo,
+  type ResidenteAdicional,
+} from "./residentes-enlace";
+export {
+  obtenerConteosConfiguracion,
+  progresoConfiguracion,
+  pasoInicialAsistente,
+  type ConteosConfiguracion,
+  type ProgresoConfiguracion,
+  type PasoConfiguracion,
+  type ClavePasoConfiguracion,
+} from "./progreso";

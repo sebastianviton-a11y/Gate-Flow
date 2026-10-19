@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Paquete, PaqueteFiltros, PaqueteHistorialEvento, UnidadConResidentes, FotografiaPaquete } from "@gateflow/types";
+import { claveDiaLocal, inicioDiaLocal, sumarDias } from "@gateflow/types";
 import { mapPaqueteRow, mapPaqueteResumenRow, mapHistorialRow, type PaqueteRow, type PaqueteResumenRow, type HistorialRow } from "./mappers";
 import { listarUbicacionesActivas } from "./ubicaciones";
 
@@ -9,20 +10,28 @@ import { listarUbicacionesActivas } from "./ubicaciones";
  * distintas hacia `users` usando el nombre de constraint que Postgres
  * genera automáticamente (`paquetes_<columna>_fkey`) — ver advertencia
  * en mappers.ts si esto no resuelve tal cual contra el proyecto real.
+ *
+ * `unidades` y `ubicaciones` también llevan su FK explícita: la
+ * integridad multitenant (20261007100000) añadió FKs compuestas
+ * (x_id, tenant_id) junto a las simples y, con dos caminos, PostgREST
+ * responde 300 / PGRST201 a un embed sin FK. Se usan las simples, que
+ * existen antes y después de esa migración (contrato_selects.py lo
+ * comprueba).
  */
 const PAQUETE_SELECT = `
   id, codigo_gateflow, tenant_id, unidad_id, residente_id, remitente,
   empresa_paqueteria_id, estado_id, tamano_id, prioridad_id, ubicacion_id,
   numero_guia, notas, recibido_por, entregado_por, entregado_a_nombre,
   fecha_recepcion, fecha_entrega, pickup_token, grupo_entrega_id,
-  unidades ( identificador, contacto_telefono ),
+  destinatario_nombre, destinatario_telefono,
+  unidades!paquetes_unidad_id_fkey ( identificador, contacto_telefono ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo, telefono ),
   recibido:users!paquetes_recibido_por_fkey ( nombre_completo ),
   entregado:users!paquetes_entregado_por_fkey ( nombre_completo ),
   empresas_paqueteria ( nombre ),
   tamanos_paquete ( clave ),
   prioridades_paquete ( clave ),
-  ubicaciones ( nombre )
+  ubicaciones!paquetes_ubicacion_id_fkey ( nombre )
 `;
 
 /**
@@ -36,9 +45,9 @@ const PAQUETE_SELECT = `
  */
 const PAQUETE_RESUMEN_SELECT = `
   id, codigo_gateflow, tenant_id, unidad_id, residente_id, estado_id, ubicacion_id, fecha_recepcion,
-  unidades ( identificador ),
+  unidades!paquetes_unidad_id_fkey ( identificador ),
   residente:users!paquetes_residente_id_fkey ( nombre_completo ),
-  ubicaciones ( nombre )
+  ubicaciones!paquetes_ubicacion_id_fkey ( nombre )
 `;
 
 export interface ListarPaquetesResultado {
@@ -331,7 +340,43 @@ export async function obtenerHistorial(supabase: SupabaseClient, paqueteId: stri
 }
 
 /** Búsqueda de unidad para el paso de selección al registrar un paquete
- * (apps/guard). Tolerante a coincidencia parcial del identificador. */
+ * (apps/guard). Tolerante a coincidencia parcial de la dirección. Trae
+ * también a las personas adicionales de cada vivienda (sin cuenta,
+ * aprobadas desde el enlace de residentes): son destinatarios posibles.
+ * Las solicitudes pendientes nunca aparecen (la guardia no las lee). */
+const SELECT_UNIDAD_CON_RESIDENTES = `id, identificador, contacto_nombre, contacto_telefono,
+  residentes_unidades!residentes_unidades_unidad_id_fkey ( id, fecha_fin, origen, nombre, apellido, telefono, users ( id, nombre_completo ) )`;
+
+type FilaUnidadConResidentes = {
+  id: string;
+  identificador: string;
+  contacto_nombre: string | null;
+  contacto_telefono: string | null;
+  residentes_unidades: Array<{
+    id?: string;
+    fecha_fin: string | null;
+    origen?: string | null;
+    nombre?: string | null;
+    apellido?: string | null;
+    telefono?: string | null;
+    users: { id: string; nombre_completo: string } | null;
+  }>;
+};
+
+function mapUnidadConResidentes(u: FilaUnidadConResidentes): UnidadConResidentes {
+  const vigentes = u.residentes_unidades.filter((r) => !r.fecha_fin);
+  return {
+    id: u.id,
+    identificador: u.identificador,
+    residentes: vigentes.filter((r) => r.users).map((r) => ({ id: r.users!.id, nombreCompleto: r.users!.nombre_completo })),
+    adicionales: vigentes
+      .filter((r) => r.origen === "enlace" && r.id && r.telefono)
+      .map((r) => ({ id: r.id!, nombre: `${r.nombre ?? ""} ${r.apellido ?? ""}`.trim(), telefono: r.telefono! })),
+    contactoNombre: u.contacto_nombre,
+    contactoTelefono: u.contacto_telefono,
+  };
+}
+
 export async function buscarUnidades(
   supabase: SupabaseClient,
   tenantId: string,
@@ -340,34 +385,43 @@ export async function buscarUnidades(
   const texto_ = texto.trim();
   const { data, error } = await supabase
     .from("unidades")
-    .select(
-      "id, identificador, contacto_nombre, contacto_telefono, residentes_unidades ( fecha_fin, users ( id, nombre_completo ) )",
-    )
+    .select(SELECT_UNIDAD_CON_RESIDENTES)
     .eq("tenant_id", tenantId)
-    // Busca por identificador de unidad O por nombre del contacto informal
-    // — "buscar residente" y "buscar unidad" son, para el guardia, la
-    // misma caja de búsqueda (no dos pantallas distintas).
+    // Busca por dirección O por nombre del contacto informal — "buscar
+    // residente" y "buscar unidad" son, para el guardia, la misma caja
+    // de búsqueda (no dos pantallas distintas).
     .or(`identificador.ilike.%${texto_}%,contacto_nombre.ilike.%${texto_}%`)
     .eq("activo", true)
     .limit(10);
 
   if (error) throw error;
+  const filas = (data ?? []) as unknown as FilaUnidadConResidentes[];
 
-  return ((data ?? []) as unknown as Array<{
-    id: string;
-    identificador: string;
-    contacto_nombre: string | null;
-    contacto_telefono: string | null;
-    residentes_unidades: Array<{ fecha_fin: string | null; users: { id: string; nombre_completo: string } | null }>;
-  }>).map((u) => ({
-    id: u.id,
-    identificador: u.identificador,
-    residentes: u.residentes_unidades
-      .filter((r) => !r.fecha_fin && r.users)
-      .map((r) => ({ id: r.users!.id, nombreCompleto: r.users!.nombre_completo })),
-    contactoNombre: u.contacto_nombre,
-    contactoTelefono: u.contacto_telefono,
-  }));
+  // También por el nombre de un residente adicional de la vivienda.
+  if (texto_ && filas.length < 10) {
+    const { data: porNombre, error: errorNombre } = await supabase
+      .from("residentes_unidades")
+      .select("unidad_id")
+      .eq("tenant_id", tenantId)
+      .eq("origen", "enlace")
+      .is("fecha_fin", null)
+      .or(`nombre.ilike.%${texto_}%,apellido.ilike.%${texto_}%`)
+      .limit(10);
+    if (errorNombre) throw errorNombre;
+    const faltan = [...new Set((porNombre ?? []).map((r) => r.unidad_id as string))].filter((id) => !filas.some((f) => f.id === id));
+    if (faltan.length > 0) {
+      const { data: extra, error: errorExtra } = await supabase
+        .from("unidades")
+        .select(SELECT_UNIDAD_CON_RESIDENTES)
+        .eq("tenant_id", tenantId)
+        .eq("activo", true)
+        .in("id", faltan.slice(0, 10 - filas.length));
+      if (errorExtra) throw errorExtra;
+      filas.push(...((extra ?? []) as unknown as FilaUnidadConResidentes[]));
+    }
+  }
+
+  return filas.map(mapUnidadConResidentes);
 }
 
 // ── Dashboard (apps/admin) — lee de las vistas de la migración Sprint 02 ──
@@ -380,27 +434,71 @@ export interface DashboardResumen {
   horasPromedioEntrega30d: number | null;
 }
 
-export async function obtenerResumenDashboard(supabase: SupabaseClient, tenantId: string): Promise<DashboardResumen> {
-  const { data, error } = await supabase
-    .from("v_dashboard_resumen")
-    .select("pendientes, recibidos_hoy, entregados_hoy, olvidados, horas_promedio_entrega_30d")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
+/** Límites [desde, hasta) del día local de `ahora` en la zona del residencial. */
+export function limitesDiaLocal(ahora: Date, zonaHoraria: string | null | undefined): { desde: string; hasta: string } {
+  const hoy = claveDiaLocal(ahora, zonaHoraria);
+  return {
+    desde: inicioDiaLocal(hoy, zonaHoraria).toISOString(),
+    hasta: inicioDiaLocal(sumarDias(hoy, 1), zonaHoraria).toISOString(),
+  };
+}
 
-  if (error) throw error;
+/**
+ * "Hoy" es el día local del residencial (`tenants.timezone`), no el día
+ * UTC: v_dashboard_resumen compara con CURRENT_DATE de la base (UTC), así
+ * que en Argentina un paquete de las 21:00 contaba para mañana. De la
+ * vista se toman solo los datos que no dependen del día (pendientes,
+ * olvidados, promedio de 30 días); recibidos y entregados de hoy se
+ * cuentan aquí con los mismos criterios que la vista (recibido: estado
+ * `recibido` y recepción hoy; entregado: estado `entregado` y entrega
+ * hoy) y los límites del día local. La base no cambia.
+ */
+export async function obtenerResumenDashboard(
+  supabase: SupabaseClient,
+  tenantId: string,
+  zonaHoraria: string | null | undefined,
+  ahora: Date = new Date(),
+): Promise<DashboardResumen> {
+  const { desde, hasta } = limitesDiaLocal(ahora, zonaHoraria);
+  const [vista, recibidos, entregados] = await Promise.all([
+    supabase
+      .from("v_dashboard_resumen")
+      .select("pendientes, olvidados, horas_promedio_entrega_30d")
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
+    supabase
+      .from("paquetes")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("estado_id", "recibido")
+      .gte("fecha_recepcion", desde)
+      .lt("fecha_recepcion", hasta),
+    supabase
+      .from("paquetes")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("estado_id", "entregado")
+      .gte("fecha_entrega", desde)
+      .lt("fecha_entrega", hasta),
+  ]);
+
+  if (vista.error) throw vista.error;
+  if (recibidos.error) throw recibidos.error;
+  if (entregados.error) throw entregados.error;
 
   return {
-    pendientes: data?.pendientes ?? 0,
-    recibidosHoy: data?.recibidos_hoy ?? 0,
-    entregadosHoy: data?.entregados_hoy ?? 0,
-    olvidados: data?.olvidados ?? 0,
-    horasPromedioEntrega30d: data?.horas_promedio_entrega_30d ?? null,
+    pendientes: vista.data?.pendientes ?? 0,
+    recibidosHoy: recibidos.count ?? 0,
+    entregadosHoy: entregados.count ?? 0,
+    olvidados: vista.data?.olvidados ?? 0,
+    horasPromedioEntrega30d: vista.data?.horas_promedio_entrega_30d ?? null,
   };
 }
 
 export interface UnidadListItem {
   id: string;
-  tipo: string;
+  /** Casa o departamento; null en las viviendas creadas sin tipo. */
+  tipo: string | null;
   identificador: string;
   contactoNombre: string | null;
   contactoTelefono: string | null;
@@ -515,24 +613,63 @@ export interface VolumenDiario {
   entregados: number;
 }
 
-/** Lee de la vista MATERIALIZADA (mv_dashboard_diario, migración
- * 20260713230300) — a diferencia de v_dashboard_resumen, esta sí
- * requiere refresh periódico (supabase/README.md). Si nunca se refrescó,
- * devuelve un array vacío en vez de fallar — el gráfico simplemente
- * queda vacío hasta el primer refresh, no rompe el dashboard. */
-export async function obtenerVolumen30Dias(supabase: SupabaseClient, tenantId: string): Promise<VolumenDiario[]> {
-  const desde = new Date();
-  desde.setDate(desde.getDate() - 30);
+export interface RecepcionParaVolumen {
+  fecha_recepcion: string;
+  estado_id: string;
+}
 
-  const { data, error } = await supabase
-    .from("mv_dashboard_diario")
-    .select("fecha, recibidos_total, entregados")
-    .eq("tenant_id", tenantId)
-    .gte("fecha", desde.toISOString().slice(0, 10))
-    .order("fecha", { ascending: true });
+/**
+ * Agrupa por el día local del residencial. Mismos criterios que la vista
+ * mv_dashboard_diario (recibidos = todos los recibidos ese día;
+ * entregados = los de ese día que hoy están entregados), pero con el día
+ * de `zonaHoraria`, no el de UTC. Solo aparecen días con paquetes.
+ */
+export function agruparVolumenPorDia(filas: RecepcionParaVolumen[], zonaHoraria: string | null | undefined): VolumenDiario[] {
+  const porDia = new Map<string, VolumenDiario>();
+  for (const f of filas) {
+    const fecha = claveDiaLocal(f.fecha_recepcion, zonaHoraria);
+    const dia = porDia.get(fecha) ?? { fecha, recibidosTotal: 0, entregados: 0 };
+    dia.recibidosTotal += 1;
+    if (f.estado_id === "entregado") dia.entregados += 1;
+    porDia.set(fecha, dia);
+  }
+  return [...porDia.values()].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+}
 
-  if (error) return []; // ver nota arriba — vista sin refrescar no debe romper el dashboard
-  return (data ?? []).map((d) => ({ fecha: d.fecha, recibidosTotal: d.recibidos_total, entregados: d.entregados }));
+const VOLUMEN_POR_PAGINA = 1000;
+const VOLUMEN_MAX_PAGINAS = 50;
+
+/**
+ * Últimos 30 días (más hoy) por día local del residencial. Antes leía la
+ * vista materializada mv_dashboard_diario, que agrupa por día UTC y no
+ * conoce la zona del residencial; ahora se agrupa aquí, sobre las
+ * recepciones del periodo (con RLS, en páginas). La vista no se toca.
+ * Si la consulta falla devuelve [] en vez de romper el dashboard: el
+ * gráfico queda vacío.
+ */
+export async function obtenerVolumen30Dias(
+  supabase: SupabaseClient,
+  tenantId: string,
+  zonaHoraria: string | null | undefined,
+  ahora: Date = new Date(),
+): Promise<VolumenDiario[]> {
+  const desde = inicioDiaLocal(sumarDias(claveDiaLocal(ahora, zonaHoraria), -30), zonaHoraria).toISOString();
+  const filas: RecepcionParaVolumen[] = [];
+  for (let pagina = 0; pagina < VOLUMEN_MAX_PAGINAS; pagina++) {
+    const inicio = pagina * VOLUMEN_POR_PAGINA;
+    const { data, error } = await supabase
+      .from("paquetes")
+      .select("fecha_recepcion, estado_id")
+      .eq("tenant_id", tenantId)
+      .gte("fecha_recepcion", desde)
+      .order("fecha_recepcion", { ascending: true })
+      .range(inicio, inicio + VOLUMEN_POR_PAGINA - 1);
+    if (error) return [];
+    const lote = (data ?? []) as RecepcionParaVolumen[];
+    filas.push(...lote);
+    if (lote.length < VOLUMEN_POR_PAGINA) break;
+  }
+  return agruparVolumenPorDia(filas, zonaHoraria);
 }
 
 export interface ActividadRecienteItem {
@@ -542,15 +679,24 @@ export interface ActividadRecienteItem {
   creadoEn: string;
 }
 
+/** Widget del dashboard: si la consulta falla, el dashboard se muestra
+ * sin actividad reciente en vez de caer entero (mismo criterio que
+ * obtenerVolumen30Dias). La tolerancia es SOLO de este widget: el resto
+ * de consultas sigue lanzando el error. */
 export async function obtenerActividadReciente(supabase: SupabaseClient, tenantId: string): Promise<ActividadRecienteItem[]> {
   const { data, error } = await supabase
     .from("paquete_historial")
-    .select("id, estado_nuevo_id, created_at, paquetes!inner ( codigo_gateflow, tenant_id, unidades ( identificador ) )")
+    .select(
+      "id, estado_nuevo_id, created_at, paquetes!paquete_historial_paquete_id_fkey!inner ( codigo_gateflow, tenant_id, unidades!paquetes_unidad_id_fkey ( identificador ) )",
+    )
     .eq("paquetes.tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(8);
 
-  if (error) throw error;
+  if (error) {
+    console.error("[GateFlow] Actividad reciente no disponible:", error.code ?? "", error.message);
+    return [];
+  }
 
   return ((data ?? []) as unknown as Array<{
     id: string;

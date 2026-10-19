@@ -7,7 +7,7 @@ export {
   ErrorTiempoAgotado,
   formatearFecha,
   formatearFechaHora,
-  ZONA_HORARIA_GATEFLOW,
+  formatearClaveDia,
 } from "./utils";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export { Card, CardHeader, CardTitle, CardContent } from "./card";
@@ -32,3 +32,14 @@ export { EstadoBadge } from "./estado-badge";
 export { GateFlowLogo } from "./gateflow-logo";
 export { PasswordInput } from "./password-input";
 export { DebugConsole } from "./debug-console";
+export { AyudaCampo } from "./ayuda/ayuda-campo";
+export { GuiaPrimeraVisita, type ContenidoGuia } from "./ayuda/guia-primera-visita";
+export {
+  almacenDelNavegador,
+  claveGuiaVista,
+  clavePrimerosPasosOculto,
+  guardarMarca,
+  leerMarca,
+  type Almacen,
+} from "./ayuda/preferencias";
+export { WHATSAPP_SOPORTE_VISIBLE, MENSAJE_AYUDA, MENSAJE_CONTRATAR, MENSAJE_DEMO, MENSAJE_MAS_DE_150, enlaceWhatsAppSoporte } from "./ayuda/contacto";

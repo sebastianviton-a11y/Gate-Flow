@@ -231,24 +231,29 @@ export async function crearResidencial(supabase: SupabaseClient, input: Residenc
   return { id: data.id };
 }
 
+// Las columnas de plataforma de public.tenants (estado del servicio,
+// plan comercial, contacto y notas internas, etc.) no se pueden
+// actualizar con un UPDATE de authenticated (migración
+// 20261008000000_tenants_columnas_protegidas): Super Admin las cambia
+// con funciones SECURITY DEFINER que validan is_super_admin() en la
+// base de datos y no dependen de tener membresía en el residencial.
+
 export async function actualizarResidencial(supabase: SupabaseClient, id: string, input: ResidencialInput): Promise<void> {
-  const { error } = await supabase
-    .from("tenants")
-    .update({
-      nombre: input.nombre.trim(),
-      ciudad: input.ciudad?.trim() || null,
-      estado_geografico: input.estadoGeografico?.trim() || null,
-      admin_contacto_nombre: input.adminContactoNombre?.trim() || null,
-      admin_contacto_email: input.adminContactoEmail?.trim() || null,
-      admin_contacto_telefono: input.adminContactoTelefono?.trim() || null,
-      observaciones: input.observaciones?.trim() || null,
-    })
-    .eq("id", id);
+  const { error } = await supabase.rpc("superadmin_actualizar_residencial", {
+    p_tenant_id: id,
+    p_nombre: input.nombre.trim(),
+    p_ciudad: input.ciudad?.trim() || null,
+    p_estado_geografico: input.estadoGeografico?.trim() || null,
+    p_admin_contacto_nombre: input.adminContactoNombre?.trim() || null,
+    p_admin_contacto_email: input.adminContactoEmail?.trim() || null,
+    p_admin_contacto_telefono: input.adminContactoTelefono?.trim() || null,
+    p_observaciones: input.observaciones?.trim() || null,
+  });
   if (error) throw error;
 }
 
 export async function cambiarEstadoServicio(supabase: SupabaseClient, id: string, estado: EstadoServicio): Promise<void> {
-  const { error } = await supabase.from("tenants").update({ estado_servicio: estado }).eq("id", id);
+  const { error } = await supabase.rpc("superadmin_cambiar_estado_servicio", { p_tenant_id: id, p_estado: estado });
   if (error) throw error;
 }
 
@@ -257,15 +262,13 @@ export async function actualizarPlanResidencial(
   id: string,
   input: { plan: PlanClave; precio?: number | null; fechaInicio?: string | null; fechaRenovacion?: string | null },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("tenants")
-    .update({
-      plan: input.plan,
-      plan_precio: input.precio ?? null,
-      plan_fecha_inicio: input.fechaInicio || null,
-      plan_fecha_renovacion: input.fechaRenovacion || null,
-    })
-    .eq("id", id);
+  const { error } = await supabase.rpc("superadmin_actualizar_plan_residencial", {
+    p_tenant_id: id,
+    p_plan: input.plan,
+    p_precio: input.precio ?? null,
+    p_fecha_inicio: input.fechaInicio || null,
+    p_fecha_renovacion: input.fechaRenovacion || null,
+  });
   if (error) throw error;
 }
 
@@ -273,13 +276,10 @@ export async function actualizarPlanResidencial(
  * unidades, usuarios vinculados, historial). La confirmación de "escribe
  * el nombre para confirmar" vive en la UI, no aquí — esta función no
  * vuelve a preguntar, asume que quien la llama ya confirmó. */
-export async function eliminarResidencial(supabase: SupabaseClient, id: string): Promise<void> {
-  const { error } = await supabase.from("tenants").delete().eq("id", id);
-  if (error) throw error;
-}
-
 export interface ResidencialDetalle extends ResidencialListItem {
   pais: string;
+  /** tenants.timezone: las fechas "hasta" de la suscripción son días de esta zona. */
+  timezone: string | null;
   planPrecio: number | null;
   planFechaInicio: string | null;
   adminContactoEmail: string | null;
@@ -291,7 +291,7 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
   const { data, error } = await supabase
     .from("tenants")
     .select(
-      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, plan_precio, plan_fecha_inicio, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
+      "id, nombre, ciudad, estado_geografico, estado_servicio, plan, configuracion, admin_contacto_nombre, admin_contacto_email, admin_contacto_telefono, observaciones, created_at, pais, timezone, plan_precio, plan_fecha_inicio, plan_fecha_renovacion, empresa_id, empresas ( nombre )",
     )
     .eq("id", id)
     .maybeSingle();
@@ -324,6 +324,7 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
     creadoEn: data.created_at,
     planFechaRenovacion: data.plan_fecha_renovacion,
     pais: data.pais,
+    timezone: (data as { timezone?: string | null }).timezone ?? null,
     planPrecio: data.plan_precio,
     planFechaInicio: data.plan_fecha_inicio,
     adminContactoEmail: data.admin_contacto_email,
@@ -332,4 +333,91 @@ export async function obtenerResidencialDetalle(supabase: SupabaseClient, id: st
     empresaId: data.empresa_id,
     empresaNombre: empresaRelacionada?.nombre ?? "—",
   };
+}
+
+// ── Suscripción del residencial (Super Admin) ─────────────────
+
+/**
+ * public.suscripciones tal como la ve Super Admin (RLS: or
+ * is_super_admin()). De los identificadores del proveedor solo se expone
+ * si existen: la pantalla solo necesita saber si la gestiona un proveedor.
+ */
+export interface SuscripcionSuperAdmin {
+  id: string;
+  estado: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  origen: "registro_publico" | "alta_manual";
+  plan: "hasta-50" | "hasta-150" | null;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  impagoDesde: string | null;
+  viviendasDeclaradas: number | null;
+  provider: string | null;
+  tieneSuscripcionProveedor: boolean;
+  tieneClienteProveedor: boolean;
+}
+
+export async function obtenerSuscripcionResidencial(supabase: SupabaseClient, tenantId: string): Promise<SuscripcionSuperAdmin | null> {
+  const { data, error } = await supabase
+    .from("suscripciones")
+    .select(
+      "id, estado, origen, plan, trial_started_at, trial_ends_at, current_period_end, cancel_at_period_end, impago_desde, viviendas_declaradas, provider, provider_subscription_id, provider_customer_id",
+    )
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    estado: data.estado,
+    origen: data.origen,
+    plan: data.plan,
+    trialStartedAt: data.trial_started_at,
+    trialEndsAt: data.trial_ends_at,
+    currentPeriodEnd: data.current_period_end,
+    cancelAtPeriodEnd: data.cancel_at_period_end === true,
+    impagoDesde: data.impago_desde,
+    viviendasDeclaradas: data.viviendas_declaradas,
+    provider: data.provider,
+    tieneSuscripcionProveedor: Boolean(data.provider_subscription_id),
+    tieneClienteProveedor: Boolean(data.provider_customer_id),
+  };
+}
+
+/** Respuesta de las RPC superadmin_* de suscripción (migración 20261013000000). */
+export interface ResultadoRpcSuscripcion {
+  resultado: "aplicado" | "sin_cambios";
+  suscripcion_id: string;
+  estado: string;
+  trial_ends_at?: string;
+  current_period_end?: string;
+}
+
+/**
+ * Las tres operaciones se validan en la base (is_super_admin, estado,
+ * proveedor, fechas, 1 fila, auditoría). `hasta` es un día "YYYY-MM-DD"
+ * en la zona del residencial: el acceso sigue durante todo ese día.
+ */
+export async function superadminExtenderTrial(supabase: SupabaseClient, tenantId: string, hasta: string): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_extender_trial", { p_tenant_id: tenantId, p_hasta: hasta });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
+}
+
+export async function superadminActivarSuscripcionManual(
+  supabase: SupabaseClient,
+  tenantId: string,
+  hasta: string,
+  plan: "hasta-50" | "hasta-150" | null,
+): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_activar_suscripcion_manual", { p_tenant_id: tenantId, p_hasta: hasta, p_plan: plan });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
+}
+
+export async function superadminExtenderSuscripcionManual(supabase: SupabaseClient, tenantId: string, hasta: string): Promise<ResultadoRpcSuscripcion> {
+  const { data, error } = await supabase.rpc("superadmin_extender_suscripcion_manual", { p_tenant_id: tenantId, p_hasta: hasta });
+  if (error) throw error;
+  return data as ResultadoRpcSuscripcion;
 }

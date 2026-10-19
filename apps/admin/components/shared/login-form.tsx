@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, MailCheck } from "lucide-react";
 import { createBrowserSupabaseClient } from "@gateflow/supabase/client";
 import { Button, PasswordInput, Input, Label, GateFlowLogo } from "@gateflow/ui";
+import { SELECT_MEMBRESIA_PANEL, destinoTrasAutenticar } from "@/lib/acceso-panel";
+import { borrarResidencialSeleccionado } from "@/app/sesion-actions";
+import { reenviarCorreoConfirmacion } from "@/app/login/actions";
+import { ESPERA_REENVIO_MS, crearControlReenvio, ofreceReenvioConfirmacion, type ResultadoReenvio } from "@/lib/registro/reenvio";
 
 export function LoginForm() {
   const router = useRouter();
@@ -13,6 +18,13 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Correo cuyo login respondió "pendiente de confirmación": solo entonces
+  // se ofrece reenviar el correo (nunca para credenciales incorrectas).
+  const [correoPendiente, setCorreoPendiente] = useState<string | null>(null);
+  const [reenviando, setReenviando] = useState(false);
+  const [resultadoReenvio, setResultadoReenvio] = useState<ResultadoReenvio | null>(null);
+  const [reenvioEnPausa, setReenvioEnPausa] = useState(false);
+  const controlReenvio = useRef(crearControlReenvio(reenviarCorreoConfirmacion));
 
   const passwordCreated = searchParams.get("password_created") === "1";
 
@@ -20,24 +32,16 @@ export function LoginForm() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setCorreoPendiente(null);
+    setResultadoReenvio(null);
 
     const supabase = createBrowserSupabaseClient();
     const emailNormalizado = email.trim().toLowerCase();
     const passwordNormalizada = password.trim();
-    console.log(
-      "STEP 8: intentando signInWithPassword ->",
-      JSON.stringify({ email: emailNormalizado, longitudPassword: passwordNormalizada.length }),
-    );
-
     const { data: dataSignIn, error: signInError } = await supabase.auth.signInWithPassword({
       email: emailNormalizado,
       password: passwordNormalizada,
     });
-
-    console.log(
-      "STEP 9: resultado signInWithPassword ->",
-      JSON.stringify({ huboSesion: !!dataSignIn?.session, userId: dataSignIn?.user?.id, error: signInError?.message }),
-    );
 
     if (signInError) {
       console.error(
@@ -48,21 +52,52 @@ export function LoginForm() {
         "status:",
         signInError.status,
       );
-      // ── DIAGNÓSTICO TEMPORAL ──────────────────────────────────
-      // Mostrando el error técnico real en pantalla, sin reemplazarlo
-      // por el mensaje genérico, porque en iPad no hay forma sencilla
-      // de leer la consola del navegador. Quitar esto una vez
-      // resuelto — no debe quedar en producción.
-      setError(
-        `[DEBUG] ${signInError.message} | code: ${(signInError as { code?: string }).code ?? "—"} | status: ${signInError.status ?? "—"}`,
-      );
+      const codigo = (signInError as { code?: string }).code;
+      setError(mensajeErrorLogin(codigo));
+      if (ofreceReenvioConfirmacion(codigo)) setCorreoPendiente(emailNormalizado);
       setLoading(false);
       return;
     }
 
     const next = searchParams.get("next") ?? "/dashboard";
+
+    // Un guardia no usa este panel: termina en la app Guard (con varias
+    // membresías, solo si todas son de guardia; si hay alguna de Admin,
+    // el middleware lleva a /seleccionar-residencial). La sesión de Admin
+    // no viaja a otro dominio, así que se cierra solo aquí (scope local:
+    // no afecta su sesión en Guard) y allí inicia sesión.
+    if (dataSignIn.user) {
+      const { data: membresias, error: errorMembresia } = await supabase
+        .from("user_tenants")
+        .select(SELECT_MEMBRESIA_PANEL)
+        .eq("user_id", dataSignIn.user.id)
+        .eq("activo", true);
+      const destino = destinoTrasAutenticar(errorMembresia, membresias ?? [], { admin: next, guard: "/login" });
+      if (destino.enGuard) {
+        await borrarResidencialSeleccionado();
+        await supabase.auth.signOut({ scope: "local" });
+        window.location.assign(destino.url);
+        return;
+      }
+    }
+
     router.replace(next);
     router.refresh();
+  }
+
+  async function reenviarConfirmacion() {
+    // Un segundo clic mientras hay una solicitud en curso, o durante la
+    // pausa posterior a un envío, no llega al servidor.
+    if (!correoPendiente || !controlReenvio.current.puedeIntentar()) return;
+    setReenviando(true);
+    const r = await controlReenvio.current.intentar(correoPendiente);
+    setReenviando(false);
+    if (!r) return;
+    setResultadoReenvio(r);
+    if (r.estado !== "error") {
+      setReenvioEnPausa(true);
+      window.setTimeout(() => setReenvioEnPausa(false), ESPERA_REENVIO_MS);
+    }
   }
 
   return (
@@ -124,16 +159,65 @@ export function LoginForm() {
             </p>
           )}
 
+          {correoPendiente && (
+            <div className="space-y-2" data-testid="reenvio-confirmacion">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={reenviarConfirmacion}
+                disabled={reenviando || reenvioEnPausa}
+                aria-busy={reenviando}
+                className="h-auto min-h-10 w-full whitespace-normal border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              >
+                {reenviando ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <MailCheck className="h-4 w-4 shrink-0" />}
+                {reenviando ? "Enviando..." : "Reenviar correo de confirmación"}
+              </Button>
+              {resultadoReenvio && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  data-estado={resultadoReenvio.estado}
+                  className={`rounded-md px-3 py-2 text-sm ${
+                    resultadoReenvio.estado === "enviado" ? "bg-success/10 text-success" : "bg-white/5 text-white/80"
+                  }`}
+                >
+                  {resultadoReenvio.mensaje}
+                </p>
+              )}
+            </div>
+          )}
+
           <Button type="submit" disabled={loading} className="w-full">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Ingresando..." : "Ingresar"}
           </Button>
+
+          <p className="text-center text-sm">
+            <Link href="/recuperar-password" className="text-primary/80 underline hover:text-primary">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
         </form>
 
-        <p className="mt-6 text-center text-xs text-white/30">
+        <p className="mt-6 text-center text-sm text-white/60">
+          ¿Todavía no tienes cuenta?{" "}
+          <a href="/registro" className="text-primary underline">
+            Prueba Gate Flow 30 días gratis
+          </a>
+        </p>
+
+        <p className="mt-4 text-center text-xs text-white/30">
           El acceso de guardias en campo se realiza desde la app móvil offline-first.
         </p>
       </div>
     </div>
   );
+}
+
+/** Mensaje para la persona; el detalle técnico queda solo en la consola. */
+function mensajeErrorLogin(codigo: string | undefined): string {
+  if (codigo === "email_not_confirmed") return "Tu correo todavía no está confirmado. Abre el enlace que te enviamos al registrarte.";
+  if (codigo === "invalid_credentials") return "Correo o contraseña incorrectos.";
+  if (codigo === "over_request_rate_limit" || codigo === "over_email_send_rate_limit") return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+  return "No pudimos iniciar sesión. Inténtalo de nuevo en unos minutos.";
 }

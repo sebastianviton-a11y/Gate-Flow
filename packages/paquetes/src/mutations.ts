@@ -3,7 +3,8 @@ import type { Paquete, RegistrarPaqueteInput, EntregarPaqueteInput } from "@gate
 import { obtenerPaquetePorId } from "./queries";
 
 export interface FilaImportarUnidad {
-  tipo: "casa" | "departamento";
+  /** Opcional: ya no se captura; solo llega de plantillas anteriores. */
+  tipo?: "casa" | "departamento" | null;
   identificador: string;
   contactoNombre?: string;
   contactoTelefono?: string;
@@ -15,7 +16,6 @@ export interface ResultadoImportacion {
 }
 
 export interface ActualizarUnidadInput {
-  tipo: "casa" | "departamento";
   identificador: string;
   contactoNombre?: string | null;
   contactoTelefono?: string | null;
@@ -33,10 +33,10 @@ export interface ActualizarUnidadInput {
  * agregar-manual.tsx, se mantiene aquí exactamente igual.
  */
 export async function actualizarUnidad(supabase: SupabaseClient, unidadId: string, input: ActualizarUnidadInput): Promise<void> {
+  // tipo no se toca: ya no se edita y se conserva el valor existente.
   const { error } = await supabase
     .from("unidades")
     .update({
-      tipo: input.tipo,
       identificador: input.identificador.trim(),
       contacto_nombre: input.contactoNombre?.trim() || null,
       contacto_telefono: input.contactoTelefono?.trim() || null,
@@ -126,14 +126,14 @@ export async function importarUnidadesMasivo(
   for (const fila of filas) {
     const { error } = await supabase.from("unidades").insert({
       tenant_id: tenantId,
-      tipo: fila.tipo,
+      tipo: fila.tipo ?? null,
       identificador: fila.identificador,
       contacto_nombre: fila.contactoNombre || null,
       contacto_telefono: fila.contactoTelefono || null,
     });
 
     if (error) {
-      const motivo = error.code === "23505" ? "Ya existe una unidad con ese identificador." : error.message;
+      const motivo = error.code === "23505" ? "Ya existe una vivienda con esa dirección." : error.message;
       omitidas.push({ identificador: fila.identificador, motivo });
     } else {
       creadas++;
@@ -162,6 +162,8 @@ export interface ResultadoRegistro {
  * "ya se envió" cuando no es cierto.
  */
 export async function registrarPaquete(supabase: SupabaseClient, input: RegistrarPaqueteInput): Promise<ResultadoRegistro> {
+  // destinatario_*: a quién se avisó, en el propio paquete (con
+  // residente_id ya consta). La base exige que sea de la misma vivienda.
   const { data, error } = await supabase
     .from("paquetes")
     .insert({
@@ -177,6 +179,9 @@ export async function registrarPaquete(supabase: SupabaseClient, input: Registra
       notas: input.notas ?? null,
       recibido_por: input.recibidoPor,
       estado_id: "recibido",
+      destinatario_nombre: input.residenteId ? null : (input.destinatarioNombre ?? null),
+      destinatario_telefono: input.residenteId ? null : (input.destinatarioTelefono ?? null),
+      destinatario_residente_id: input.residenteId ? null : (input.destinatarioResidenteId ?? null),
     })
     .select("id")
     .single();

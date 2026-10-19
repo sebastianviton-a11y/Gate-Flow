@@ -9,12 +9,27 @@ import { Button, Input, Label, obtenerMensajeError } from "@gateflow/ui";
 /**
  * Reutiliza importarUnidadesMasivo() con un solo registro en vez de
  * crear una mutación nueva — es exactamente la misma validación
- * (identificador duplicado, tipo válido) que ya usa la carga por
- * plantilla, así que las dos vías nunca pueden divergir en sus reglas.
+ * (dirección duplicada) que ya usa la carga por plantilla, así que las
+ * dos vías nunca pueden divergir en sus reglas. Sin "Tipo": ya no se
+ * captura (la vivienda queda sin tipo, nunca con uno supuesto).
  */
-export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string; onAgregada: () => void }) {
-  const [abierto, setAbierto] = useState(false);
-  const [tipo, setTipo] = useState<"casa" | "departamento">("casa");
+export function AgregarUnidadManual({
+  tenantId,
+  onAgregada,
+  pais = null,
+  abiertoInicial = false,
+  onCerrar,
+}: {
+  tenantId: string;
+  onAgregada: () => void;
+  /** País del residencial: solo cambia el ejemplo del teléfono. */
+  pais?: string | null;
+  /** Desde Residentes ("Nuevo residente") el formulario abre directo. */
+  abiertoInicial?: boolean;
+  /** Si se pasa, "Cerrar" lo maneja quien abrió el formulario. */
+  onCerrar?: () => void;
+}) {
+  const [abierto, setAbierto] = useState(abiertoInicial);
   const [identificador, setIdentificador] = useState("");
   const [contactoNombre, setContactoNombre] = useState("");
   const [contactoTelefono, setContactoTelefono] = useState("");
@@ -39,7 +54,6 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
       const supabase = createBrowserSupabaseClient();
       const resultado = await importarUnidadesMasivo(supabase, tenantId, [
         {
-          tipo,
           identificador: identificador.trim(),
           contactoNombre: contactoNombre.trim() || undefined,
           contactoTelefono: contactoTelefono.trim() || undefined,
@@ -52,10 +66,10 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
         onAgregada();
         setTimeout(() => setExito(null), 3000);
       } else {
-        setError(resultado.omitidas[0]?.motivo ?? "No se pudo agregar la unidad.");
+        setError(resultado.omitidas[0]?.motivo ?? "No se pudo agregar la vivienda.");
       }
     } catch (e) {
-      setError(obtenerMensajeError(e, "No se pudo agregar la unidad."));
+      setError(obtenerMensajeError(e, "No se pudo agregar la vivienda."));
     } finally {
       setEnviando(false);
     }
@@ -73,37 +87,23 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
   return (
     <div className="space-y-4 rounded-lg border border-border p-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Agregar unidad y residente</p>
-        <button onClick={() => setAbierto(false)} className="text-xs text-muted-foreground hover:text-foreground">
+        <p className="text-sm font-medium">Agregar vivienda y residente</p>
+        <button onClick={() => (onCerrar ? onCerrar() : setAbierto(false))} className="text-xs text-muted-foreground hover:text-foreground">
           Cerrar
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="tipo-manual">Tipo</Label>
-          <select
-            id="tipo-manual"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as "casa" | "departamento")}
-            className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="casa">Casa</option>
-            <option value="departamento">Departamento</option>
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="identificador-manual">
-            Identificador <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="identificador-manual"
-            placeholder='Ej. "Casa 12" o "Depto 302"'
-            value={identificador}
-            onChange={(e) => setIdentificador(e.target.value)}
-            className="mt-1.5"
-          />
-        </div>
+      <div>
+        <Label htmlFor="identificador-manual">
+          Dirección <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="identificador-manual"
+          placeholder='Ej. "Calle 5 #12", "Casa 12" o "Torre B, Depto 302"'
+          value={identificador}
+          onChange={(e) => setIdentificador(e.target.value)}
+          className="mt-1.5"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -121,7 +121,7 @@ export function AgregarUnidadManual({ tenantId, onAgregada }: { tenantId: string
           <Input
             id="telefono-manual"
             type="tel"
-            placeholder="9981234567"
+            placeholder={pais === "AR" ? "11 2345-6789" : "998 123 4567"}
             value={contactoTelefono}
             onChange={(e) => setContactoTelefono(e.target.value)}
             className="mt-1.5"

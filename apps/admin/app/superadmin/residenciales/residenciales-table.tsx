@@ -73,8 +73,8 @@ export function ResidencialesTable({ residenciales, mostrarEmpresa = true }: { r
               <td className="px-4 py-2.5 text-muted-foreground">{r.totalViviendas}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{r.totalUsuarios}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{PLAN_LABEL[r.plan] ?? r.plan}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.creadoEn)}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.planFechaRenovacion)}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.creadoEn, null)}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{formatearFecha(r.planFechaRenovacion, null)}</td>
               <td className="px-4 py-2.5">
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${ESTADO_CLASE[r.estadoServicio]}`}>
                   {ESTADO_SERVICIO_LABEL[r.estadoServicio]}
