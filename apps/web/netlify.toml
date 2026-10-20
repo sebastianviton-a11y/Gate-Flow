@@ -32,8 +32,9 @@
 #     conservan su ancla interna (#d-probar / #m-probar) y no hay
 #     redirecciones.
 #   NEXT_PUBLIC_LANDING_MODO=demo — mientras el alta de prueba no esté
-#     abierta en el panel de clientes: los CTAs dicen "Solicitar demo" y
-#     abren el contacto de demo, y no se muestran Privacidad ni Términos.
+#     abierta en el panel de clientes: los CTAs siguen diciendo "Probar 30
+#     días gratis" pero abren el contacto de demo (el acceso se habilita a
+#     mano), y no se muestran Privacidad ni Términos.
 #   NEXT_PUBLIC_LANDING_CONTACTO_DEMO — contacto de demo (mailto: o
 #     https://); sin valor, el WhatsApp de Gate Flow (+52 55 2324 8345).
 #   GF_LANDING_INDEXAR=1 — solo en el sitio público (lib/indexacion.ts).

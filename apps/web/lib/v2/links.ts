@@ -25,21 +25,22 @@ export const TEXTO_CTA_PRUEBA = "Probar 30 días gratis";
 const ADMIN_APP_URL = normalizarUrlAdmin(process.env.NEXT_PUBLIC_ADMIN_APP_URL);
 
 /**
- * Modo «Solicitar demo» (NEXT_PUBLIC_LANDING_MODO=demo): mientras el alta
- * de prueba no esté abierta en el panel de clientes, todos los CTAs de
- * prueba dicen «Solicitar demo» y abren el contacto de demo, y no se
- * muestran los enlaces legales (son los documentos que se aceptan en
- * /registro; hasta publicarlos no hay una página a la que llevar). Sin la
- * variable (staging, previews) todo queda como antes. Se resuelve en
- * build, igual que NEXT_PUBLIC_ADMIN_APP_URL.
+ * Modo demo (NEXT_PUBLIC_LANDING_MODO=demo): mientras el alta de prueba no
+ * esté abierta en el panel de clientes, los CTAs de prueba siguen diciendo
+ * «Probar 30 días gratis» pero abren el contacto de demo (el acceso se
+ * habilita a mano), y no se muestran los enlaces legales (son los
+ * documentos que se aceptan en /registro; hasta publicarlos no hay una
+ * página a la que llevar). Sin la variable (staging, previews) los mismos
+ * CTAs llevan a /registro: quitarla es todo el cambio al alta autónoma. Se
+ * resuelve en build, igual que NEXT_PUBLIC_ADMIN_APP_URL.
  */
 export const MODO_DEMO = process.env.NEXT_PUBLIC_LANDING_MODO === "demo";
 
 /** Contacto de demo: NEXT_PUBLIC_LANDING_CONTACTO_DEMO (mailto: o https://);
- * sin valor válido, el WhatsApp de Gate Flow con el mensaje de demostración. */
+ * sin valor válido, el WhatsApp de Gate Flow con el mensaje de solicitud de prueba. */
 const CONTACTO_DEMO =
   normalizarContactoDemo(process.env.NEXT_PUBLIC_LANDING_CONTACTO_DEMO) ??
-  whatsapp("Hola, me gustaría agendar una demostración de Gate Flow.");
+  whatsapp("Hola, quiero probar Gate Flow 30 días gratis en mi residencial");
 
 export const V2_LINKS = {
   /** Header desktop y menú mobile: login del panel Admin. */
@@ -81,9 +82,9 @@ export function ctaHref(anclaSinDestino: string, plan?: PlanRegistro, modoDemo: 
   return modoDemo ? V2_LINKS.demo : registroHref(anclaSinDestino, plan);
 }
 
-/** Texto de un CTA de prueba («Probar gratis…») o «Solicitar demo» en modo demo. */
-export function ctaTexto(textoPrueba: string, modoDemo: boolean = MODO_DEMO): string {
-  return modoDemo ? "Solicitar demo" : textoPrueba;
+/** Texto de un CTA de prueba: el mismo en modo demo (solo cambia el destino, ver ctaHref). */
+export function ctaTexto(textoPrueba: string): string {
+  return textoPrueba;
 }
 
 export function registroHref(anclaSinDestino: string, plan?: PlanRegistro, base: string | null = ADMIN_APP_URL): string {

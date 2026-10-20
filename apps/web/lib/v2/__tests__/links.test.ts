@@ -1,5 +1,5 @@
 /**
- * Destinos de los CTAs "Probar gratis" / "Solicitar demo" de la landing V2
+ * Destinos de los CTAs "Probar 30 días gratis" de la landing V2 (registro o, en modo demo, WhatsApp)
  * y redirecciones de las rutas viejas del panel.
  *   npx tsx apps/web/lib/v2/__tests__/links.test.ts
  */
@@ -106,8 +106,8 @@ console.log("\nModo demo (NEXT_PUBLIC_LANDING_MODO=demo)");
 assert(MODO_DEMO === false, "sin variable: modo de registro (staging y previews sin cambios)");
 assert(ctaHref("#d-probar", "hasta-50", false) === registroHref("#d-probar", "hasta-50"), "fuera de demo: igual que antes");
 assert(ctaHref("#d-probar", undefined, true) === V2_LINKS.demo && ctaHref("#m-probar", "hasta-150", true) === V2_LINKS.demo, "en demo: todos los CTAs → contacto de demo");
-assert(TEXTO_CTA_PRUEBA === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, false) === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA, true) === "Solicitar demo", "texto: «Probar 30 días gratis»; «Solicitar demo» solo en demo");
-assert(V2_LINKS.demo.startsWith("https://wa.me/525523248345?text=") && decodeURIComponent(V2_LINKS.demo).includes("demostración"), "contacto de demo por defecto: WhatsApp con el mensaje de demostración");
+assert(TEXTO_CTA_PRUEBA === "Probar 30 días gratis" && ctaTexto(TEXTO_CTA_PRUEBA) === "Probar 30 días gratis", "texto: «Probar 30 días gratis» también en modo demo (solo cambia el destino)");
+assert(V2_LINKS.demo === "https://wa.me/525523248345?text=" + encodeURIComponent("Hola, quiero probar Gate Flow 30 días gratis en mi residencial"), "contacto de demo por defecto: WhatsApp con el mensaje de solicitud de prueba");
 assert(normalizarContactoDemo("mailto:ventas@gateflow.mx") === "mailto:ventas@gateflow.mx" && normalizarContactoDemo(" https://wa.me/5215500000000 ") === "https://wa.me/5215500000000", "acepta mailto: y https://");
 for (const malo of [undefined, "", "soporte@gateflow.mx", "http://inseguro.test", "javascript:alert(1)", "mailto:sin-arroba", "tel:+5215500000000"]) {
   assert(normalizarContactoDemo(malo) === null, `rechaza ${JSON.stringify(malo)} (queda el WhatsApp)`);
